@@ -1,0 +1,61 @@
+name: Dashboard Auto Refresh
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "dashboard/**"
+      - "tools/**"
+      - "backtest/**"
+      - "output/**"
+      - "update_dashboard_live_data.py"
+      - "generate_deep_analysis.py"
+      - "generate_model_history.py"
+  workflow_dispatch:
+
+concurrency:
+  group: dashboard-auto-refresh
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  refresh-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_PROJECT: ${{ vars.VERCEL_PROJECT || 'stock-screening-dashboard' }}
+      VERCEL_TEAM_SLUG: ${{ vars.VERCEL_TEAM_SLUG }}
+      VERCEL_TEAM_ID: ${{ vars.VERCEL_TEAM_ID }}
+      PYTHONIOENCODING: utf-8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install minimal dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas pyarrow fastparquet requests beautifulsoup4 lxml html5lib
+
+      - name: Update live data
+        run: python update_dashboard_live_data.py
+
+      - name: Regenerate dashboard analysis
+        run: python generate_deep_analysis.py
+
+      - name: Regenerate model history
+        run: python generate_model_history.py
+
+      - name: Deploy dashboard to Vercel
+        run: python tools/deploy_vercel_dashboard.py --dashboard-dir dashboard --target production --wait
