@@ -1,31 +1,24 @@
-# Online Auto Refresh Setup (No Manual Deploy)
+# Online Auto Refresh Setup (Free)
 
-This project now includes:
+## Trạng thái hiện tại
 
-- `.github/workflows/dashboard-auto-refresh.yml`
+- Dashboard online: `https://stock-screening-dashboard-rust.vercel.app`
+- Nút `Update` trên bản online đã chuyển sang lấy **giá live trực tiếp** (không cần backend local).
 
-What it does:
+## Để bật full auto deploy từ GitHub (1 lần duy nhất)
 
-1. Every 10 minutes:
-   - run `update_dashboard_live_data.py`
-   - run `generate_deep_analysis.py`
-   - run `generate_model_history.py`
-   - deploy `dashboard/` to Vercel using API
-2. Can also be run manually via **Actions -> Dashboard Auto Refresh -> Run workflow**.
+1. Vào Vercel Account Settings -> Connections.
+2. Add/Login GitHub connection cho account hiện tại.
+3. Tạo project từ repo `anhkhoant94/tradingbot`.
 
-## Required GitHub secrets/variables
+## Vì sao vẫn cần bước trên
 
-Set in GitHub repo **Settings -> Secrets and variables -> Actions**:
+- Vercel API hiện trả lỗi khi link repo: chưa có GitHub Login Connection.
+- Token GitHub hiện tại chưa có quyền ghi workflow (`.github/workflows`), nên chưa thể tạo cron bằng API.
 
-- Secret:
-  - `VERCEL_TOKEN`
-- Variables:
-  - `VERCEL_PROJECT` = `stock-screening-dashboard` (or your project name)
-  - Optional: `VERCEL_TEAM_SLUG`
-  - Optional: `VERCEL_TEAM_ID`
+## Khi đã đủ quyền
 
-## Notes
-
-- The online Vercel dashboard is static. The `Update` button in online mode is intentionally disabled.
-- Data refresh is handled by this workflow and redeploy, not by browser button click.
-- If runtime is close to schedule interval, workflow concurrency keeps only the latest run.
+- Bật workflow `dashboard-auto-refresh.yml` để cron tự:
+  1. cập nhật data live,
+  2. rebuild dashboard,
+  3. deploy production.
