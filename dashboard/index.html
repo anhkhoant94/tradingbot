@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Trading Dashboard</title>
+    <link rel="stylesheet" href="./styles.css?v=static_update_guard_2026_05_28" />
+  </head>
+  <body>
+    <div class="app">
+      <main>
+        <header class="topbar">
+          <div>
+            <p>AI Trading Dashboard</p>
+            <h1>Trading Execution Desk</h1>
+            <small id="serverStatusText">Đang kiểm tra...</small>
+          </div>
+          <div class="top-actions">
+            <span id="asOf"></span>
+            <button id="updateBtn" type="button">Update</button>
+            <button id="printBtn" type="button">In PDF</button>
+          </div>
+        </header>
+
+        <nav class="view-tabs" aria-label="Dashboard tabs">
+          <button class="nav active" data-view="portfolio" type="button">Copy trade</button>
+          <button class="nav" data-view="modelLogic" type="button">Bộ lọc model</button>
+        </nav>
+
+        <section class="kpi-grid" id="kpis"></section>
+
+        <section class="view is-active" id="portfolio">
+          <article class="panel">
+            <div class="command-row">
+              <div class="command-title">
+                <span>Copy trade</span>
+                <h2>Lệnh mua/bán theo policy hiện tại</h2>
+              </div>
+              <div class="portfolio-controls">
+                <label>
+                  Policy
+                  <select id="strategyMode">
+                    <option value="r46_bear_stop_mcore">R46 Bear Stop 15bps</option>
+                    <option value="r23_nav3b_mcore">R23_NAV3B</option>
+                    <option value="flexible_vni30_candidate">VNI+20 Copy-trade 15bps</option>
+                  </select>
+                </label>
+                <label>
+                  NAV (tỷ)
+                  <input id="portfolioNav" type="number" min="0" step="0.01" value="1" />
+                </label>
+                <input id="portfolioCash" type="hidden" />
+              </div>
+            </div>
+
+            <div id="modelLoading" class="model-loading" aria-live="polite"><span></span></div>
+
+            <section class="execution-panel">
+              <div class="panel-title spread">
+                <div>
+                  <span>Orders</span>
+                  <h2>Danh sách lệnh cần copy</h2>
+                </div>
+                <div class="alert-actions">
+                  <button id="enableAlertsBtn" class="secondary" type="button">Bật cảnh báo</button>
+                  <button id="markAlertsSeenBtn" class="secondary" type="button">Đã xem</button>
+                </div>
+              </div>
+              <div id="tradeAlertSummary" class="trade-alert-summary"></div>
+              <div class="planned-orders">
+                <div class="planned-head">
+                  <div>
+                    <span>Next open</span>
+                    <h3>Dự kiến lệnh thứ 2 tới</h3>
+                  </div>
+                  <div id="plannedTradeSummary" class="planned-summary"></div>
+                </div>
+                <div class="table-wrap compact planned-wrap">
+                  <table class="planned-table copy-table">
+                    <thead>
+                      <tr>
+                        <th>Ngày dự kiến</th>
+                        <th>Mã</th>
+                        <th>Kế hoạch</th>
+                        <th class="num">Giá TT</th>
+                        <th class="num">Giá thực hiện</th>
+                        <th class="num">Giá vốn</th>
+                        <th class="num">Khối lượng</th>
+                        <th class="num">Giá trị (tr)</th>
+                        <th class="num">Tỷ trọng</th>
+                        <th class="num">Lãi/lỗ (tr)</th>
+                        <th class="num">Lãi/lỗ %</th>
+                        <th class="num">Target</th>
+                        <th class="num">Stop</th>
+                        <th>Ghi chú</th>
+                      </tr>
+                    </thead>
+                    <tbody id="plannedTradeRows"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="table-wrap compact">
+                <table class="copy-table">
+                  <thead>
+                  <tr>
+                      <th>Ngày</th>
+                      <th>Mã</th>
+                      <th>Lệnh</th>
+                      <th class="num">Giá TT</th>
+                      <th class="num">Giá thực hiện</th>
+                      <th class="num">Giá vốn</th>
+                      <th class="num">Khối lượng</th>
+                      <th class="num">Giá trị (tr)</th>
+                      <th class="num">Tỷ trọng</th>
+                      <th class="num">Lãi/lỗ (tr)</th>
+                      <th class="num">Lãi/lỗ %</th>
+                      <th class="num">Target</th>
+                      <th class="num">Stop</th>
+                      <th>Ghi chú</th>
+                    </tr>
+                  </thead>
+                  <tbody id="copyTradeRows"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <div class="performance-card">
+              <div class="panel-title spread">
+                <div>
+                  <span>Performance</span>
+                  <h2>Hiệu quả model so với VN-Index</h2>
+                </div>
+                <div class="range-tabs" id="performanceRange">
+                  <button class="range active" data-range="ytd" type="button">YTD</button>
+                  <button class="range" data-range="3m" type="button">3M</button>
+                  <button class="range" data-range="6m" type="button">6M</button>
+                  <button class="range" data-range="1y" type="button">1Y</button>
+                  <button class="range" data-range="all" type="button">All</button>
+                </div>
+              </div>
+              <div id="performanceStats" class="performance-stats"></div>
+              <div class="chart-legend" aria-label="Chú giải biểu đồ">
+                <span><i class="model"></i>Model portfolio</span>
+                <span><i class="vni"></i>VN-Index</span>
+              </div>
+              <canvas id="performanceChart" height="320"></canvas>
+            </div>
+
+            <div class="panel-title compact-title">
+              <div>
+                <span>Holdings</span>
+                <h2>Danh mục đang nắm giữ</h2>
+              </div>
+            </div>
+            <div id="holdingsSummary" class="holdings-summary"></div>
+            <div class="table-wrap compact">
+              <table class="portfolio-table">
+                <thead>
+                  <tr>
+                    <th>Mã</th>
+                    <th>Ngành</th>
+                    <th>Ngày mua</th>
+                    <th class="num">Giá vốn</th>
+                    <th class="num">Giá TT</th>
+                    <th class="num">Khối lượng</th>
+                    <th class="num">Giá trị (tr)</th>
+                    <th class="num">Lãi/lỗ (tr)</th>
+                    <th class="num">Lãi/lỗ %</th>
+                    <th class="num">Tỷ trọng</th>
+                    <th class="num">Target</th>
+                    <th class="num">Stop</th>
+                  </tr>
+                </thead>
+                <tbody id="holdingRows"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-title spread">
+              <div>
+                <span>Ledger</span>
+                <h2>Lịch sử giao dịch</h2>
+              </div>
+              <span id="ledgerSummary" class="muted"></span>
+            </div>
+            <div class="table-wrap compact">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ngày</th>
+                    <th>Mã</th>
+                    <th>Lệnh</th>
+                    <th class="num">Khối lượng</th>
+                    <th class="num">Giá</th>
+                    <th class="num">Giá trị (tr)</th>
+                    <th class="num">Lãi/lỗ (tr)</th>
+                    <th class="num">Lãi/lỗ %</th>
+                    <th class="num">Nắm giữ</th>
+                  </tr>
+                </thead>
+                <tbody id="modelLedgerRows"></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="view" id="modelLogic">
+          <article class="panel">
+            <div class="panel-title spread">
+              <div>
+                <span>Model logic</span>
+                <h2>Bộ lọc cổ phiếu đang dùng</h2>
+              </div>
+              <strong id="modelLogicStatus"></strong>
+            </div>
+            <div id="modelLogicBody" class="logic-grid"></div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <script src="./data.js?v=exchange_gap_guard_2026_05_23"></script>
+    <script src="./analysis.js?v=static_update_guard_2026_05_28"></script>
+    <script src="./history.js?v=static_update_guard_2026_05_28"></script>
+    <script src="./app.js?v=static_update_guard_2026_05_28"></script>
+  </body>
+</html>
