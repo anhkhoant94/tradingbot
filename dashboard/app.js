@@ -18,7 +18,7 @@ const POLICY_DISPLAY = {
 };
 
 // Dashboard version-keyed cache invalidation — auto clear stale localStorage when dashboard upgrades
-const DASHBOARD_VERSION = "static_update_guard_2026_05_28";
+const DASHBOARD_VERSION = "live_quote_refresh_2026_05_28_v1";
 const storedVersion = localStorage.getItem("hose_hnx_dashboard_version");
 if (storedVersion !== DASHBOARD_VERSION) {
   // Wipe all dashboard-related localStorage keys
@@ -85,12 +85,84 @@ function setStaticUpdateMode() {
   const statusEl = document.getElementById("serverStatusText");
   if (!btn) return;
   if (!isLocalDashboardHost()) {
-    btn.disabled = true;
-    btn.title = "Bản online static không chạy update trực tiếp";
+    btn.disabled = false;
+    btn.title = "Lấy giá live trực tiếp từ nguồn market data";
     if (statusEl) {
-      statusEl.textContent = "Bản online static: dữ liệu chỉ đổi khi backend chạy lại và redeploy.";
+      statusEl.textContent = "Bản online: bấm Update để lấy giá live mới nhất.";
     }
   }
+}
+
+function uniqueSymbolsForLiveRefresh() {
+  const symbols = new Set();
+  for (const policy of deep.strategyPolicies || []) {
+    for (const row of policy?.holdings || []) {
+      const symbol = String(row?.symbol || "").toUpperCase().trim();
+      if (symbol) symbols.add(symbol);
+    }
+  }
+  return [...symbols];
+}
+
+async function fetchDailyClose(symbol) {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const fromSec = nowSec - 86400 * 14;
+  const url = `https://histdatafeed.vps.com.vn/tradingview/history?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${fromSec}&to=${nowSec}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`${symbol}: HTTP ${res.status}`);
+  const payload = await res.json();
+  if (payload?.s !== "ok" || !Array.isArray(payload?.t) || !payload.t.length) {
+    throw new Error(`${symbol}: no_data`);
+  }
+  const idx = payload.t.length - 1;
+  const closeRaw = Number(payload.c?.[idx]);
+  const close = Number.isFinite(closeRaw) ? (closeRaw > 1000 && symbol !== "VNINDEX" ? closeRaw / 1000 : closeRaw) : NaN;
+  const ts = Number(payload.t[idx]) * 1000;
+  if (!Number.isFinite(close) || close <= 0 || !Number.isFinite(ts)) throw new Error(`${symbol}: bad_payload`);
+  const date = new Date(ts).toISOString().slice(0, 10);
+  return { symbol, close, date };
+}
+
+async function refreshLiveMarketData() {
+  const symbols = uniqueSymbolsForLiveRefresh();
+  if (!symbols.length) return { ok: false, reason: "no_symbols" };
+  const targets = ["VNINDEX", ...symbols];
+  const settled = await Promise.allSettled(targets.map((symbol) => fetchDailyClose(symbol)));
+  const quoteMap = new Map();
+  let ok = 0;
+  for (const item of settled) {
+    if (item.status === "fulfilled") {
+      ok += 1;
+      quoteMap.set(item.value.symbol, item.value);
+    }
+  }
+  if (!quoteMap.size) return { ok: false, reason: "all_failed" };
+
+  for (const policy of deep.strategyPolicies || []) {
+    for (const row of policy?.holdings || []) {
+      const symbol = String(row?.symbol || "").toUpperCase().trim();
+      const q = quoteMap.get(symbol);
+      if (!q) continue;
+      row.currentPrice = q.close;
+      row.priceAsOf = q.date;
+      const shares = roundLot(displayTradeShares(row));
+      if (shares > 0) {
+        const currentValueMil = (shares * q.close) / 1000;
+        row.currentValueMil = currentValueMil;
+        const entry = Number(row.entryPrice) || 0;
+        const costMil = entry > 0 ? (shares * entry) / 1000 : Number(row.costMil) || 0;
+        if (costMil > 0) {
+          row.costMil = costMil;
+          row.currentPnlMil = currentValueMil - costMil;
+          row.currentPnlPct = ((q.close / entry) - 1) * 100;
+        }
+      }
+    }
+  }
+  const sortedDates = [...quoteMap.values()].map((x) => x.date).sort();
+  const latestDate = sortedDates.length ? sortedDates[sortedDates.length - 1] : null;
+  if (data?.summary && latestDate) data.summary.as_of = latestDate;
+  return { ok: true, refreshed: ok, total: targets.length, latestDate };
 }
 
 function roundLot(shares) {
@@ -383,8 +455,25 @@ async function refreshStatus() {
 
 async function triggerUpdate(mode) {
   if (!isLocalDashboardHost()) {
-    setStaticUpdateMode();
-    alert("Bản online static không chạy update trực tiếp. Em cần chạy backend cập nhật và redeploy.");
+    const el = document.getElementById("serverStatusText");
+    if (el) el.textContent = "Đang lấy giá live...";
+    try {
+      const refreshed = await refreshLiveMarketData();
+      if (!refreshed.ok) {
+        if (el) el.textContent = "Không lấy được giá live lúc này.";
+        alert("Không lấy được giá live, anh thử lại sau vài giây.");
+        return;
+      }
+      renderActiveModel();
+      renderRecentTrades();
+      renderHeadlines(activePolicy());
+      if (el) {
+        el.textContent = `Đã cập nhật giá live (${refreshed.refreshed}/${refreshed.total}) đến ${refreshed.latestDate || "-"}.`;
+      }
+    } catch (err) {
+      if (el) el.textContent = "Lỗi kết nối nguồn giá live.";
+      alert(`Lỗi update live: ${err?.message || err}`);
+    }
     return;
   }
   const endpoint = "/api/update-fast";
