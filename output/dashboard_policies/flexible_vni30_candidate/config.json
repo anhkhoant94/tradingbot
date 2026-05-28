@@ -1,0 +1,67 @@
+{
+  "label": "VNI+20 Copy-trade 15bps",
+  "frequency": "daily strict 100-lot, weekly flexible-entry signal, T+2.5 strict",
+  "verdict": "DASHBOARD_PROMOTED_BY_USER_15BPS",
+  "production_status": "User accepted 15bps gate on 2026-05-27; Codex verified source files before dashboard promotion.",
+  "cagr": 74.10641630004986,
+  "sharpe": 2.0756196635111452,
+  "max_drawdown": -21.985941740716108,
+  "total_return": 1860.0053328800072,
+  "nav_start_vnd": 1000000000,
+  "nav_end_vnd": 19600053328,
+  "min_edge_vs_vni": 20.812597551045766,
+  "pass_vni20": 6,
+  "pass_vni30": 3,
+  "beat_vni": 6,
+  "pass_years_vni20": [
+    2021,
+    2022,
+    2023,
+    2024,
+    2025,
+    2026
+  ],
+  "fail_years_vni20": [],
+  "yearly_edges_pp": {
+    "2021": 163.21,
+    "2022": 88.77,
+    "2023": 20.81,
+    "2024": 21.58,
+    "2025": 37.32,
+    "2026": 24.62
+  },
+  "entry_gap_threshold": 0.09,
+  "entry_limit_buffer": 0.0,
+  "entry_pullback_days": 2,
+  "entry_no_fill_policy": "skip",
+  "entry_min_sell_sessions": 3,
+  "daily_stop_loss": 0.0,
+  "lot_size": 100,
+  "slippage_bps_per_side": 15,
+  "trade_count": 1066,
+  "lot_violations": 0,
+  "avg_holdings_per_week": null,
+  "max_single_position_pct": 33,
+  "avg_exposure_pct": 64.3,
+  "turnover_trades_per_year": 198.1,
+  "source_config": "C:/Users/Yeah1/OneDrive/Documents/New project 2/stock_screening/output/beat_vni30_parallel/codex_baseline_liquid_leadership_overlay_20260527/refine_user_execution_552/best_metrics.json",
+  "source_equity": "C:/Users/Yeah1/OneDrive/Documents/New project 2/stock_screening/output/beat_vni30_parallel/codex_baseline_liquid_leadership_overlay_20260527/refine_user_execution_552/best_equity.parquet",
+  "source_trades": "C:/Users/Yeah1/OneDrive/Documents/New project 2/stock_screening/output/beat_vni30_parallel/codex_baseline_liquid_leadership_overlay_20260527/refine_user_execution_552/best_trades.csv",
+  "audit_date": "2026-05-27",
+  "cost_stress_summary": {
+    "15bps": {
+      "pass_vni20": 6,
+      "min_gap_to_vni20_pp": 0.81
+    },
+    "20bps": {
+      "pass_vni20": 4,
+      "min_gap_to_vni20_pp": -1.35
+    }
+  },
+  "honest_caveats": [
+    "Gate ?ang d?ng l? 15bps m?i chi?u theo quy?t ??nh c?a user; stress 20bps gi?m c?n VNI+20 4/6.",
+    "Candidate v?n c? turnover cao kho?ng 198 l?nh/n?m v? c?n theo d?i tr??t gi? th?c t? khi copy trade.",
+    "Backtest b?t ??u 2021-01-04; ph?n 2016-2020 v?n ?ang ch? data/liquidity raw ???c Claude ho?n t?t ?? audit m? r?ng.",
+    "Kh?ng d?ng l?nh l?: to?n b? BUY/SELL trong ledger l? b?i s? c?a 100 c? phi?u."
+  ]
+}
