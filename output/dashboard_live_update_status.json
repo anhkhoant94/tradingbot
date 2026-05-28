@@ -1,0 +1,135 @@
+{
+  "updatedAt": "2026-05-28 15:45:47",
+  "seconds": 2.51,
+  "symbols": [
+    "MSB",
+    "DXP",
+    "GEE",
+    "PVP",
+    "VIC",
+    "YEG",
+    "NVL",
+    "KSV",
+    "BVB",
+    "HNG"
+  ],
+  "latestPriceDate": "2026-05-28",
+  "prices": [
+    {
+      "symbol": "BVB",
+      "ok": true,
+      "latest": "2026-05-28",
+      "rows": 1468
+    },
+    {
+      "symbol": "DXP",
+      "ok": true,
+      "latest": "2026-05-28",
+      "rows": 2532
+    },
+    {
+      "symbol": "GEE",
+      "ok": true,
+      "latest": "2026-05-28",
+      "rows": 1021
+    },
+    {
+      "symbol": "HNG",
+      "ok": true,
+      "latest": "2026-05-28",
+      "rows": 1586
+    },
+    {
+      "symbol": "KSV",
+      "ok": true,
+      "latest": "2026-05-28",
+      "rows": 1309
+    },
+    {
+      "symbol": "MSB",
+      "ok": true,
+      "latest": "2026-05-28",
+      "rows": 1350
+    },
+    {
+      "symbol": "NVL",
+      "ok": true,
+      "latest": "2026-05-28",
+      "rows": 2346
+    },
+    {
+      "symbol": "PVP",
+      "ok": true,
+      "latest": "2026-05-28",
+      "rows": 1989
+    },
+    {
+      "symbol": "VIC",
+      "ok": true,
+      "latest": "2026-05-28",
+      "rows": 2594
+    },
+    {
+      "symbol": "YEG",
+      "ok": true,
+      "latest": "2026-05-28",
+      "rows": 1978
+    }
+  ],
+  "vnindex": {
+    "symbol": "VNINDEX",
+    "ok": true,
+    "latest": "2026-05-28",
+    "rows": 1597
+  },
+  "bctc": [
+    {
+      "symbol": "DXP",
+      "ok": true,
+      "rows": 2600,
+      "seconds": 0.88
+    },
+    {
+      "symbol": "GEE",
+      "ok": true,
+      "rows": 1798,
+      "seconds": 0.73
+    },
+    {
+      "symbol": "KSV",
+      "ok": true,
+      "rows": 2600,
+      "seconds": 0.47
+    },
+    {
+      "symbol": "MSB",
+      "ok": true,
+      "rows": 1068,
+      "seconds": 0.8
+    },
+    {
+      "symbol": "NVL",
+      "ok": true,
+      "rows": 2600,
+      "seconds": 0.51
+    },
+    {
+      "symbol": "PVP",
+      "ok": true,
+      "rows": 2600,
+      "seconds": 0.87
+    },
+    {
+      "symbol": "VIC",
+      "ok": true,
+      "rows": 2600,
+      "seconds": 0.3
+    },
+    {
+      "symbol": "YEG",
+      "ok": true,
+      "rows": 2600,
+      "seconds": 0.26
+    }
+  ]
+}
