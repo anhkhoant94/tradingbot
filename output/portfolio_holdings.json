@@ -1,0 +1,37 @@
+{
+  "navBil": 1.0,
+  "cashBil": null,
+  "holdings": [
+    {
+      "symbol": "YEG",
+      "quantity": 51000.0,
+      "avgPriceK": 10.39,
+      "note": ""
+    },
+    {
+      "symbol": "NVL",
+      "quantity": 27800.0,
+      "avgPriceK": 19.18,
+      "note": ""
+    },
+    {
+      "symbol": "KSV",
+      "quantity": 400.0,
+      "avgPriceK": 173.13,
+      "note": ""
+    },
+    {
+      "symbol": "BVB",
+      "quantity": 10000.0,
+      "avgPriceK": 13.03,
+      "note": ""
+    },
+    {
+      "symbol": "HNG",
+      "quantity": 10000.0,
+      "avgPriceK": 7.67,
+      "note": ""
+    }
+  ],
+  "updatedAt": "2026-05-19 11:33:08"
+}
