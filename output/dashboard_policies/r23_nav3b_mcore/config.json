@@ -1,0 +1,21 @@
+{
+  "key": "r23_nav3b_mcore",
+  "label": "R23_NAV3B",
+  "version_code": "R23",
+  "frequency": "strict daily 100-lot, M-core weekly targets",
+  "deployment_scope": "fixed live NAV <= 3B VND",
+  "deployment_nav_bil": 3.0,
+  "participation_cap_adv": 0.2,
+  "extra_slippage_bps": 15,
+  "buy_cost_pct": 0.3,
+  "sell_cost_pct": 0.4,
+  "cagr": 39.09390947350187,
+  "max_drawdown": -28.726223011787756,
+  "pass_vni20_all": 7,
+  "pass_vni30_all": 6,
+  "pass_vni20_2021_2026": 6,
+  "pass_vni30_2021_2026": 6,
+  "min_edge_2021_2026": 30.56043151973222,
+  "source_research": "output\\beat_vni30_parallel\\m_core_fixed_nav_under5_r23_20260528",
+  "dashboard_note": "R23 small-NAV dashboard policy. Recent 2021-2026 strong; not full-history 2012-2026 proof."
+}
