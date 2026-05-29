@@ -1281,37 +1281,28 @@ function classifyWatchCandidate(item) {
 }
 
 function renderWatchRule(index, text) {
-  return `
-    <article class="watchlist-rule">
-      <span class="rule-index">${index}</span>
-      <span class="rule-text">${esc(text)}</span>
-    </article>
-  `;
+  return `<span><b>${index}</b>${esc(text)}</span>`;
 }
 
-function reasonParts(line) {
-  const text = String(line || "").trim();
-  if (!text) return [];
-  if (text.startsWith("Chưa đạt:")) {
-    return text
-      .replace(/^Chưa đạt:\s*/i, "")
-      .split(",")
-      .map((part) => ({ text: part.trim(), kind: "warn" }))
-      .filter((part) => part.text);
-  }
-  const kind = text.startsWith("Đạt chuẩn") || text.startsWith("Trạng thái") || text.startsWith("Thanh khoản") || text.startsWith("R:R") || text.startsWith("Target")
-    ? "good"
-    : "";
-  return [{ text, kind }];
+function conciseFailLabel(text = "") {
+  const raw = String(text).toLowerCase();
+  if (raw.includes("đang nắm")) return "Đang nắm";
+  if (raw.includes("hard gate")) return "Hard gate chưa đạt";
+  if (raw.includes("avoid")) return "AVOID";
+  if (raw.includes("trạng thái buy") || raw.includes("lệnh mua")) return "Chưa có tín hiệu mua";
+  if (raw.includes("thanh khoản")) return "Thanh khoản thấp/thiếu";
+  if (raw.includes("r:r")) return "R:R < 2";
+  if (raw.includes("upside")) return "Upside < 12%";
+  return text;
 }
 
-function renderWatchReasons(reasons = []) {
-  const chips = reasons.flatMap(reasonParts);
-  return `
-    <div class="reason-cell">
-      ${chips.map((chip) => `<span class="reason-chip ${chip.kind}">${esc(chip.text)}</span>`).join("")}
-    </div>
-  `;
+function watchNote(row) {
+  if (row.bucket === "BUY_SOON") return `Đủ ${row.gatePassCount}/${row.gateTotal} điều kiện`;
+  const failed = (row.reasons || [])
+    .find((line) => String(line).startsWith("Chưa đạt:"));
+  if (!failed) return "Theo dõi thêm";
+  const first = String(failed).replace(/^Chưa đạt:\s*/i, "").split(",")[0]?.trim();
+  return first ? conciseFailLabel(first) : "Theo dõi thêm";
 }
 
 function renderWatchlistTab() {
@@ -1353,10 +1344,13 @@ function renderWatchlistTab() {
   const rulesEl = document.getElementById("watchlistRules");
   if (rulesEl) {
     rulesEl.innerHTML = [
-      "Điểm lọc mã chỉ dùng tiêu chí thuộc rule live (không phải auto-buy)",
-      "Sắp xếp theo Điểm lọc mã giảm dần, rồi Target Upside giảm dần",
-      "Gate live hiện tại gồm 7 điều kiện: không nắm, hard gate PASS, không AVOID, có tín hiệu BUY/ACC/MUA, thanh khoản 20D >= 3 tỷ, R:R >= 2, target upside >= 12%",
-      "Lệnh mua thực tế chỉ chạy khi mã nằm trong target tuần của policy hiện tại",
+      "Không nắm",
+      "Gate PASS",
+      "Không AVOID",
+      "Có tín hiệu mua",
+      "Thanh khoản >= 3 tỷ",
+      "R:R >= 2",
+      "Upside >= 12%",
     ].map((rule, index) => renderWatchRule(index + 1, rule)).join("");
   }
 
@@ -1373,21 +1367,10 @@ function renderWatchlistTab() {
       <td class="num ${row.rrOk ? "target" : ""}">${row.riskReward === null ? "-" : `${f(row.riskReward, 2)}x`}</td>
       <td class="num ${row.liquidityOk ? "target" : ""}">${row.liq20dBil === null ? "-" : f(row.liq20dBil)}</td>
       <td>${plannedMap.has(row.symbol) ? "Có" : "Không"}</td>
-      <td>${plannedMap.has(row.symbol) ? esc(plannedMap.get(row.symbol)?.action || "-") : "-"}</td>
-      <td>${row.inPortfolio ? "Không" : "Có"}</td>
-      <td>${row.passHardGate ? "PASS" : "FAIL"}</td>
-      <td>${row.status.includes("AVOID") ? "Không" : "Có"}</td>
       <td>${(row.status.includes("BUY") || row.status.includes("ACCUMULATE") || row.action.includes("MUA")) ? "Có" : "Không"}</td>
+      <td>${esc(watchNote(row))}</td>
     </tr>
-    <tr class="watch-reason-row">
-      <td colspan="12">
-        <div class="watch-reason-detail">
-          <b>Lý do</b>
-          ${renderWatchReasons(row.reasons)}
-        </div>
-      </td>
-    </tr>
-  `).join("") : `<tr><td colspan="12" class="empty-state">Chưa có mã phù hợp cho watchlist.</td></tr>`;
+  `).join("") : `<tr><td colspan="9" class="empty-state">Chưa có mã phù hợp cho watchlist.</td></tr>`;
 }
 
 function currentPriceK(symbol) {
