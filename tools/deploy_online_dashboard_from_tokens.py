@@ -41,6 +41,7 @@ FILES_TO_PUSH = [
     "dashboard/app.js",
     "dashboard/index.html",
     "tools/check_dashboard_public_health.py",
+    "tools/deploy_vercel_dashboard.py",
     "tools/deploy_online_dashboard_from_tokens.py",
     "ONLINE_AUTO_REFRESH_SETUP.md",
 ]
