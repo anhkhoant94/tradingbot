@@ -3,22 +3,25 @@ const deep = window.SCREENING_DEEP_ANALYSIS || { memos: [], portfolioPlan: {} };
 const modelHistory = window.MODEL_TRADE_HISTORY || { policies: [] };
 const nf = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 });
 const nf0 = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 });
+const LIVE_STATUS_FILE = "./dashboard_live_update_status.json";
 const portfolioStorageKey = "hose_hnx_portfolio_v1";
 const PERFORMANCE_START_DATE = "2021-01-01";
+const LIVE_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+const BUNDLED_LIVE_STALE_MS = 15 * 60 * 1000;
 let portfolio = { navBil: 1, cashBil: null, holdings: [] };
+let lastLiveRefreshAt = null;
+let onlineLiveRefreshTimer = null;
 const ACTIVE_POLICY_KEYS = [
   "r46_bear_stop_mcore",
-  "r23_nav3b_mcore",
 ];
 const POLICY_DISPLAY = {
   r46_bear_stop_mcore: "R46 Bear Stop",
-  r23_nav3b_mcore: "R23_NAV3B",
   technical_t2_vni30_v13: "T2 VNI+30 Research (loophole, not production)",
   rank_best_full_tier_a: "Best hiện tại - sạch",
 };
 
 // Dashboard version-keyed cache invalidation — auto clear stale localStorage when dashboard upgrades
-const DASHBOARD_VERSION = "live_quote_refresh_2026_05_28_v1";
+const DASHBOARD_VERSION = "live_quote_refresh_2026_05_29_v10_online_poll_fallback";
 const storedVersion = localStorage.getItem("hose_hnx_dashboard_version");
 if (storedVersion !== DASHBOARD_VERSION) {
   // Wipe all dashboard-related localStorage keys
@@ -27,6 +30,7 @@ if (storedVersion !== DASHBOARD_VERSION) {
 }
 const storedStrategyMode = localStorage.getItem("hose_hnx_strategy_mode");
 let strategyMode = storedStrategyMode || deep.defaultPolicy || ACTIVE_POLICY_KEYS[0];
+let resizeRenderTimer = null;
 // Force-upgrade legacy strategy modes to the current champion default
 const LEGACY_MODES_TO_UPGRADE = [
   "phase18_meanreversion_boost",
@@ -75,6 +79,26 @@ function lastItem(arr) {
   return Array.isArray(arr) && arr.length ? arr[arr.length - 1] : undefined;
 }
 
+function pad2(value) {
+  return String(value).padStart(2, "0");
+}
+
+function formatTimeLabel(ts) {
+  if (!ts) return "";
+  const d = ts instanceof Date ? ts : new Date(ts);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+}
+
+function performanceChartHeight() {
+  const w = Number(window.innerWidth) || 1280;
+  if (w <= 420) return 180;
+  if (w <= 560) return 200;
+  if (w <= 720) return 220;
+  if (w <= 960) return 260;
+  return 320;
+}
+
 function isLocalDashboardHost() {
   const host = String(window.location.hostname || "").toLowerCase();
   return host === "localhost" || host === "127.0.0.1" || host === "";
@@ -84,18 +108,82 @@ function setStaticUpdateMode() {
   const btn = document.getElementById("updateBtn");
   const statusEl = document.getElementById("serverStatusText");
   if (!btn) return;
-  if (!isLocalDashboardHost()) {
-    btn.disabled = false;
-    btn.title = "Lấy giá live trực tiếp từ nguồn market data";
-    if (statusEl) {
-      statusEl.textContent = "Bản online: bấm Update để lấy giá live mới nhất.";
+  const isLocal = isLocalDashboardHost();
+  btn.style.display = isLocal ? "" : "none";
+  if (!isLocal && statusEl) {
+    statusEl.textContent = "Bản online: cập nhật giá tự động theo lịch 5 phút.";
+  }
+}
+
+function normalizeQuoteRow(row = {}) {
+  const symbol = String(row.symbol || "").toUpperCase().trim();
+  if (!symbol) return null;
+  const closeRaw = Number(row.close);
+  if (!Number.isFinite(closeRaw) || closeRaw <= 0) return null;
+  const rawDate = String(row.date || row.latestDate || row.latest || "").trim();
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null;
+  return { symbol, close: closeRaw, date };
+}
+
+async function fetchBundledLiveQuotes() {
+  try {
+    const res = await fetch(LIVE_STATUS_FILE, { cache: "no-store" });
+    if (!res.ok) return null;
+    const payload = await res.json();
+    const quoteMap = new Map();
+    const quotes = payload?.quotes || payload?.prices || [];
+    if (Array.isArray(quotes)) {
+      for (const item of quotes) {
+        const parsed = normalizeQuoteRow(item);
+        if (parsed) quoteMap.set(parsed.symbol, parsed);
+      }
+    } else if (quotes && typeof quotes === "object") {
+      for (const [symbol, raw] of Object.entries(quotes)) {
+        const parsed = normalizeQuoteRow({ symbol, ...raw });
+        if (parsed) quoteMap.set(parsed.symbol, parsed);
+      }
+    }
+    return {
+      quoteMap,
+      latestDate: (String(payload?.latestPriceDate || payload?.latest_date || "").slice(0, 10)) || null,
+      updatedAt: String(payload?.updatedAt || ""),
+      updatedAtMs: Date.parse(String(payload?.updatedAt || "").replace(" ", "T")),
+      fetched: true,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function fallbackQuotesFromPolicyHoldings(symbols) {
+  const out = new Map();
+  for (const symbol of symbols) {
+    for (const policy of deep.strategyPolicies || []) {
+      for (const row of policy?.holdings || []) {
+        const rowSymbol = String(row?.symbol || "").toUpperCase().trim();
+        if (!rowSymbol || rowSymbol !== symbol) continue;
+        const closeRaw = Number(row.currentPrice);
+        if (!Number.isFinite(closeRaw) || closeRaw <= 0) continue;
+        const fallbackDate = String(
+          row.priceAsOf || row.historyLastDate || row.entryDate || (data?.summary?.as_of || "")
+        ).slice(0, 10);
+        out.set(rowSymbol, {
+          symbol: rowSymbol,
+          close: closeRaw,
+          date: fallbackDate || null,
+        });
+        break;
+      }
     }
   }
+  return out;
 }
 
 function uniqueSymbolsForLiveRefresh() {
   const symbols = new Set();
-  for (const policy of deep.strategyPolicies || []) {
+  const active = activePolicy();
+  const scoped = active?.holdings?.length ? [active] : (deep.strategyPolicies || []);
+  for (const policy of scoped) {
     for (const row of policy?.holdings || []) {
       const symbol = String(row?.symbol || "").toUpperCase().trim();
       if (symbol) symbols.add(symbol);
@@ -127,16 +215,51 @@ async function refreshLiveMarketData() {
   const symbols = uniqueSymbolsForLiveRefresh();
   if (!symbols.length) return { ok: false, reason: "no_symbols" };
   const targets = ["VNINDEX", ...symbols];
-  const settled = await Promise.allSettled(targets.map((symbol) => fetchDailyClose(symbol)));
-  const quoteMap = new Map();
-  let ok = 0;
-  for (const item of settled) {
-    if (item.status === "fulfilled") {
-      ok += 1;
-      quoteMap.set(item.value.symbol, item.value);
+  let source = "live_direct";
+  let quoteMap = null;
+  let staleBundledQuoteMap = null;
+  if (!isLocalDashboardHost()) {
+    const bundled = await fetchBundledLiveQuotes();
+    if (bundled?.quoteMap?.size) {
+      const ageMs = Number.isFinite(bundled.updatedAtMs) ? Date.now() - bundled.updatedAtMs : Infinity;
+      if (ageMs <= BUNDLED_LIVE_STALE_MS) {
+        quoteMap = bundled.quoteMap;
+        source = "bundled";
+      } else {
+        staleBundledQuoteMap = bundled.quoteMap;
+        source = "bundled_stale";
+      }
     }
   }
-  if (!quoteMap.size) return { ok: false, reason: "all_failed" };
+  if (!quoteMap) {
+    const settled = await Promise.allSettled(targets.map((symbol) => fetchDailyClose(symbol)));
+    quoteMap = new Map();
+    for (const item of settled) {
+      if (item.status === "fulfilled") {
+        quoteMap.set(item.value.symbol, item.value);
+      }
+    }
+  }
+  if (!quoteMap.size && staleBundledQuoteMap?.size) {
+    quoteMap = staleBundledQuoteMap;
+    source = "bundled_stale";
+  }
+  if (!quoteMap.size) {
+    const fallback = fallbackQuotesFromPolicyHoldings(symbols);
+    if (fallback.size) {
+      quoteMap = fallback;
+      source = source === "live_direct" ? "cached_holdings" : `${source}+cached_holdings`;
+    }
+  }
+  const refreshedSymbolCount = symbols.filter((symbol) => quoteMap.has(symbol)).length;
+  const totalSymbols = symbols.length;
+  const ok = refreshedSymbolCount;
+  const sortedDates = [...quoteMap.values()].map((x) => x.date).filter(Boolean).sort();
+  if (!ok) return { ok: false, reason: "all_failed", source };
+  let latestDate = sortedDates.length ? sortedDates[sortedDates.length - 1] : null;
+  if (!latestDate && source === "bundled" && data?.summary?.as_of) {
+    latestDate = data.summary.as_of;
+  }
 
   for (const policy of deep.strategyPolicies || []) {
     for (const row of policy?.holdings || []) {
@@ -159,10 +282,39 @@ async function refreshLiveMarketData() {
       }
     }
   }
-  const sortedDates = [...quoteMap.values()].map((x) => x.date).sort();
-  const latestDate = sortedDates.length ? sortedDates[sortedDates.length - 1] : null;
   if (data?.summary && latestDate) data.summary.as_of = latestDate;
-  return { ok: true, refreshed: ok, total: targets.length, latestDate };
+  lastLiveRefreshAt = new Date();
+  return {
+    ok: true,
+    refreshed: refreshedSymbolCount,
+    total: totalSymbols,
+    latestDate,
+    source,
+    refreshedAt: lastLiveRefreshAt.toISOString(),
+    refreshedAtText: formatTimeLabel(lastLiveRefreshAt),
+  };
+}
+
+async function refreshOnlineLivePrices() {
+  if (isLocalDashboardHost()) return;
+  const statusEl = document.getElementById("serverStatusText");
+  try {
+    const refreshed = await refreshLiveMarketData();
+    if (!refreshed.ok) return;
+    renderActiveModel();
+    if (statusEl) {
+      const sourceText = refreshed.source === "bundled"
+        ? "dữ liệu deploy tự động"
+        : refreshed.source === "bundled_stale"
+          ? "dữ liệu deploy gần nhất"
+          : "nguồn trực tiếp";
+      statusEl.textContent = `Đã cập nhật giá live cho ${refreshed.refreshed}/${refreshed.total} mã lúc ${refreshed.refreshedAtText || "--:--:--"} từ ${sourceText} (ngày giá ${refreshed.latestDate || "-"})`;
+    }
+  } catch (err) {
+    if (statusEl) {
+      statusEl.textContent = "Chưa thể cập nhật giá live từ bản deploy, thử lại sau vài phút.";
+    }
+  }
 }
 
 function roundLot(shares) {
@@ -248,6 +400,17 @@ function modelInitialNavMil() {
   return (Number.isFinite(configured) && configured > 0 ? configured : 1_000_000_000) / 1e6;
 }
 
+function performanceWindowEndDate(hist = activeHistory()) {
+  const rows = allPerformanceRows(hist);
+  return lastItem(rows)?.date || data?.summary?.as_of || null;
+}
+
+function performanceWindowLabel(hist = activeHistory()) {
+  const endDate = performanceWindowEndDate(hist);
+  const endYear = endDate ? String(endDate).slice(0, 4) : "";
+  return endYear ? `2021 - ${endYear}` : "2021 - hiện tại";
+}
+
 function badge(status) {
   const label = displayAction(status || "-");
   const cls = actionClass(status || "");
@@ -302,23 +465,28 @@ function scoreBar(value) {
 
 function renderKpis() {
   const s = data.summary;
+  const hist = activeHistory();
   const policy = activePolicy();
   const holdings = policy?.holdings || [];
   const audit = policy?.productionAudit || null;
-  const perf = policyPerformanceSummary(activeHistory());
+  const perf = policyPerformanceSummary(hist);
+  const perfWindow = performanceWindowLabel(hist);
   const totalWeight = holdings.reduce((sum, item) => sum + n(item.suggestedWeight), 0);
   const explicitCash = Number(policy?.cashBuffer);
   const cashPct = policy ? (explicitCash > 0 ? explicitCash : Math.max(0, 100 - totalWeight)) : 0;
   const asset = currentAssetSnapshot();
   const kpiValue = (value) => typeof value === "number" ? nf0.format(value) : value;
   const marketDate = lastItem(holdings.map((h) => h.priceAsOf).filter(Boolean).sort()) || s.as_of;
-  document.getElementById("asOf").textContent = `Giá đến ${marketDate}`;
+  const liveClock = formatTimeLabel(lastLiveRefreshAt);
+  document.getElementById("asOf").textContent = liveClock
+    ? `Giá đến ${marketDate} lúc ${liveClock}`
+    : `Giá đến ${marketDate}`;
   document.getElementById("kpis").innerHTML = [
     ["Policy", policyName(policy)],
     ["Tài sản", moneyMilLabel(asset.currentAssetMil)],
     ["Lãi/lỗ", `${asset.gainPct >= 0 ? "+" : ""}${f(asset.gainPct)}%`],
-    ["CAGR 2021+", perf ? `${f(perf.cagr)}%` : (audit ? `${f(audit.cagr)}%` : "-")],
-    ["MaxDD 2021+", perf ? `${f(perf.maxDrawdown)}%` : (audit ? `${f(audit.maxDrawdown)}%` : "-")],
+    [`CAGR ${perfWindow}`, perf ? `${f(perf.cagr)}%` : (audit ? `${f(audit.cagr)}%` : "-")],
+    [`MaxDD ${perfWindow}`, perf ? `${f(perf.maxDrawdown)}%` : (audit ? `${f(audit.maxDrawdown)}%` : "-")],
     ["Vị thế / Cash", `${holdings.length} mã / ${f(cashPct)}%`]
   ].map(([label, value, note]) => `
     <article class="kpi">
@@ -346,10 +514,11 @@ function syncStrategyOptions() {
   const select = document.getElementById("strategyMode");
   if (!select) return;
   const policies = activePolicies();
+  const perfWindow = performanceWindowLabel(activeHistory());
   select.innerHTML = policies.map((policy) => {
     const audit = policy.productionAudit;
     const suffix = Number.isFinite(Number(policy.historicalCagr))
-      ? `2021+ CAGR ${f(policy.historicalCagr)}%, MaxDD ${f(policy.historicalMaxDrawdown)}%`
+      ? `${perfWindow} CAGR ${f(policy.historicalCagr)}%, MaxDD ${f(policy.historicalMaxDrawdown)}%`
       : audit
       ? `Strict 100-lot VNI+20 ${f(audit.passVni20 ?? audit.passVni30, 0)}/6`
       : `CAGR ${f(policy.historicalCagr)}%, Sharpe ${f(policy.historicalSharpe, 2)}`;
@@ -373,6 +542,7 @@ function setModelLoading(message = "") {
 function renderActiveModel() {
   arrangePortfolioLayout();
   renderKpis();
+  renderWatchlistTab();
   renderModelLogicTab();
   renderPortfolio();
 }
@@ -386,14 +556,14 @@ function renderModelLogicTab() {
   if (!body) return;
   const policy = activePolicy();
   const perf = policyPerformanceSummary(activeHistory());
-  const period = perf ? `${perf.startDate} đến ${perf.endDate}` : "2021 đến hiện tại";
+  const period = perf ? `${perf.startDate} đến ${perf.endDate}` : `${performanceWindowLabel(activeHistory())}`;
   const status = document.getElementById("modelLogicStatus");
   if (status) status.textContent = policy?.methodology?.status || "Candidate preview";
   const audit = policy?.productionAudit || null;
   const failText = audit?.failYears?.length ? audit.failYears.join(", ") : "không";
   const auditText = audit
     ? (audit.status === "R23_NAV3B"
-      ? `R23_NAV3B tính fixed live NAV 3 tỷ, cap 20% ADV và thêm trượt giá ${f((audit.slippageBps || 15) / 100, 2)}% mỗi chiều. Giai đoạn 2021-hiện tại đạt VNI+20 ${f(audit.passVni20 ?? audit.passVni30, 0)}/6 năm, VNI+30 ${f(audit.passVni30, 0)}/6 năm, CAGR ${perf ? f(perf.cagr) : f(audit.cagr)}%, MaxDD ${perf ? f(perf.maxDrawdown) : f(audit.maxDrawdown)}%, min edge ${f(audit.minEdgeVsVni)} điểm %. Ở stress 30bps vẫn giữ VNI+20 6/6.`
+      ? `R23_NAV3B tính fixed live NAV 3 tỷ, cap 20% ADV và thêm trượt giá ${f((audit.slippageBps || 15) / 100, 2)}% mỗi chiều. Giai đoạn ${period} đạt VNI+20 ${f(audit.passVni20 ?? audit.passVni30, 0)}/6 năm, VNI+30 ${f(audit.passVni30, 0)}/6 năm, CAGR ${perf ? f(perf.cagr) : f(audit.cagr)}%, MaxDD ${perf ? f(perf.maxDrawdown) : f(audit.maxDrawdown)}%, min edge ${f(audit.minEdgeVsVni)} điểm %. Ở stress 30bps vẫn giữ VNI+20 6/6.`
       : audit.status === "R46_BEAR_STOP_15BPS"
       ? `R46 Bear Stop tính fixed live NAV 3 tỷ, cap 20% ADV và thêm trượt giá ${f((audit.slippageBps || 15) / 100, 2)}% mỗi chiều. Giai đoạn ${period} đạt VNI+20 ${f(audit.passVni20, 0)}/6 năm, VNI+30 ${f(audit.passVni30, 0)}/6 năm, CAGR ${perf ? f(perf.cagr) : f(audit.cagr)}%, MaxDD ${perf ? f(perf.maxDrawdown) : f(audit.maxDrawdown)}%, min edge ${f(audit.minEdgeVsVni)} điểm %. Ở stress 20bps, VNI+30 recent còn 5/6 nên cần theo dõi chi phí khớp lệnh thật.`
       : `Backtest tính thêm trượt giá ${f((audit.slippageBps || 15) / 100, 2)}% mỗi chiều. Strict 100-lot hiện đạt VNI+20 ${f(audit.passVni20 ?? audit.passVni30, 0)}/6 năm, CAGR ${f(audit.cagr)}%, MaxDD ${f(audit.maxDrawdown)}%, min edge ${f(audit.minEdgeVsVni)} điểm %, fail năm ${failText}. VNI+30 đạt ${f(audit.passVni30, 0)}/6. Nếu trượt giá thực tế tăng lên 20bps, gate VNI+20 giảm còn 4/6 nên dashboard cần theo dõi chi phí khớp lệnh thật.`)
@@ -442,12 +612,13 @@ async function refreshStatus() {
   }
   const status = await getServerStatus();
   const el = document.getElementById("serverStatusText");
+  const updateBtn = document.getElementById("updateBtn");
   if (!status) {
     el.textContent = "Mở bằng open-dashboard-server.cmd để dùng nút update.";
-    document.getElementById("updateBtn").disabled = true;
+    if (updateBtn) updateBtn.disabled = true;
     return;
   }
-  document.getElementById("updateBtn").disabled = Boolean(status.running);
+  if (updateBtn) updateBtn.disabled = Boolean(status.running);
   el.textContent = status.running
     ? `Đang cập nhật từ ${status.started_at}...`
     : `${status.message}${status.finished_at ? ` | ${status.finished_at}` : ""}`;
@@ -465,10 +636,9 @@ async function triggerUpdate(mode) {
         return;
       }
       renderActiveModel();
-      renderRecentTrades();
-      renderHeadlines(activePolicy());
       if (el) {
-        el.textContent = `Đã cập nhật giá live (${refreshed.refreshed}/${refreshed.total}) đến ${refreshed.latestDate || "-"}.`;
+        const sourceText = refreshed.source === "bundled" ? "dữ liệu deploy tự động" : "nguồn trực tiếp";
+        el.textContent = `Đã cập nhật giá live cho ${refreshed.refreshed}/${refreshed.total} mã lúc ${refreshed.refreshedAtText || "--:--:--"} từ ${sourceText} (ngày giá ${refreshed.latestDate || "-"})`;
       }
     } catch (err) {
       if (el) el.textContent = "Lỗi kết nối nguồn giá live.";
@@ -477,7 +647,7 @@ async function triggerUpdate(mode) {
     return;
   }
   const endpoint = "/api/update-fast";
-  const label = "Update";
+  const label = "Cập nhật";
   const res = await fetch(endpoint, { method: "POST" });
   if (!res.ok && res.status !== 409) {
     alert(`${label} không chạy được. Hãy mở dashboard qua open-dashboard-server.cmd.`);
@@ -891,7 +1061,7 @@ function renderMemos() {
     : n(plan.cashBuffer);
   document.getElementById("portfolioPlan").innerHTML = `
     <strong>${f(policy?.totalSuggestedWeight ?? plan.totalSuggestedWeight)}% NAV</strong>
-    <small>${policy ? `${policyName(policy)} | Cash ${f(memoCash)}% | CAGR 2021+ ${perf ? f(perf.cagr) : f(policy.historicalCagr)}%` : `Cash buffer ${f(memoCash)}%`}</small>
+    <small>${policy ? `${policyName(policy)} | Cash ${f(memoCash)}% | CAGR ${performanceWindowLabel(activeHistory())} ${perf ? f(perf.cagr) : f(policy.historicalCagr)}%` : `Cash buffer ${f(memoCash)}%`}</small>
   `;
   const memos = deep.memos || [];
   const memoHtml = memos.length ? memos.map((memo) => `
@@ -918,6 +1088,265 @@ function renderMemos() {
     </article>
   `).join("") : `<article class="panel"><div class="empty-state">Chưa có memo nào.</div></article>`;
   document.getElementById("memoGrid").innerHTML = memoHtml;
+}
+
+function normalizeWatchItem(raw = {}, source = "unknown") {
+  const symbol = String(raw.symbol || "").toUpperCase().trim();
+  if (!symbol) return null;
+  const action = String(raw.action || raw.orderAction || "").toUpperCase().trim();
+  const currentPriceK = firstPositive(raw.current_price_k, raw.currentPrice);
+  let buyLow = n(raw.buy_zone_low_k, null);
+  let buyHigh = n(raw.buy_zone_high_k, null);
+  const maxBuyPriceK = n(raw.maxBuyPrice, null);
+  const limitPriceK = n(raw.limitPrice, null);
+  if (!Number.isFinite(buyLow) || !Number.isFinite(buyHigh)) {
+    const low = Number.isFinite(limitPriceK) ? limitPriceK : maxBuyPriceK;
+    const high = Number.isFinite(maxBuyPriceK) ? maxBuyPriceK : limitPriceK;
+    if (Number.isFinite(low) && Number.isFinite(high)) {
+      buyLow = Math.min(low, high);
+      buyHigh = Math.max(low, high);
+    }
+  }
+  const targetPriceK = n(raw.target_price_k ?? raw.targetPrice, null);
+  const stopPriceK = n(raw.stop_price_k ?? raw.stopPrice, null);
+  const support20K = n(raw.support20_k, null);
+  const atr20K = n(raw.atr20_k, null);
+  const rrMin = n(raw.rr_min, 2);
+  let liq20dBil = n(raw.avg_value_20d_bil, null);
+  if (Number.isFinite(liq20dBil) && liq20dBil <= 0) liq20dBil = null;
+  const status = String(raw.status || raw.qualitative_overlay || "WATCH").toUpperCase();
+  const hardGate = String(raw.hard_gate || "PASS").toUpperCase();
+  const rrRaw = n(raw.risk_reward ?? raw.riskReward, null);
+  const upsideRaw = n(raw.upside_pct ?? raw.upsidePct, null);
+  const upsidePct = upsideRaw === null ? null : (Math.abs(upsideRaw) <= 2 ? upsideRaw * 100 : upsideRaw);
+  let riskReward = rrRaw;
+  if ((riskReward === null || riskReward <= 0) && targetPriceK && stopPriceK && currentPriceK && currentPriceK > stopPriceK) {
+    riskReward = (targetPriceK - currentPriceK) / (currentPriceK - stopPriceK);
+  }
+  const isCenteredFeedZone = Number.isFinite(currentPriceK)
+    && Number.isFinite(buyLow)
+    && Number.isFinite(buyHigh)
+    && Math.abs((buyLow / currentPriceK) - 0.98) < 0.0015
+    && Math.abs((buyHigh / currentPriceK) - 1.02) < 0.0015;
+  if (isCenteredFeedZone) {
+    const lowBySupport = Number.isFinite(support20K) && Number.isFinite(atr20K)
+      ? support20K - (0.35 * atr20K)
+      : null;
+    const highBySupport = Number.isFinite(support20K) && Number.isFinite(atr20K)
+      ? support20K + (0.85 * atr20K)
+      : null;
+    const highByRR = Number.isFinite(targetPriceK) && Number.isFinite(stopPriceK)
+      ? (targetPriceK + rrMin * stopPriceK) / (1 + rrMin)
+      : null;
+    const floorByStop = Number.isFinite(stopPriceK) ? (stopPriceK * 1.03) : null;
+    const resolvedLow = [lowBySupport, floorByStop].filter((x) => Number.isFinite(x));
+    const resolvedHigh = [highBySupport, highByRR].filter((x) => Number.isFinite(x));
+    if (resolvedLow.length && resolvedHigh.length) {
+      buyLow = Math.max(...resolvedLow);
+      buyHigh = Math.min(...resolvedHigh);
+      if (buyHigh < buyLow) {
+        buyHigh = buyLow;
+      }
+    } else {
+      // Reject synthetic centered zones when we cannot resolve a real zone from rule anchors.
+      buyLow = null;
+      buyHigh = null;
+    }
+  }
+  return {
+    symbol,
+    source,
+    action,
+    status,
+    hardGate,
+    industry: raw.industry_name || raw.industry || raw.sleeve || "-",
+    currentPriceK,
+    buyLow,
+    buyHigh,
+    targetPriceK,
+    stopPriceK,
+    support20K,
+    atr20K,
+    upsidePct,
+    riskReward,
+    liq20dBil,
+    rrMin,
+  };
+}
+
+function activePolicyPlannedRows() {
+  const policy = activePolicy();
+  const planned = policy?.plannedOrders || deep.plannedOrders || {};
+  return Array.isArray(planned.rows) ? planned.rows : [];
+}
+
+function watchlistUniverseRows() {
+  const plannedRows = activePolicyPlannedRows();
+  const shortlistSymbols = new Set();
+  for (const row of deep.memos || []) {
+    const symbol = String(row?.symbol || "").toUpperCase().trim();
+    if (symbol) shortlistSymbols.add(symbol);
+  }
+  for (const row of plannedRows) {
+    const symbol = String(row?.symbol || "").toUpperCase().trim();
+    if (symbol) shortlistSymbols.add(symbol);
+  }
+
+  const merged = new Map();
+  const sourceRank = {
+    watch: 1,
+    memo: 2,
+    candidate: 3,
+    live_shortlist: 4,
+  };
+  const put = (row, source) => {
+    const item = normalizeWatchItem(row, source);
+    if (!item) return;
+    const prev = merged.get(item.symbol);
+    const prevRank = prev ? (sourceRank[prev.source] || 0) : -1;
+    const nextRank = sourceRank[source] || 0;
+    if (!prev || nextRank >= prevRank) {
+      merged.set(item.symbol, item);
+    }
+  };
+
+  if (shortlistSymbols.size) {
+    for (const symbol of shortlistSymbols) {
+      const stock = stockBySymbol.get(symbol) || {};
+      const memo = (deep.memos || []).find((row) => String(row.symbol || "").toUpperCase() === symbol) || {};
+      const plan = plannedRows.find((row) => String(row.symbol || "").toUpperCase() === symbol) || {};
+      put({ ...stock, ...memo, ...plan }, "live_shortlist");
+    }
+  }
+
+  for (const row of data.candidates || []) put(row, "candidate");
+  for (const row of data.watch || []) put(row, "watch");
+  for (const row of deep.memos || []) {
+    const enriched = stockBySymbol.get(String(row.symbol || "").toUpperCase()) || {};
+    put({ ...enriched, ...row }, "memo");
+  }
+  return [...merged.values()];
+}
+
+function classifyWatchCandidate(item) {
+  const inPortfolio = isHeld(item.symbol);
+  const passHardGate = item.hardGate.includes("PASS");
+  const notAvoid = !item.status.includes("AVOID");
+  const buyAction = item.action.includes("MUA");
+  const liquidityOk = Number.isFinite(item.liq20dBil) && item.liq20dBil >= 3;
+  const rrOk = Number.isFinite(item.riskReward) && item.riskReward >= 2;
+  const upsideOk = Number.isFinite(item.upsidePct) && item.upsidePct >= 12;
+  const strongStatus = item.status.includes("BUY") || item.status.includes("ACCUMULATE") || buyAction;
+
+  const reasons = [];
+  if (item.action) reasons.push(`Lệnh policy: ${item.action}`);
+  if (strongStatus) reasons.push("Trạng thái BUY/ACCUMULATE");
+  if (liquidityOk) reasons.push(`Thanh khoản 20D ${f(item.liq20dBil)} tỷ`);
+  if (rrOk) reasons.push(`R:R ${f(item.riskReward, 2)}x`);
+  if (upsideOk) reasons.push(`Target upside ${f(item.upsidePct)}%`);
+
+  const failedConditions = [];
+  if (inPortfolio) failedConditions.push("đang nắm trong danh mục");
+  if (!passHardGate) failedConditions.push(`hard gate ${item.hardGate || "không đạt"}`);
+  if (!notAvoid) failedConditions.push("trạng thái AVOID");
+  if (!strongStatus) failedConditions.push("chưa có trạng thái BUY/ACCUMULATE hoặc lệnh MUA từ policy");
+  if (!Number.isFinite(item.liq20dBil)) failedConditions.push("thiếu dữ liệu thanh khoản 20D");
+  else if (!liquidityOk) failedConditions.push("thanh khoản 20D < 3 tỷ");
+  if (!rrOk) failedConditions.push("R:R < 2");
+  if (!upsideOk) failedConditions.push("target upside < 12%");
+
+  const canBuySoon = !inPortfolio && passHardGate && notAvoid && strongStatus && liquidityOk && rrOk && upsideOk;
+  const gatePassCount = [!inPortfolio, passHardGate, notAvoid, strongStatus, liquidityOk, rrOk, upsideOk]
+    .filter(Boolean)
+    .length;
+  const gateTotal = 7;
+  if (!canBuySoon && failedConditions.length) {
+    reasons.push(`Chưa đạt: ${failedConditions.join(", ")}`);
+  } else if (canBuySoon) {
+    reasons.push(`Đạt chuẩn mua: ${gatePassCount}/${gateTotal} điều kiện`);
+  }
+  return {
+    ...item,
+    isLiveShortlist: item.source === "live_shortlist",
+    inPortfolio,
+    passHardGate,
+    liquidityOk,
+    rrOk,
+    upsideOk,
+    gatePassCount,
+    gateTotal,
+    bucket: canBuySoon ? "BUY_SOON" : "WATCH",
+    reasons: reasons.length ? reasons : ["Chờ tín hiệu rõ hơn theo rule"],
+  };
+}
+
+function renderWatchlistTab() {
+  const plannedMap = new Map(
+    activePolicyPlannedRows().map((row) => [
+      String(row.symbol || "").toUpperCase(),
+      {
+        action: displayAction(row.action || row.side || ""),
+        status: String(row.status || ""),
+      },
+    ])
+  );
+  const allRows = watchlistUniverseRows().map(classifyWatchCandidate).sort((a, b) => {
+    const byScore = (b.gatePassCount || 0) - (a.gatePassCount || 0);
+    if (byScore !== 0) return byScore;
+    const byUpside = (b.upsidePct || 0) - (a.upsidePct || 0);
+    if (byUpside !== 0) return byUpside;
+    const byRR = (b.riskReward || 0) - (a.riskReward || 0);
+    if (byRR !== 0) return byRR;
+    return String(a.symbol || "").localeCompare(String(b.symbol || ""));
+  });
+  const excludedHeld = allRows.filter((row) => row.inPortfolio);
+  const rows = allRows.filter((row) => !row.inPortfolio);
+  const liveScope = rows.filter((row) => row.isLiveShortlist);
+  const buySoon = rows.filter((row) => row.bucket === "BUY_SOON");
+  const watchMore = rows.filter((row) => row.bucket === "WATCH");
+
+  const summaryEl = document.getElementById("watchlistSummary");
+  if (summaryEl) {
+    summaryEl.innerHTML = `
+      <span>Shortlist live policy <b>${liveScope.length} mã</b></span>
+      <span>Có thể mua sớm <b>${buySoon.length} mã</b></span>
+      <span>Cần theo dõi thêm <b>${watchMore.length} mã</b></span>
+      <span>Tổng watchlist <b>${rows.length} mã</b></span>
+      <span>Đang nắm (đã loại khỏi mua mới) <b>${excludedHeld.length} mã</b></span>
+    `;
+  }
+
+  const rulesEl = document.getElementById("watchlistRules");
+  if (rulesEl) {
+    rulesEl.innerHTML = [
+      "Điểm lọc mã chỉ dùng tiêu chí thuộc rule live (không phải auto-buy)",
+      "Sắp xếp theo Điểm lọc mã giảm dần, rồi Target Upside giảm dần",
+      "Gate live hiện tại gồm 7 điều kiện: không nắm, hard gate PASS, không AVOID, có tín hiệu BUY/ACC/MUA, thanh khoản 20D >= 3 tỷ, R:R >= 2, target upside >= 12%",
+      "Lệnh mua thực tế chỉ chạy khi mã nằm trong target tuần của policy hiện tại",
+    ].map((rule) => `<span>${rule}</span>`).join("");
+  }
+
+  const body = document.getElementById("watchlistRows");
+  if (!body) return;
+  body.innerHTML = rows.length ? rows.map((row) => `
+    <tr>
+      <td><strong>${esc(row.symbol)}</strong></td>
+      <td>${row.bucket === "BUY_SOON" ? `<span class="action-pill buy">CÓ THỂ MUA</span>` : `<span class="action-pill watch">THEO DÕI</span>`}</td>
+      <td class="num">${row.bucket === "BUY_SOON"
+        ? `<span class="action-pill buy">${row.gatePassCount}/${row.gateTotal}</span>`
+        : `<span class="action-pill watch">${row.gatePassCount}/${row.gateTotal}</span>`}</td>
+      <td class="num ${row.upsideOk ? "target" : ""}">${row.upsidePct === null ? "-" : `${f(row.upsidePct)}%`}</td>
+      <td class="num ${row.rrOk ? "target" : ""}">${row.riskReward === null ? "-" : `${f(row.riskReward, 2)}x`}</td>
+      <td class="num ${row.liquidityOk ? "target" : ""}">${row.liq20dBil === null ? "-" : f(row.liq20dBil)}</td>
+      <td>${plannedMap.has(row.symbol) ? "Có" : "Không"}</td>
+      <td>${plannedMap.has(row.symbol) ? esc(plannedMap.get(row.symbol)?.action || "-") : "-"}</td>
+      <td>${row.inPortfolio ? "Không" : "Có"}</td>
+      <td>${row.passHardGate ? "PASS" : "FAIL"}</td>
+      <td>${row.status.includes("AVOID") ? "Không" : "Có"}</td>
+      <td>${(row.status.includes("BUY") || row.status.includes("ACCUMULATE") || row.action.includes("MUA")) ? "Có" : "Không"}</td>
+      <td>${esc(row.reasons.join(" · "))}</td>
+    </tr>
+  `).join("") : `<tr><td colspan="13" class="empty-state">Chưa có mã phù hợp cho watchlist.</td></tr>`;
 }
 
 function currentPriceK(symbol) {
@@ -1194,6 +1623,9 @@ function renderPerformanceChart() {
   const rows = filteredCurve(hist);
   const statsEl = document.getElementById("performanceStats");
   const canvas = document.getElementById("performanceChart");
+  if (canvas) {
+    canvas.setAttribute("height", String(performanceChartHeight()));
+  }
   if (!hist || rows.length < 2) {
     if (statsEl) statsEl.innerHTML = `<span>Chưa có đủ NAV history cho policy này.</span>`;
     if (canvas) canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
@@ -1343,7 +1775,7 @@ function openBuyIdeas(decisions, totals) {
     .map((memo) => {
       const targetWeight = n(memo.suggestedWeight);
       const policyReason = policy
-        ? `${policyName(policy)}: mua tại kỳ update hiện tại nếu giá còn trong vùng mua; target ${f(targetWeight)}% NAV, stop theo memo/policy.`
+        ? `${policyName(policy)}: theo gate live hiện tại; target ${f(targetWeight)}% NAV, stop theo memo/policy.`
         : memo.plan;
       return {
         symbol: memo.symbol,
@@ -1565,6 +1997,11 @@ function evaluatedPlannedTradeSignals() {
 function renderPlannedTrades() {
   const plan = activePlannedOrders();
   const rows = plannedTradeSignals();
+  const watchGateMap = new Map(
+    watchlistUniverseRows()
+      .map(classifyWatchCandidate)
+      .map((row) => [row.symbol, row])
+  );
   const summaryEl = document.getElementById("plannedTradeSummary");
   const body = document.getElementById("plannedTradeRows");
   const wrapper = document.querySelector(".planned-orders");
@@ -1581,9 +2018,15 @@ function renderPlannedTrades() {
       live_window: "Đang trong cửa sổ T2-T4",
       closed_window: "Đã qua cửa sổ mua",
     }[plan.stage] || "Theo dõi";
+    const buyRows = rows.filter((row) => isBuyAction(row.action));
+    const buyGatePass = buyRows.filter((row) => {
+      const gate = watchGateMap.get(String(row.symbol || "").toUpperCase());
+      return gate && gate.gatePassCount >= gate.gateTotal;
+    }).length;
     summaryEl.innerHTML = `
       <span>${esc(stageText)}</span>
-      <span>Giá đến ${esc(plan.asOf || "-")} · kế hoạch ${esc(plan.planDate || "-")}</span>
+      <span>Kế hoạch ${esc(plan.planDate || "-")}</span>
+      <span>Mua đạt đủ điểm ${buyGatePass}/${buyRows.length}</span>
       <span>${esc(plan.summary || "Chưa có kế hoạch kỳ tới.")}</span>
     `;
   }
@@ -1591,6 +2034,10 @@ function renderPlannedTrades() {
   body.innerHTML = rows.length ? rows.map((row) => {
     const status = row.status || "-";
     const action = row.action || "GIỮ";
+    const watchGate = watchGateMap.get(String(row.symbol || "").toUpperCase()) || null;
+    const buyGateOk = !isBuyAction(action)
+      || (watchGate && watchGate.gatePassCount >= watchGate.gateTotal);
+    const actionDisplay = isBuyAction(action) && !buyGateOk ? "CHỜ ĐỦ ĐIỂM" : action;
     const target = row.targetPrice;
     const stop = row.stopPrice;
     const weight = row.suggestedWeight;
@@ -1607,12 +2054,18 @@ function renderPlannedTrades() {
     const rawNote = row.gapPct === null || row.gapPct === undefined
       ? `${positionHint}${row.note || ""}`
       : `${positionHint}${row.note || ""} Gap hiện tại ${f(row.gapPct)}%.`;
-    const note = `${status} · ${rawNote}`;
+    const gateNote = (isBuyAction(action) && watchGate)
+      ? `Điểm mua ${watchGate.gatePassCount}/${watchGate.gateTotal}. `
+      : "";
+    const missingGateNote = isBuyAction(action) && !buyGateOk
+      ? "Chưa đủ điểm theo watchlist gate, tạm không kích hoạt lệnh mua. "
+      : "";
+    const note = `${status} · ${gateNote}${missingGateNote}${rawNote}`;
     return `
       <tr>
         <td>${esc(row.planDate || plan.planDate || "-")}</td>
         <td><strong>${esc(row.symbol || "-")}</strong></td>
-        <td><span class="action-pill ${actionClass(action)}">${esc(displayAction(action))}</span></td>
+        <td><span class="action-pill ${actionClass(actionDisplay)}">${esc(displayAction(actionDisplay))}</span></td>
         <td class="num">${marketPrice ? `${f(marketPrice)}k` : "-"}</td>
         <td class="num">${executionPrice ? `${f(executionPrice)}k` : "-"}</td>
         <td class="num">${entryPrice ? `${f(entryPrice)}k` : "-"}</td>
@@ -1670,15 +2123,13 @@ function renderTradeAlerts() {
   const body = document.getElementById("copyTradeRows");
   if (summaryEl) {
     const hist = activeHistory();
-    const marketDate = lastItem((activePolicy()?.holdings || []).map((h) => h.priceAsOf).filter(Boolean).sort());
-    const latestDate = marketDate || hist?.lastTradeDate || data.summary?.as_of || "-";
     const navBil = inputNavBil();
     const label = evaluatedPlan.length
       ? `Kế hoạch ${activePlannedOrders().planDate || ""}: ${evaluatedPlan.length} dòng đã cập nhật`
       : (latest.length ? `Lệnh mới nhất: ${latest.length} dòng` : "Danh mục mục tiêu");
     summaryEl.innerHTML = `
       <span class="${unseen.length ? "alert-hot" : ""}">${esc(label)}</span>
-      <span>NAV ${f(navBil, 2)} tỷ · Giá đến ${esc(latestDate)} · ${latest.length ? "Lệnh đã scale theo NAV nhập" : "Theo tỷ trọng policy hiện tại"}</span>
+      <span>NAV ${f(navBil, 2)} tỷ · ${latest.length ? "Lệnh đã scale theo NAV nhập" : "Theo tỷ trọng policy hiện tại"}</span>
     `;
   }
   if (body) {
@@ -1692,19 +2143,21 @@ function renderTradeAlerts() {
       const weight = row.source === "ledger"
         ? row.suggestedWeight
         : (row.suggestedWeight || row.targetWeight || memo.suggestedWeight);
+      const isSell = isSellAction(row.actionLabel || row.side || side);
       const entryPrice = row.entryPriceK || memo.entryPrice;
-      const marketPrice = row.marketPriceK || row.currentPrice || memo.currentPrice || row.priceK;
       const executionPrice = row.executionPriceK || row.priceK;
       const hasCurrentPnlPct = Object.prototype.hasOwnProperty.call(row, "currentPnlPct");
       const hasCurrentPnlMil = Object.prototype.hasOwnProperty.call(row, "currentPnlMil");
-      const pnlPct = hasCurrentPnlPct
+      const pnlPctRaw = hasCurrentPnlPct
         ? (row.currentPnlPct === null || row.currentPnlPct === undefined ? null : Number(row.currentPnlPct))
         : (row.returnPct === null || row.returnPct === undefined ? null : Number(row.returnPct));
-      const pnlMil = hasCurrentPnlMil
+      const pnlMilRaw = hasCurrentPnlMil
         ? (row.currentPnlMil === null || row.currentPnlMil === undefined ? null : Number(row.currentPnlMil))
         : (row.pnlBil === null || row.pnlBil === undefined ? null : Number(row.pnlBil) * 1000);
+      const pnlPct = isSell ? pnlPctRaw : null;
+      const pnlMil = isSell ? pnlMilRaw : null;
       const orderShares = roundLot(displayTradeShares(row));
-      const orderValueMil = displayTradeValueMil(row, orderShares, executionPrice || marketPrice);
+      const orderValueMil = displayTradeValueMil(row, orderShares, executionPrice || row.priceK);
       const note = row.note || `Theo tỷ trọng ${f(weight)}%`;
       const orderSharesCell = orderShares ? f(orderShares, 0) : "-";
       const orderValueCell = orderValueMil ? f(orderValueMil, 1) : "-";
@@ -1713,7 +2166,6 @@ function renderTradeAlerts() {
           <td>${esc(row.signalDate || row.date || "-")}</td>
           <td><strong>${esc(sym)}</strong></td>
           <td><span class="action-pill ${cls}">${esc(side)}</span></td>
-          <td class="num">${marketPrice ? `${f(marketPrice)}k` : "-"}</td>
           <td class="num">${executionPrice ? `${f(executionPrice)}k` : "-"}</td>
           <td class="num">${entryPrice ? `${f(entryPrice)}k` : "-"}</td>
           <td class="num">${orderSharesCell}</td>
@@ -1726,7 +2178,7 @@ function renderTradeAlerts() {
           <td>${esc(note)}</td>
         </tr>
       `;
-    }).join("") : `<tr><td colspan="14" class="empty-state">Chưa có lệnh cho policy này.</td></tr>`;
+    }).join("") : `<tr><td colspan="13" class="empty-state">Chưa có lệnh cho policy này.</td></tr>`;
   }
   maybeNotifyNewTrades(latest);
 }
@@ -1855,7 +2307,7 @@ function renderPortfolio() {
       const fallbackPnlPct = price && entryPrice ? (price / entryPrice - 1) * 100 : null;
       const pnlMil = fallbackPnlMil;
       const pnlPct = fallbackPnlPct;
-      const priceLabel = price ? `${f(price)}k${h.priceAsOf ? ` (${esc(h.priceAsOf)})` : ""}` : "-";
+      const priceLabel = price ? `${f(price)}k` : "-";
       return `
         <tr>
           <td><strong>${esc(sym)}</strong></td>
@@ -1872,7 +2324,7 @@ function renderPortfolio() {
           <td class="num stop">${stop ? `${f(stop)}k` : "-"}</td>
         </tr>
       `;
-    }).join("") : `<tr><td colspan="12" class="empty-state">Chưa có mã nào trong danh mục model. Anh bấm Update để lấy snapshot mới nhất.</td></tr>`;
+    }).join("") : `<tr><td colspan="12" class="empty-state">Chưa có mã nào trong danh mục model.</td></tr>`;
   }
 
   // Summary metrics for the live model account; copy-trade order sizing is handled separately.
@@ -1897,7 +2349,7 @@ function renderPortfolio() {
       <span>Mã đang nắm <b>${holdings.length}</b></span>
       <span>Tổng tỷ trọng <b>${f(totalWeight)}% NAV</b></span>
       <span>Cash buffer <b>${f(cashPct)}%</b></span>
-      ${policy ? `<span>Hiệu quả 2021+ <b>CAGR ${perf ? f(perf.cagr) : f(policy.historicalCagr)}%</b>, MaxDD <b>${perf ? f(perf.maxDrawdown) : f(policy.historicalMaxDrawdown)}%</b></span>` : ""}
+      ${policy ? `<span>Hiệu quả ${performanceWindowLabel(activeHistory())} <b>CAGR ${perf ? f(perf.cagr) : f(policy.historicalCagr)}%</b>, MaxDD <b>${perf ? f(perf.maxDrawdown) : f(policy.historicalMaxDrawdown)}%</b></span>` : ""}
       ${policy?.currentMode ? `<span>Regime <b>${policy.currentMode}</b> (spread ${policy.currentSpread > 0 ? '+' : ''}${policy.currentSpread}%)</span>` : ""}
     </div>
   `;
@@ -1927,9 +2379,13 @@ function renderModelLedger() {
     const shares = roundLot(displayTradeShares(row));
     const priceK = Number(row.executionPriceK || row.priceK || 0);
     const grossMil = displayTradeValueMil(row, shares, priceK) || null;
-    const pnlMil = displayTradePnlMil(row, shares, priceK, Number(row.entryPriceK || 0), grossMil || 0);
     const label = displayAction(row.actionLabel || row.side);
     const cls = actionClass(row.actionLabel || row.side);
+    const isSell = isSellAction(label);
+    const pnlMilRaw = displayTradePnlMil(row, shares, priceK, Number(row.entryPriceK || 0), grossMil || 0);
+    const pnlMil = isSell ? pnlMilRaw : null;
+    const returnPctRaw = row.returnPct === null || row.returnPct === undefined ? null : Number(row.returnPct);
+    const returnPct = isSell ? returnPctRaw : null;
     return `
     <tr>
       <td>${row.triggerDate || row.date}</td>
@@ -1939,7 +2395,7 @@ function renderModelLedger() {
       <td class="num">${priceK ? f(priceK) : "-"}${priceK ? "k" : ""}</td>
       <td class="num">${grossMil === null ? "-" : f(grossMil, 1)}</td>
       <td class="num ${pnlMil === null || pnlMil >= 0 ? "target" : "stop"}">${pnlMil === null ? "-" : f(pnlMil, 1)}</td>
-      <td class="num ${Number(row.returnPct) >= 0 ? "target" : "stop"}">${row.returnPct === null || row.returnPct === undefined ? "-" : `${f(row.returnPct)}%`}</td>
+      <td class="num ${returnPct === null || returnPct >= 0 ? "target" : "stop"}">${returnPct === null ? "-" : `${f(returnPct)}%`}</td>
       <td class="num">${row.holdDays === null || row.holdDays === undefined ? "-" : `${f(row.holdDays, 0)} ngày`}</td>
     </tr>
   `;
@@ -1950,6 +2406,7 @@ function activate(view) {
   document.querySelectorAll(".nav").forEach((btn) => btn.classList.toggle("active", btn.dataset.view === view));
   document.querySelectorAll(".view").forEach((el) => el.classList.toggle("is-active", el.id === view));
   if (view === "portfolio") setTimeout(renderPortfolio, 0);
+  if (view === "watchlist") setTimeout(renderWatchlistTab, 0);
   if (view === "modelLogic") setTimeout(renderModelLogicTab, 0);
 }
 
@@ -1990,8 +2447,21 @@ async function init() {
   setStaticUpdateMode();
   setModelLoading("");
   await refreshStatus();
+  if (!isLocalDashboardHost()) {
+    await refreshOnlineLivePrices();
+    if (!onlineLiveRefreshTimer) {
+      onlineLiveRefreshTimer = setInterval(refreshOnlineLivePrices, LIVE_REFRESH_INTERVAL_MS);
+    }
+  }
   syncStrategyOptions();
   renderActiveModel();
 }
+
+window.addEventListener("resize", () => {
+  if (resizeRenderTimer) clearTimeout(resizeRenderTimer);
+  resizeRenderTimer = setTimeout(() => {
+    renderPerformanceChart();
+  }, 120);
+});
 
 init();
