@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parent
 OUT = ROOT / "output"
 BACKTEST_CACHE = ROOT / ".cache" / "backtest"
 STATUS_PATH = OUT / "dashboard_live_update_status.json"
+DASHBOARD_STATUS_PATH = ROOT / "dashboard" / "dashboard_live_update_status.json"
 POLICY_DIR = OUT / "dashboard_policies" / "r46_bear_stop_mcore"
 
 PRICE_DIRS = [
@@ -106,6 +107,7 @@ def merge_price_cache(symbol: str, fresh: pd.DataFrame) -> dict:
         return {"symbol": symbol, "ok": False, "reason": "no_data"}
     latest = None
     rows = 0
+    latest_close = None
     for directory in PRICE_DIRS:
         path = directory / f"{symbol}.parquet"
         old = pd.DataFrame()
@@ -119,7 +121,10 @@ def merge_price_cache(symbol: str, fresh: pd.DataFrame) -> dict:
         if not combined.empty:
             latest = combined["time"].max().date().isoformat()
             rows = len(combined)
-    return {"symbol": symbol, "ok": True, "latest": latest, "rows": rows}
+            tail = combined.iloc[-1]
+            close_value = float(tail["close"])
+            latest_close = close_value if math.isfinite(close_value) else None
+    return {"symbol": symbol, "ok": True, "latest": latest, "rows": rows, "latestClose": latest_close}
 
 
 def update_symbol_price(symbol: str) -> dict:
@@ -280,11 +285,23 @@ def main() -> None:
         "seconds": round(time.time() - started, 2),
         "symbols": symbols,
         "latestPriceDate": finite_latest(price_results),
+        "quotes": {
+            row.get("symbol", ""): {
+                "ok": bool(row.get("ok")),
+                "date": row.get("latest"),
+                "close": row.get("latestClose"),
+                "reason": row.get("reason"),
+            }
+            for row in price_results
+            if row.get("symbol")
+        },
         "prices": price_results,
         "vnindex": vni_result,
         "bctc": bctc_results,
     }
     STATUS_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    DASHBOARD_STATUS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    DASHBOARD_STATUS_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     ok_prices = sum(1 for row in price_results if row.get("ok"))
     ok_bctc = sum(1 for row in bctc_results if row.get("ok"))
     print(
