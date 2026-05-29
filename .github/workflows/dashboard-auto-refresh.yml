@@ -60,7 +60,12 @@ jobs:
         run: python generate_model_history.py
 
       - name: Regenerate dashboard data
-        run: python generate_dashboard_data.py
+        run: |
+          if [ -f generate_dashboard_data.py ]; then
+            python generate_dashboard_data.py
+          else
+            echo "generate_dashboard_data.py not present in this repo checkout; keeping existing dashboard/data.js"
+          fi
 
       - name: Deploy dashboard to Vercel
         run: python tools/deploy_vercel_dashboard.py --dashboard-dir dashboard --target production --wait
