@@ -100,7 +100,7 @@ jobs:
                       print(f"Public dashboard fresh: {updated_at}")
                       sys.exit(0)
                   last_error = f"stale updatedAt={updated_at}"
-              except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+              except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, json.JSONDecodeError, RuntimeError) as exc:
                   last_error = repr(exc)
               print(f"Waiting for Vercel alias propagation attempt {attempt}/12: {last_error}")
               time.sleep(10)
