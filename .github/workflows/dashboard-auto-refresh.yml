@@ -77,15 +77,25 @@ jobs:
           import os
           import sys
           import time
+          import urllib.error
           import urllib.request
 
           base = os.environ["VERCEL_PUBLIC_URL"].rstrip("/")
-          url = f"{base}/dashboard_live_update_status.json?v={int(time.time())}"
-          with urllib.request.urlopen(url, timeout=30) as resp:
-              payload = json.loads(resp.read().decode("utf-8"))
-          updated_at = str(payload.get("updatedAt") or "")
-          if not updated_at.startswith(time.strftime("%Y-%m-%d")):
-              print(f"Public dashboard stale: {updated_at} at {url}", file=sys.stderr)
-              sys.exit(1)
-          print(f"Public dashboard fresh: {updated_at}")
+          last_error = None
+          for attempt in range(1, 13):
+              url = f"{base}/dashboard_live_update_status.json?v={int(time.time())}"
+              try:
+                  with urllib.request.urlopen(url, timeout=30) as resp:
+                      payload = json.loads(resp.read().decode("utf-8"))
+                  updated_at = str(payload.get("updatedAt") or "")
+                  if updated_at.startswith(time.strftime("%Y-%m-%d")):
+                      print(f"Public dashboard fresh: {updated_at}")
+                      sys.exit(0)
+                  last_error = f"stale updatedAt={updated_at}"
+              except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+                  last_error = repr(exc)
+              print(f"Waiting for Vercel alias propagation attempt {attempt}/12: {last_error}")
+              time.sleep(10)
+          print(f"Public dashboard freshness check failed after retries: {last_error}", file=sys.stderr)
+          sys.exit(1)
           PY
