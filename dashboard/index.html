@@ -1,10 +1,10 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="vi">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>AI Trading Dashboard</title>
-    <link rel="stylesheet" href="./styles.css?v=static_update_guard_2026_05_28" />
+    <link rel="stylesheet" href="./styles.css?v=static_update_guard_2026_05_28_v12" />
   </head>
   <body>
     <div class="app">
@@ -17,13 +17,13 @@
           </div>
           <div class="top-actions">
             <span id="asOf"></span>
-            <button id="updateBtn" type="button">Update</button>
             <button id="printBtn" type="button">In PDF</button>
           </div>
         </header>
 
         <nav class="view-tabs" aria-label="Dashboard tabs">
           <button class="nav active" data-view="portfolio" type="button">Copy trade</button>
+          <button class="nav" data-view="watchlist" type="button">Theo dõi mua</button>
           <button class="nav" data-view="modelLogic" type="button">Bộ lọc model</button>
         </nav>
 
@@ -41,8 +41,6 @@
                   Policy
                   <select id="strategyMode">
                     <option value="r46_bear_stop_mcore">R46 Bear Stop 15bps</option>
-                    <option value="r23_nav3b_mcore">R23_NAV3B</option>
-                    <option value="flexible_vni30_candidate">VNI+20 Copy-trade 15bps</option>
                   </select>
                 </label>
                 <label>
@@ -102,11 +100,10 @@
               <div class="table-wrap compact">
                 <table class="copy-table">
                   <thead>
-                  <tr>
+                    <tr>
                       <th>Ngày</th>
                       <th>Mã</th>
                       <th>Lệnh</th>
-                      <th class="num">Giá TT</th>
                       <th class="num">Giá thực hiện</th>
                       <th class="num">Giá vốn</th>
                       <th class="num">Khối lượng</th>
@@ -205,6 +202,42 @@
           </article>
         </section>
 
+        <section class="view" id="watchlist">
+          <article class="panel">
+            <div class="panel-title spread">
+              <div>
+                <span>Watchlist</span>
+                <h2>Mã đáng theo dõi và có thể mua sắp tới</h2>
+                <p class="muted">Bảng này là watchlist gate để quan sát mã đáng chú ý, không phải rule khớp lệnh live của R46. Rule live vẫn theo execution config (gap, pullback, T+2.5, min-sell).</p>
+              </div>
+            </div>
+            <div id="watchlistSummary" class="watchlist-summary"></div>
+            <div id="watchlistRules" class="watchlist-rules"></div>
+            <div class="table-wrap compact">
+              <table class="watchlist-table">
+                <thead>
+                  <tr>
+                    <th>Mã</th>
+                    <th>Nhóm</th>
+                    <th class="num">Điểm lọc mã</th>
+                    <th class="num">Target Upside</th>
+                    <th class="num">R:R</th>
+                    <th class="num">Thanh khoản 20D (tỷ)</th>
+                    <th>Trong target tuần</th>
+                    <th>Lệnh tuần</th>
+                    <th>Không nắm</th>
+                    <th>Hard gate</th>
+                    <th>Không AVOID</th>
+                    <th>Tín hiệu mua</th>
+                    <th>Lý do</th>
+                  </tr>
+                </thead>
+                <tbody id="watchlistRows"></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
         <section class="view" id="modelLogic">
           <article class="panel">
             <div class="panel-title spread">
@@ -220,9 +253,9 @@
       </main>
     </div>
 
-    <script src="./data.js?v=exchange_gap_guard_2026_05_23"></script>
-    <script src="./analysis.js?v=static_update_guard_2026_05_28"></script>
-    <script src="./history.js?v=static_update_guard_2026_05_28"></script>
-    <script src="./app.js?v=static_update_guard_2026_05_28"></script>
+    <script src="./data.js?v=exchange_gap_guard_2026_05_23_v6"></script>
+    <script src="./analysis.js?v=static_update_guard_2026_05_28_v12"></script>
+    <script src="./history.js?v=static_update_guard_2026_05_28_v12"></script>
+    <script src="./app.js?v=live_quote_refresh_2026_05_29_v10"></script>
   </body>
 </html>
