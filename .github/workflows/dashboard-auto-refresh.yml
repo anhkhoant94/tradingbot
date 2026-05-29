@@ -2,7 +2,7 @@ name: Dashboard Auto Refresh
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "2-59/5 * * * *"
   push:
     branches:
       - main
@@ -13,6 +13,7 @@ on:
       - "backtest/**"
       - "output/**"
       - "update_dashboard_live_data.py"
+      - "generate_dashboard_data.py"
       - "generate_deep_analysis.py"
       - "generate_model_history.py"
   workflow_dispatch:
@@ -30,7 +31,8 @@ jobs:
     timeout-minutes: 25
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      VERCEL_PROJECT: ${{ vars.VERCEL_PROJECT || 'stock-screening-dashboard' }}
+      VERCEL_PROJECT: ${{ vars.VERCEL_PROJECT || 'trading-execution-desk-khoa' }}
+      VERCEL_PUBLIC_URL: ${{ vars.VERCEL_PUBLIC_URL || 'https://trading-execution-desk-khoa.vercel.app' }}
       VERCEL_TEAM_SLUG: ${{ vars.VERCEL_TEAM_SLUG }}
       VERCEL_TEAM_ID: ${{ vars.VERCEL_TEAM_ID }}
       PYTHONIOENCODING: utf-8
@@ -57,5 +59,28 @@ jobs:
       - name: Regenerate model history
         run: python generate_model_history.py
 
+      - name: Regenerate dashboard data
+        run: python generate_dashboard_data.py
+
       - name: Deploy dashboard to Vercel
         run: python tools/deploy_vercel_dashboard.py --dashboard-dir dashboard --target production --wait
+
+      - name: Verify public dashboard freshness
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          import time
+          import urllib.request
+
+          base = os.environ["VERCEL_PUBLIC_URL"].rstrip("/")
+          url = f"{base}/dashboard_live_update_status.json?v={int(time.time())}"
+          with urllib.request.urlopen(url, timeout=30) as resp:
+              payload = json.loads(resp.read().decode("utf-8"))
+          updated_at = str(payload.get("updatedAt") or "")
+          if not updated_at.startswith(time.strftime("%Y-%m-%d")):
+              print(f"Public dashboard stale: {updated_at} at {url}", file=sys.stderr)
+              sys.exit(1)
+          print(f"Public dashboard fresh: {updated_at}")
+          PY
