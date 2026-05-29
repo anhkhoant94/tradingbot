@@ -1280,6 +1280,40 @@ function classifyWatchCandidate(item) {
   };
 }
 
+function renderWatchRule(index, text) {
+  return `
+    <article class="watchlist-rule">
+      <span class="rule-index">${index}</span>
+      <span class="rule-text">${esc(text)}</span>
+    </article>
+  `;
+}
+
+function reasonParts(line) {
+  const text = String(line || "").trim();
+  if (!text) return [];
+  if (text.startsWith("Chưa đạt:")) {
+    return text
+      .replace(/^Chưa đạt:\s*/i, "")
+      .split(",")
+      .map((part) => ({ text: part.trim(), kind: "warn" }))
+      .filter((part) => part.text);
+  }
+  const kind = text.startsWith("Đạt chuẩn") || text.startsWith("Trạng thái") || text.startsWith("Thanh khoản") || text.startsWith("R:R") || text.startsWith("Target")
+    ? "good"
+    : "";
+  return [{ text, kind }];
+}
+
+function renderWatchReasons(reasons = []) {
+  const chips = reasons.flatMap(reasonParts);
+  return `
+    <div class="reason-cell">
+      ${chips.map((chip) => `<span class="reason-chip ${chip.kind}">${esc(chip.text)}</span>`).join("")}
+    </div>
+  `;
+}
+
 function renderWatchlistTab() {
   const plannedMap = new Map(
     activePolicyPlannedRows().map((row) => [
@@ -1323,7 +1357,7 @@ function renderWatchlistTab() {
       "Sắp xếp theo Điểm lọc mã giảm dần, rồi Target Upside giảm dần",
       "Gate live hiện tại gồm 7 điều kiện: không nắm, hard gate PASS, không AVOID, có tín hiệu BUY/ACC/MUA, thanh khoản 20D >= 3 tỷ, R:R >= 2, target upside >= 12%",
       "Lệnh mua thực tế chỉ chạy khi mã nằm trong target tuần của policy hiện tại",
-    ].map((rule) => `<span>${rule}</span>`).join("");
+    ].map((rule, index) => renderWatchRule(index + 1, rule)).join("");
   }
 
   const body = document.getElementById("watchlistRows");
@@ -1344,9 +1378,16 @@ function renderWatchlistTab() {
       <td>${row.passHardGate ? "PASS" : "FAIL"}</td>
       <td>${row.status.includes("AVOID") ? "Không" : "Có"}</td>
       <td>${(row.status.includes("BUY") || row.status.includes("ACCUMULATE") || row.action.includes("MUA")) ? "Có" : "Không"}</td>
-      <td>${esc(row.reasons.join(" · "))}</td>
     </tr>
-  `).join("") : `<tr><td colspan="13" class="empty-state">Chưa có mã phù hợp cho watchlist.</td></tr>`;
+    <tr class="watch-reason-row">
+      <td colspan="12">
+        <div class="watch-reason-detail">
+          <b>Lý do</b>
+          ${renderWatchReasons(row.reasons)}
+        </div>
+      </td>
+    </tr>
+  `).join("") : `<tr><td colspan="12" class="empty-state">Chưa có mã phù hợp cho watchlist.</td></tr>`;
 }
 
 function currentPriceK(symbol) {
