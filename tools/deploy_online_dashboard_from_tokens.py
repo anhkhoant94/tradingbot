@@ -40,6 +40,7 @@ FILES_TO_PUSH = [
     ".github/workflows/dashboard-auto-refresh.yml",
     "dashboard/app.js",
     "dashboard/index.html",
+    "dashboard/styles.css",
     "update_dashboard_live_data.py",
     "tools/check_dashboard_public_health.py",
     "tools/deploy_vercel_dashboard.py",
