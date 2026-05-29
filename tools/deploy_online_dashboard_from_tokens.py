@@ -204,7 +204,7 @@ def verify_public() -> None:
     # Vercel aliases can take a few seconds to settle.
     for attempt in range(1, 7):
         try:
-            run_step([sys.executable, "tools/check_dashboard_public_health.py", "--require-fresh-live"])
+            run_step([sys.executable, "tools/check_dashboard_public_health.py", "--require-fresh-live", "--require-vni-history"])
             return
         except subprocess.CalledProcessError:
             if attempt == 6:
