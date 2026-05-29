@@ -63,6 +63,13 @@ def collect_files(root: Path) -> list[dict]:
     return files
 
 
+def host_from_url(url: str | None) -> str | None:
+    if not url:
+        return None
+    parsed = urllib.parse.urlparse(url if "://" in url else f"https://{url}")
+    return parsed.netloc or parsed.path or None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Deploy dashboard to Vercel")
     parser.add_argument("--dashboard-dir", default="dashboard")
@@ -121,6 +128,21 @@ def main() -> int:
             time.sleep(2)
 
     public_url = f"https://{aliases[0]}" if aliases else (f"https://{url}" if url else None)
+    public_host = host_from_url(os.environ.get("VERCEL_PUBLIC_URL"))
+    if public_host and deploy_id:
+        try:
+            request_json(
+                "POST",
+                f"/v2/deployments/{deploy_id}/aliases",
+                token,
+                {"alias": public_host, "redirect": None},
+                query,
+            )
+            if public_host not in aliases:
+                aliases.insert(0, public_host)
+            public_url = f"https://{public_host}"
+        except RuntimeError as exc:
+            print(f"Alias assignment warning: {exc}", file=sys.stderr)
     print(
         json.dumps(
             {
