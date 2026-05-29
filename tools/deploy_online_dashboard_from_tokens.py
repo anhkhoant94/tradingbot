@@ -39,6 +39,7 @@ SECRET_PATH = Path.home() / ".cache" / "stock_screening_deploy_secrets.json"
 FILES_TO_PUSH = [
     ".github/workflows/dashboard-auto-refresh.yml",
     "dashboard/app.js",
+    "dashboard/history.js",
     "dashboard/index.html",
     "dashboard/styles.css",
     "update_dashboard_live_data.py",
