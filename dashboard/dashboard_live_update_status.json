@@ -1,0 +1,207 @@
+{
+  "updatedAt": "2026-05-29 10:36:00",
+  "seconds": 3.7,
+  "symbols": [
+    "MSB",
+    "DXP",
+    "GEE",
+    "PVP",
+    "VIC",
+    "YEG",
+    "NVL",
+    "KSV",
+    "BVB",
+    "HNG"
+  ],
+  "latestPriceDate": "2026-05-29",
+  "quotes": {
+    "BVB": {
+      "ok": true,
+      "date": "2026-05-29",
+      "close": 12.4,
+      "reason": null
+    },
+    "DXP": {
+      "ok": true,
+      "date": "2026-05-29",
+      "close": 13.3,
+      "reason": null
+    },
+    "GEE": {
+      "ok": true,
+      "date": "2026-05-29",
+      "close": 108.1,
+      "reason": null
+    },
+    "HNG": {
+      "ok": true,
+      "date": "2026-05-29",
+      "close": 7.2,
+      "reason": null
+    },
+    "KSV": {
+      "ok": true,
+      "date": "2026-05-29",
+      "close": 157.2,
+      "reason": null
+    },
+    "MSB": {
+      "ok": true,
+      "date": "2026-05-29",
+      "close": 15.0,
+      "reason": null
+    },
+    "NVL": {
+      "ok": true,
+      "date": "2026-05-29",
+      "close": 14.85,
+      "reason": null
+    },
+    "PVP": {
+      "ok": true,
+      "date": "2026-05-29",
+      "close": 17.35,
+      "reason": null
+    },
+    "VIC": {
+      "ok": true,
+      "date": "2026-05-29",
+      "close": 210.5,
+      "reason": null
+    },
+    "YEG": {
+      "ok": true,
+      "date": "2026-05-29",
+      "close": 9.1,
+      "reason": null
+    }
+  },
+  "prices": [
+    {
+      "symbol": "BVB",
+      "ok": true,
+      "latest": "2026-05-29",
+      "rows": 1469,
+      "latestClose": 12.4
+    },
+    {
+      "symbol": "DXP",
+      "ok": true,
+      "latest": "2026-05-29",
+      "rows": 2533,
+      "latestClose": 13.3
+    },
+    {
+      "symbol": "GEE",
+      "ok": true,
+      "latest": "2026-05-29",
+      "rows": 1022,
+      "latestClose": 108.1
+    },
+    {
+      "symbol": "HNG",
+      "ok": true,
+      "latest": "2026-05-29",
+      "rows": 1587,
+      "latestClose": 7.2
+    },
+    {
+      "symbol": "KSV",
+      "ok": true,
+      "latest": "2026-05-29",
+      "rows": 1310,
+      "latestClose": 157.2
+    },
+    {
+      "symbol": "MSB",
+      "ok": true,
+      "latest": "2026-05-29",
+      "rows": 1351,
+      "latestClose": 15.0
+    },
+    {
+      "symbol": "NVL",
+      "ok": true,
+      "latest": "2026-05-29",
+      "rows": 2347,
+      "latestClose": 14.85
+    },
+    {
+      "symbol": "PVP",
+      "ok": true,
+      "latest": "2026-05-29",
+      "rows": 1990,
+      "latestClose": 17.35
+    },
+    {
+      "symbol": "VIC",
+      "ok": true,
+      "latest": "2026-05-29",
+      "rows": 2595,
+      "latestClose": 210.5
+    },
+    {
+      "symbol": "YEG",
+      "ok": true,
+      "latest": "2026-05-29",
+      "rows": 1979,
+      "latestClose": 9.1
+    }
+  ],
+  "vnindex": {
+    "symbol": "VNINDEX",
+    "ok": true,
+    "latest": "2026-05-29",
+    "rows": 1598
+  },
+  "bctc": [
+    {
+      "symbol": "DXP",
+      "ok": false,
+      "rows": 0,
+      "seconds": 0.8
+    },
+    {
+      "symbol": "GEE",
+      "ok": false,
+      "rows": 0,
+      "seconds": 0.8
+    },
+    {
+      "symbol": "KSV",
+      "ok": false,
+      "rows": 0,
+      "seconds": 0.74
+    },
+    {
+      "symbol": "MSB",
+      "ok": false,
+      "rows": 0,
+      "seconds": 0.67
+    },
+    {
+      "symbol": "NVL",
+      "ok": false,
+      "rows": 0,
+      "seconds": 0.72
+    },
+    {
+      "symbol": "PVP",
+      "ok": false,
+      "rows": 0,
+      "seconds": 0.82
+    },
+    {
+      "symbol": "VIC",
+      "ok": false,
+      "rows": 0,
+      "seconds": 0.56
+    },
+    {
+      "symbol": "YEG",
+      "ok": false,
+      "rows": 0,
+      "seconds": 0.75
+    }
+  ]
+}
