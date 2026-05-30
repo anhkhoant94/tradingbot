@@ -1,0 +1,121 @@
+name: BCTC Scrape Monthly
+
+# Scrape BCTC quarterly day 1 cua moi thang luc 06:00 ICT (23:00 UTC ngay cuoi cua thang truoc),
+# vi BCTC quy thuong release sau Q-end 30-90 ngay. Day 1 hang thang la tan suat tiet kiem
+# va du sau de bat cac release truoc khi screening Chu Nhat ke tiep chay.
+
+on:
+  schedule:
+    - cron: "0 23 28-31 * *"
+  workflow_dispatch:
+    inputs:
+      sample_size:
+        description: "So mac scrape (0 = full universe)"
+        required: false
+        default: "0"
+
+concurrency:
+  group: bctc-monthly
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  scrape-bctc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      PYTHONIOENCODING: utf-8
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - name: Gate to actual month-end day-1 (UTC)
+        if: github.event_name == 'schedule'
+        run: |
+          tomorrow_day=$(date -u -d 'tomorrow' +%d)
+          if [ "$tomorrow_day" != "01" ]; then
+            echo "Not the day before month-start (UTC) — exit."
+            exit 0
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas pyarrow fastparquet requests beautifulsoup4 lxml html5lib
+
+      - name: Restore cp68 cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/backtest/cp68
+          key: cp68-cache-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            cp68-cache-${{ runner.os }}-
+
+      - name: Scrape BCTC full universe
+        env:
+          SAMPLE_SIZE: ${{ github.event.inputs.sample_size || '0' }}
+        run: |
+          python - <<'PY'
+          import os, time
+          from pathlib import Path
+          import pandas as pd
+          from backtest.cp68_scraper import fetch_quarterly_bctc
+
+          CACHE = Path(".cache/backtest/cp68")
+          CACHE.mkdir(parents=True, exist_ok=True)
+
+          # Universe symbols: from existing parquets in cp68 or universe.parquet
+          symbols = set()
+          universe_path = Path(".cache/universe.parquet")
+          if universe_path.exists():
+              df = pd.read_parquet(universe_path)
+              for col in ("symbol", "Symbol", "code", "ticker"):
+                  if col in df.columns:
+                      symbols.update(df[col].dropna().astype(str).str.upper().tolist())
+                      break
+          for p in CACHE.glob("*.parquet"):
+              symbols.add(p.stem.upper())
+
+          sample = int(os.environ.get("SAMPLE_SIZE", "0") or 0)
+          symbols = sorted(s for s in symbols if s and s.isalnum())
+          if sample > 0:
+              symbols = symbols[:sample]
+          print(f"Scraping {len(symbols)} symbols")
+          ok, fail = 0, 0
+          for i, sym in enumerate(symbols, 1):
+              try:
+                  df = fetch_quarterly_bctc(sym, cache_dir=CACHE, force=True, timeout=15, delay_s=0.5, max_retries=2)
+                  if df is not None and not df.empty:
+                      ok += 1
+                  else:
+                      fail += 1
+              except Exception as exc:
+                  fail += 1
+                  print(f"{sym}: {exc!r}")
+              if i % 50 == 0:
+                  print(f"progress {i}/{len(symbols)} ok={ok} fail={fail}")
+          print(f"DONE ok={ok} fail={fail}")
+          PY
+
+      - name: Commit BCTC cache
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .cache/backtest/cp68
+          if git diff --cached --quiet; then
+            echo "No BCTC changes to commit."
+          else
+            git commit -m "chore(bctc): monthly refresh $(date -u +'%Y-%m')"
+            git push origin HEAD:${GITHUB_REF##*/}
+          fi
