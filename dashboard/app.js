@@ -90,6 +90,13 @@ function formatTimeLabel(ts) {
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
 }
 
+function formatDateLabel(ts) {
+  if (!ts) return "";
+  const d = ts instanceof Date ? ts : new Date(ts);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
 function performanceChartHeight() {
   const w = Number(window.innerWidth) || 1280;
   if (w <= 420) return 180;
@@ -292,6 +299,7 @@ async function refreshLiveMarketData() {
     source,
     refreshedAt: lastLiveRefreshAt.toISOString(),
     refreshedAtText: formatTimeLabel(lastLiveRefreshAt),
+    refreshedDateText: formatDateLabel(lastLiveRefreshAt),
   };
 }
 
@@ -308,7 +316,7 @@ async function refreshOnlineLivePrices() {
         : refreshed.source === "bundled_stale"
           ? "dữ liệu deploy gần nhất"
           : "nguồn trực tiếp";
-      statusEl.textContent = `Đã cập nhật giá live cho ${refreshed.refreshed}/${refreshed.total} mã lúc ${refreshed.refreshedAtText || "--:--:--"} từ ${sourceText} (ngày giá ${refreshed.latestDate || "-"})`;
+      statusEl.textContent = `Đã cập nhật giá live cho ${refreshed.refreshed}/${refreshed.total} mã lúc ${refreshed.refreshedAtText || "--:--:--"} từ ${sourceText} (ngày giá ${refreshed.refreshedDateText || refreshed.latestDate || "-"})`;
     }
   } catch (err) {
     if (statusEl) {
@@ -478,8 +486,9 @@ function renderKpis() {
   const kpiValue = (value) => typeof value === "number" ? nf0.format(value) : value;
   const marketDate = lastItem(holdings.map((h) => h.priceAsOf).filter(Boolean).sort()) || s.as_of;
   const liveClock = formatTimeLabel(lastLiveRefreshAt);
+  const liveDate = formatDateLabel(lastLiveRefreshAt);
   document.getElementById("asOf").textContent = liveClock
-    ? `Giá đến ${marketDate} lúc ${liveClock}`
+    ? `Giá đến ${liveDate || marketDate} lúc ${liveClock}`
     : `Giá đến ${marketDate}`;
   document.getElementById("kpis").innerHTML = [
     ["Policy", policyName(policy)],
@@ -638,7 +647,7 @@ async function triggerUpdate(mode) {
       renderActiveModel();
       if (el) {
         const sourceText = refreshed.source === "bundled" ? "dữ liệu deploy tự động" : "nguồn trực tiếp";
-        el.textContent = `Đã cập nhật giá live cho ${refreshed.refreshed}/${refreshed.total} mã lúc ${refreshed.refreshedAtText || "--:--:--"} từ ${sourceText} (ngày giá ${refreshed.latestDate || "-"})`;
+        el.textContent = `Đã cập nhật giá live cho ${refreshed.refreshed}/${refreshed.total} mã lúc ${refreshed.refreshedAtText || "--:--:--"} từ ${sourceText} (ngày giá ${refreshed.refreshedDateText || refreshed.latestDate || "-"})`;
       }
     } catch (err) {
       if (el) el.textContent = "Lỗi kết nối nguồn giá live.";
@@ -2472,20 +2481,4 @@ async function init() {
   setModelLoading("");
   await refreshStatus();
   if (!isLocalDashboardHost()) {
-    await refreshOnlineLivePrices();
-    if (!onlineLiveRefreshTimer) {
-      onlineLiveRefreshTimer = setInterval(refreshOnlineLivePrices, LIVE_REFRESH_INTERVAL_MS);
-    }
-  }
-  syncStrategyOptions();
-  renderActiveModel();
-}
-
-window.addEventListener("resize", () => {
-  if (resizeRenderTimer) clearTimeout(resizeRenderTimer);
-  resizeRenderTimer = setTimeout(() => {
-    renderPerformanceChart();
-  }, 120);
-});
-
-init();
+    a
