@@ -2481,4 +2481,20 @@ async function init() {
   setModelLoading("");
   await refreshStatus();
   if (!isLocalDashboardHost()) {
-    a
+    await refreshOnlineLivePrices();
+    if (!onlineLiveRefreshTimer) {
+      onlineLiveRefreshTimer = setInterval(refreshOnlineLivePrices, LIVE_REFRESH_INTERVAL_MS);
+    }
+  }
+  syncStrategyOptions();
+  renderActiveModel();
+}
+
+window.addEventListener("resize", () => {
+  if (resizeRenderTimer) clearTimeout(resizeRenderTimer);
+  resizeRenderTimer = setTimeout(() => {
+    renderPerformanceChart();
+  }, 120);
+});
+
+init();
