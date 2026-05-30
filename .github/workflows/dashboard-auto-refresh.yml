@@ -51,10 +51,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install pandas pyarrow fastparquet requests beautifulsoup4 lxml html5lib
 
-      - name: Verify backtest package importable
-        run: |
-          python -c "import backtest, sys; print('backtest at', backtest.__file__); print('sys.path[0]=', sys.path[0])"
-
       - name: Update live data
         working-directory: ${{ github.workspace }}
         run: python update_dashboard_live_data.py
@@ -109,4 +105,6 @@ jobs:
                       print(f"Public dashboard fresh: {updated_at}")
                       sys.exit(0)
                   last_error = f"stale updatedAt={updated_at}"
-  
+              except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, json.JSONDecodeError, RuntimeError) as exc:
+                  last_error = repr(exc)
+              print
