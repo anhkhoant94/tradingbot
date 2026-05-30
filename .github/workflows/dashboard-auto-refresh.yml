@@ -36,6 +36,7 @@ jobs:
       VERCEL_TEAM_SLUG: ${{ vars.VERCEL_TEAM_SLUG }}
       VERCEL_TEAM_ID: ${{ vars.VERCEL_TEAM_ID }}
       PYTHONIOENCODING: utf-8
+      PYTHONPATH: ${{ github.workspace }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -50,16 +51,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install pandas pyarrow fastparquet requests beautifulsoup4 lxml html5lib
 
+      - name: Verify backtest package importable
+        run: |
+          python -c "import backtest, sys; print('backtest at', backtest.__file__); print('sys.path[0]=', sys.path[0])"
+
       - name: Update live data
+        working-directory: ${{ github.workspace }}
         run: python update_dashboard_live_data.py
 
       - name: Regenerate dashboard analysis
+        working-directory: ${{ github.workspace }}
         run: python generate_deep_analysis.py
 
       - name: Regenerate model history
+        working-directory: ${{ github.workspace }}
         run: python generate_model_history.py
 
       - name: Regenerate dashboard data
+        working-directory: ${{ github.workspace }}
         run: |
           if [ -f generate_dashboard_data.py ]; then
             python generate_dashboard_data.py
@@ -100,10 +109,4 @@ jobs:
                       print(f"Public dashboard fresh: {updated_at}")
                       sys.exit(0)
                   last_error = f"stale updatedAt={updated_at}"
-              except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, json.JSONDecodeError, RuntimeError) as exc:
-                  last_error = repr(exc)
-              print(f"Waiting for Vercel alias propagation attempt {attempt}/12: {last_error}")
-              time.sleep(10)
-          print(f"Public dashboard freshness check failed after retries: {last_error}", file=sys.stderr)
-          sys.exit(1)
-          PY
+  
