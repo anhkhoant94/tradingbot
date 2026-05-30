@@ -2,7 +2,7 @@ name: Dashboard Auto Refresh
 
 on:
   schedule:
-    - cron: "2-59/5 * * * *"
+    - cron: "2-59/5 * * * 1-5"
   push:
     branches:
       - main
@@ -107,4 +107,4 @@ jobs:
                   last_error = f"stale updatedAt={updated_at}"
               except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, json.JSONDecodeError, RuntimeError) as exc:
                   last_error = repr(exc)
-              print
+              pri
