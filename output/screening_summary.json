@@ -1,0 +1,26 @@
+{
+  "as_of": "2026-05-29",
+  "mode": "opportunity",
+  "filters": {
+    "market_cap_bil": 1500,
+    "avg_value_20d_bil": 5,
+    "price_k": 5
+  },
+  "universe_count": 703,
+  "exchange_counts": {
+    "HOSE": 402,
+    "HNX": 301
+  },
+  "hard_gate_counts": {
+    "FAIL_SIZE_LIQUIDITY": 652,
+    "PASS": 49,
+    "FAIL_BANK_QUALITY": 2
+  },
+  "status_counts": {
+    "AVOID": 694,
+    "WATCH": 8,
+    "BUY": 1
+  },
+  "buy_accumulate_count": 1,
+  "generated_at": "2026-05-29"
+}
