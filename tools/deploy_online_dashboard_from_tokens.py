@@ -38,6 +38,9 @@ SECRET_PATH = Path.home() / ".cache" / "stock_screening_deploy_secrets.json"
 
 FILES_TO_PUSH = [
     ".github/workflows/dashboard-auto-refresh.yml",
+    ".github/workflows/screening-weekly.yml",
+    ".github/workflows/bctc-monthly.yml",
+    ".github/workflows/weekly-signal.yml",
     "dashboard/app.js",
     "dashboard/history.js",
     "dashboard/index.html",
@@ -47,6 +50,14 @@ FILES_TO_PUSH = [
     "tools/deploy_vercel_dashboard.py",
     "tools/deploy_online_dashboard_from_tokens.py",
     "ONLINE_AUTO_REFRESH_SETUP.md",
+    "requirements.txt",
+    "DASHBOARD_ARCHITECTURE_AUDIT_20260530.md",
+    "FULL_AUTO_PIPELINE_20260530.md",
+    "E2E_TEST_FULL_AUTO_20260530.md",
+    "output/screening_summary.json",
+    "output/screening_full_results.csv",
+    "dashboard/data.js",
+    "dashboard/dashboard_live_update_status.json",
 ]
 
 
@@ -222,21 +233,4 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.all:
-        args.push = args.build = args.deploy = args.verify = True
-
-    secrets = load_secrets()
-
-    if args.push:
-        for rel_path in FILES_TO_PUSH:
-            push_file(secrets["repo"], secrets["branch"], rel_path, secrets["github_token"])
-    if args.build:
-        build_dashboard()
-    if args.deploy:
-        deploy_vercel(secrets)
-    if args.verify:
-        verify_public()
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+        args.push = args.
