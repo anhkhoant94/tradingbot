@@ -59,6 +59,7 @@ FILES_TO_PUSH = [
     "FULL_AUTO_PIPELINE_20260530.md",
     "E2E_TEST_FULL_AUTO_20260530.md",
     "output/screening_summary.json",
+    "output/screening_candidates.csv",
     "output/screening_full_results.csv",
     "dashboard/data.js",
     "dashboard/dashboard_live_update_status.json",
