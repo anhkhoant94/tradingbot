@@ -50,6 +50,7 @@ FILES_TO_PUSH = [
     "dashboard/index.html",
     "dashboard/styles.css",
     "update_dashboard_live_data.py",
+    "run_stock_screen.py",
     "backtest/__init__.py",
     "backtest/cp68_scraper.py",
     "backtest/live_signal_generator.py",
