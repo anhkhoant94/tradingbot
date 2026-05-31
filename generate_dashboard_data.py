@@ -66,7 +66,13 @@ def records(df: pd.DataFrame, cols: list[str]) -> list[dict]:
 
 def main() -> None:
     full = pd.read_csv(OUT / "screening_full_results.csv")
-    candidates = pd.read_csv(OUT / "screening_candidates.csv")
+    candidates_path = OUT / "screening_candidates.csv"
+    if candidates_path.exists():
+        candidates = pd.read_csv(candidates_path)
+    elif "status" in full.columns:
+        candidates = full[full["status"].eq("BUY")].copy()
+    else:
+        candidates = full.head(0).copy()
     summary = json.loads((OUT / "screening_summary.json").read_text(encoding="utf-8"))
     as_of = str(summary.get("as_of") or "")
     as_of_year = int(as_of[:4]) if len(as_of) >= 4 and as_of[:4].isdigit() else None
