@@ -69,11 +69,33 @@ def clean_date(value: str | pd.Timestamp) -> pd.Timestamp:
     return pd.Timestamp(value).tz_localize(None).normalize()
 
 
-def default_as_of(vni_path: Path) -> pd.Timestamp:
+def _valid_signal_date(value: object) -> pd.Timestamp | None:
+    try:
+        ts = clean_date(value)
+    except Exception:
+        return None
+    if pd.isna(ts):
+        return None
+    if ts < pd.Timestamp("2000-01-01") or ts > pd.Timestamp.today().normalize() + pd.Timedelta(days=7):
+        return None
+    return ts
+
+
+def default_as_of(vni_path: Path, scores_dir: Path | None = None) -> pd.Timestamp:
+    candidates: list[pd.Timestamp] = []
     if vni_path.exists():
         vni = pd.read_parquet(vni_path)
         if not vni.empty and "date" in vni.columns:
-            return clean_date(pd.to_datetime(vni["date"]).max())
+            ts = _valid_signal_date(pd.to_datetime(vni["date"], errors="coerce").max())
+            if ts is not None:
+                candidates.append(ts)
+    if scores_dir is not None and scores_dir.exists():
+        for path in scores_dir.glob("*.parquet"):
+            ts = _valid_signal_date(path.stem)
+            if ts is not None:
+                candidates.append(ts)
+    if candidates:
+        return max(candidates)
     return clean_date(pd.Timestamp.today())
 
 
@@ -499,7 +521,7 @@ def main() -> None:
     vni_path = Path(args.vni_path)
     out_root = Path(args.out_dir)
 
-    as_of = clean_date(args.as_of) if args.as_of else default_as_of(vni_path)
+    as_of = clean_date(args.as_of) if args.as_of else default_as_of(vni_path, scores_dir)
     trade_date = next_monday(as_of)
     score_date, scores = load_score_snapshot(scores_dir, as_of)
     holdings = load_holdings(args.holdings)
