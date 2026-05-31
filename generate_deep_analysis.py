@@ -22,6 +22,13 @@ SELECTOR_LABEL_DIR = OUT / "beat_vni30_parallel" / "claude_g2_selector_labels"
 DAILY_AUDIT_CONFIG = OUT / "beat_vni30_parallel" / "codex_lane_n_daily_lot_cash_signal_exchange_gap_grid" / "best_stock_only" / "config.json"
 
 
+def atomic_write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(text, encoding="utf-8")
+    tmp.replace(path)
+
+
 POLICY_SPECS = [
     {
         "key": "phase18_meanreversion_boost",
@@ -1957,4 +1964,15 @@ def main() -> None:
             "nav_vnd": DEFAULT_NAV_VND,
         },
     }
-    (DASH / "analysis.js").write_text
+    analysis_text = (
+        "window.SCREENING_DEEP_ANALYSIS = "
+        + json.dumps(payload, ensure_ascii=False, indent=2)
+        + ";\n"
+    )
+    atomic_write_text(DASH / "analysis.js", analysis_text)
+    atomic_write_text(OUT / "deep_analysis.json", json.dumps(payload, ensure_ascii=False, indent=2))
+    print(f"Wrote {DASH / 'analysis.js'} with {len(policies)} execution policies")
+
+
+if __name__ == "__main__":
+    main()
