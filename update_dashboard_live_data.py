@@ -24,6 +24,7 @@ def atomic_write_text(path: Path, text: str) -> None:
     tmp.write_text(text, encoding="utf-8")
     tmp.replace(path)
 POLICY_DIR = OUT / "dashboard_policies" / "r46_bear_stop_mcore"
+VNINDEX_FALLBACK_CSV = OUT / "vnindex_daily.csv"
 
 PRICE_DIRS = [
     ROOT / ".cache" / "history",
@@ -178,6 +179,30 @@ def update_vnindex() -> dict:
         latest = frames[-1]["date"].max().date().isoformat() if frames else None
         return {"symbol": "VNINDEX", "ok": True, "latest": latest, "rows": len(frames[-1]) if frames else 0}
     except Exception as exc:
+        if VNINDEX_FALLBACK_CSV.exists():
+            try:
+                fallback = pd.read_csv(VNINDEX_FALLBACK_CSV)
+                fallback = fallback[["date", "close"]].copy()
+                fallback["date"] = pd.to_datetime(fallback["date"]).dt.tz_localize(None).dt.normalize()
+                fallback["close"] = pd.to_numeric(fallback["close"], errors="coerce")
+                fallback = fallback.dropna(subset=["date", "close"]).drop_duplicates("date", keep="last").sort_values("date")
+                for p in [BACKTEST_CACHE / "vnindex_daily.parquet", BACKTEST_CACHE / "vnindex_daily_v6.parquet"]:
+                    write_parquet(fallback, p)
+                latest = fallback["date"].max().date().isoformat() if not fallback.empty else None
+                return {
+                    "symbol": "VNINDEX",
+                    "ok": True,
+                    "latest": latest,
+                    "rows": len(fallback),
+                    "staleFallback": True,
+                    "reason": f"vps_fetch_failed: {str(exc)[:120]}",
+                }
+            except Exception as fallback_exc:
+                return {
+                    "symbol": "VNINDEX",
+                    "ok": False,
+                    "reason": f"{str(exc)[:100]}; fallback_failed: {str(fallback_exc)[:80]}",
+                }
         return {"symbol": "VNINDEX", "ok": False, "reason": str(exc)[:160]}
 
 
