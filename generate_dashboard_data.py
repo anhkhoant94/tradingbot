@@ -69,9 +69,11 @@ def main() -> None:
             liq_num = pd.to_numeric(full["avg_value_20d_bil"], errors="coerce")
             mask = liq_num.isna() | (liq_num <= 0)
             if mask.any():
-                full.loc[mask, "avg_value_20d_bil"] = full.loc[mask, "symbol"].map(
-                    lambda s: liq_fallback.get(str(s).upper())
+                fallback_liq = pd.to_numeric(
+                    full.loc[mask, "symbol"].map(lambda s: liq_fallback.get(str(s).upper())),
+                    errors="coerce",
                 )
+                full.loc[mask, "avg_value_20d_bil"] = fallback_liq.where(fallback_liq.notna(), liq_num.loc[mask])
         if "history_last_date" in full.columns and "current_price_k" in full.columns:
             current_price_num = pd.to_numeric(full["current_price_k"], errors="coerce")
             missing_hist = full["history_last_date"].isna() | (full["history_last_date"].astype(str).str.strip() == "")
