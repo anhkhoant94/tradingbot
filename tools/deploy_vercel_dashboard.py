@@ -12,6 +12,7 @@ Optional:
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import sys
@@ -57,7 +58,16 @@ def collect_files(root: Path) -> list[dict]:
         rel = path.relative_to(root).as_posix()
         if path.suffix.lower() not in TEXT_EXTS:
             raise RuntimeError(f"Unexpected non-text dashboard file: {rel}")
-        files.append({"file": rel, "data": path.read_text(encoding="utf-8")})
+        data = path.read_bytes()
+        if b"\0" in data:
+            raise RuntimeError(f"Refusing to deploy dashboard file containing NUL bytes: {rel}")
+        files.append(
+            {
+                "file": rel,
+                "data": base64.b64encode(data).decode("ascii"),
+                "encoding": "base64",
+            }
+        )
     if not any(f["file"] == "index.html" for f in files):
         raise RuntimeError("dashboard/index.html not found")
     return files
