@@ -23,6 +23,7 @@ DEFAULT_HISTORY_DIR = BACKTEST_CACHE / "history_clean"
 DEFAULT_VNI_PATH = BACKTEST_CACHE / "vnindex_daily.parquet"
 DEFAULT_OUT_DIR = ROOT / "output" / "live_signals"
 DEFAULT_SCREENING_RESULTS = ROOT / "output" / "screening_full_results.csv"
+DEFAULT_VNINDEX_FALLBACK_CSV = ROOT / "output" / "vnindex_daily.csv"
 
 FEE_BUY = 0.0015
 FEE_SELL = 0.0015
@@ -84,8 +85,8 @@ def _valid_signal_date(value: object) -> pd.Timestamp | None:
 
 def default_as_of(vni_path: Path, scores_dir: Path | None = None) -> pd.Timestamp:
     candidates: list[pd.Timestamp] = []
-    if vni_path.exists():
-        vni = pd.read_parquet(vni_path)
+    if vni_path.exists() or DEFAULT_VNINDEX_FALLBACK_CSV.exists():
+        vni = load_vnindex_frame(vni_path)
         if not vni.empty and "date" in vni.columns:
             ts = _valid_signal_date(pd.to_datetime(vni["date"], errors="coerce").max())
             if ts is not None:
@@ -156,6 +157,14 @@ def latest_price_k(history_dir: Path, symbol: str, as_of: pd.Timestamp) -> tuple
     if not math.isfinite(close) or close <= 0:
         return None, None
     return close, df.iloc[-1]["time"].date().isoformat()
+
+
+def load_vnindex_frame(vni_path: Path) -> pd.DataFrame:
+    if vni_path.exists():
+        return pd.read_parquet(vni_path)
+    if DEFAULT_VNINDEX_FALLBACK_CSV.exists():
+        return pd.read_csv(DEFAULT_VNINDEX_FALLBACK_CSV)
+    return pd.DataFrame(columns=["date", "close"])
 
 
 def weekly_features(history_dir: Path, symbol: str, as_of: pd.Timestamp) -> dict:
@@ -229,8 +238,20 @@ def compute_overlay_state(
     threshold: float,
     stock_exposure: float,
 ) -> OverlayState:
-    vni = pd.read_parquet(vni_path)
+    vni = load_vnindex_frame(vni_path)
     vni = vni.copy()
+    if vni.empty:
+        return OverlayState(
+            decision="BULL",
+            trade_date=trade_date.date().isoformat(),
+            signal_date=None,
+            vni_close_signal=None,
+            vni_ret_8w_pct=None,
+            overlay_exposure=stock_exposure,
+            reason="missing_vni_history_default_bull",
+            latest_vni_date=None,
+            latest_vni_close=None,
+        )
     vni["date"] = pd.to_datetime(vni["date"]).dt.tz_localize(None)
     vni = vni.sort_values("date")
     latest = vni[vni["date"] <= as_of].tail(1)
