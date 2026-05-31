@@ -22,8 +22,6 @@ DEFAULT_SCORES_DIR = BACKTEST_CACHE / "scores_2016_v4"
 DEFAULT_HISTORY_DIR = BACKTEST_CACHE / "history_clean"
 DEFAULT_VNI_PATH = BACKTEST_CACHE / "vnindex_daily.parquet"
 DEFAULT_OUT_DIR = ROOT / "output" / "live_signals"
-DEFAULT_SCREENING_RESULTS = ROOT / "output" / "screening_full_results.csv"
-DEFAULT_VNINDEX_FALLBACK_CSV = ROOT / "output" / "vnindex_daily.csv"
 
 FEE_BUY = 0.0015
 FEE_SELL = 0.0015
@@ -71,33 +69,11 @@ def clean_date(value: str | pd.Timestamp) -> pd.Timestamp:
     return pd.Timestamp(value).tz_localize(None).normalize()
 
 
-def _valid_signal_date(value: object) -> pd.Timestamp | None:
-    try:
-        ts = clean_date(value)
-    except Exception:
-        return None
-    if pd.isna(ts):
-        return None
-    if ts < pd.Timestamp("2000-01-01") or ts > pd.Timestamp.today().normalize() + pd.Timedelta(days=7):
-        return None
-    return ts
-
-
-def default_as_of(vni_path: Path, scores_dir: Path | None = None) -> pd.Timestamp:
-    candidates: list[pd.Timestamp] = []
-    if vni_path.exists() or DEFAULT_VNINDEX_FALLBACK_CSV.exists():
-        vni = load_vnindex_frame(vni_path)
+def default_as_of(vni_path: Path) -> pd.Timestamp:
+    if vni_path.exists():
+        vni = pd.read_parquet(vni_path)
         if not vni.empty and "date" in vni.columns:
-            ts = _valid_signal_date(pd.to_datetime(vni["date"], errors="coerce").max())
-            if ts is not None:
-                candidates.append(ts)
-    if scores_dir is not None and scores_dir.exists():
-        for path in scores_dir.glob("*.parquet"):
-            ts = _valid_signal_date(path.stem)
-            if ts is not None:
-                candidates.append(ts)
-    if candidates:
-        return max(candidates)
+            return clean_date(pd.to_datetime(vni["date"]).max())
     return clean_date(pd.Timestamp.today())
 
 
@@ -108,25 +84,13 @@ def next_monday(as_of: pd.Timestamp) -> pd.Timestamp:
     return as_of + pd.Timedelta(days=days)
 
 
-def load_score_snapshot(
-    scores_dir: Path,
-    as_of: pd.Timestamp,
-    fallback_csv: Path = DEFAULT_SCREENING_RESULTS,
-) -> tuple[pd.Timestamp, pd.DataFrame]:
+def load_score_snapshot(scores_dir: Path, as_of: pd.Timestamp) -> tuple[pd.Timestamp, pd.DataFrame]:
     files = sorted(scores_dir.glob("*.parquet"))
     dated = [(clean_date(p.stem), p) for p in files if clean_date(p.stem) <= as_of]
-    if dated:
-        score_date, path = dated[-1]
-        return score_date, pd.read_parquet(path)
-    if fallback_csv.exists():
-        df = pd.read_csv(fallback_csv)
-        score_date = as_of
-        if "history_last_date" in df.columns:
-            ts = _valid_signal_date(pd.to_datetime(df["history_last_date"], errors="coerce").max())
-            if ts is not None and ts <= as_of:
-                score_date = ts
-        return score_date, df
-    raise FileNotFoundError(f"No score snapshot <= {as_of.date()} in {scores_dir}; missing fallback {fallback_csv}")
+    if not dated:
+        raise FileNotFoundError(f"No score snapshot <= {as_of.date()} in {scores_dir}")
+    score_date, path = dated[-1]
+    return score_date, pd.read_parquet(path)
 
 
 def load_holdings(path: str | None) -> pd.DataFrame:
@@ -157,14 +121,6 @@ def latest_price_k(history_dir: Path, symbol: str, as_of: pd.Timestamp) -> tuple
     if not math.isfinite(close) or close <= 0:
         return None, None
     return close, df.iloc[-1]["time"].date().isoformat()
-
-
-def load_vnindex_frame(vni_path: Path) -> pd.DataFrame:
-    if vni_path.exists():
-        return pd.read_parquet(vni_path)
-    if DEFAULT_VNINDEX_FALLBACK_CSV.exists():
-        return pd.read_csv(DEFAULT_VNINDEX_FALLBACK_CSV)
-    return pd.DataFrame(columns=["date", "close"])
 
 
 def weekly_features(history_dir: Path, symbol: str, as_of: pd.Timestamp) -> dict:
@@ -238,20 +194,8 @@ def compute_overlay_state(
     threshold: float,
     stock_exposure: float,
 ) -> OverlayState:
-    vni = load_vnindex_frame(vni_path)
+    vni = pd.read_parquet(vni_path)
     vni = vni.copy()
-    if vni.empty:
-        return OverlayState(
-            decision="BULL",
-            trade_date=trade_date.date().isoformat(),
-            signal_date=None,
-            vni_close_signal=None,
-            vni_ret_8w_pct=None,
-            overlay_exposure=stock_exposure,
-            reason="missing_vni_history_default_bull",
-            latest_vni_date=None,
-            latest_vni_close=None,
-        )
     vni["date"] = pd.to_datetime(vni["date"]).dt.tz_localize(None)
     vni = vni.sort_values("date")
     latest = vni[vni["date"] <= as_of].tail(1)
@@ -555,7 +499,7 @@ def main() -> None:
     vni_path = Path(args.vni_path)
     out_root = Path(args.out_dir)
 
-    as_of = clean_date(args.as_of) if args.as_of else default_as_of(vni_path, scores_dir)
+    as_of = clean_date(args.as_of) if args.as_of else default_as_of(vni_path)
     trade_date = next_monday(as_of)
     score_date, scores = load_score_snapshot(scores_dir, as_of)
     holdings = load_holdings(args.holdings)
