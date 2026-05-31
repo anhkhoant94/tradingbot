@@ -13,6 +13,14 @@ on:
         description: "Filter mode (opportunity | conservative)"
         required: false
         default: "opportunity"
+      sample_size:
+        description: "Smoke limit for precheck symbols (0 = full)"
+        required: false
+        default: "0"
+      workers:
+        description: "Parallel workers for history/ratio fetch"
+        required: false
+        default: "4"
 
 concurrency:
   group: screening-weekly
@@ -30,6 +38,8 @@ jobs:
       PYTHONIOENCODING: utf-8
       PYTHONPATH: ${{ github.workspace }}
       MODE: ${{ github.event.inputs.mode || 'opportunity' }}
+      SAMPLE_SIZE: ${{ github.event.inputs.sample_size || '0' }}
+      WORKERS: ${{ github.event.inputs.workers || '4' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -69,6 +79,10 @@ jobs:
           ARGS=""
           if [ "$MODE" = "conservative" ]; then
             ARGS="--conservative"
+          fi
+          ARGS="$ARGS --workers $WORKERS"
+          if [ "$SAMPLE_SIZE" != "0" ]; then
+            ARGS="$ARGS --limit-prelim $SAMPLE_SIZE"
           fi
           python run_stock_screen.py $ARGS
 
