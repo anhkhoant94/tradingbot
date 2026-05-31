@@ -1,12 +1,12 @@
-name: Weekly Signal Monday
+name: Weekly Signal Friday Close
 
-# Sinh signal/orders cho sang thu Hai. Chay Chu Nhat 02:30 UTC (~ 09:30 ICT),
-# tuc la sau khi screening-weekly da push outputs sang Chu Nhat ICT.
+# Sinh signal/orders cho phien thu Hai ke tiep. Chay sau phien thu Sau:
+# 08:45 UTC = 15:45 ICT, sau screening-weekly 30 phut.
 # Output day vao output/live_signals/<date>/ va commit nguoc, kich hoat dashboard refresh.
 
 on:
   schedule:
-    - cron: "30 2 * * 0"
+    - cron: "45 8 * * 5"
   workflow_dispatch:
     inputs:
       nav:
