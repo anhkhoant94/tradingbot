@@ -1,12 +1,12 @@
 name: Screening Pipeline Weekly
 
-# Cap nhat screening_full_results.csv + screening_summary.json + data.js moi tuan,
-# chay Chu Nhat 23:00 UTC (~ 06:00 ICT thu Hai) truoc khi mo cua.
+# Cap nhat screening_full_results.csv + screening_summary.json + data.js moi tuan
+# sau phien thu Sau. 08:15 UTC = 15:15 ICT, de du thoi gian cho EOD data settle.
 # Output duoc commit nguoc ve repo de dashboard-auto-refresh.yml picks up va deploy.
 
 on:
   schedule:
-    - cron: "0 23 * * 0"
+    - cron: "15 8 * * 5"
   workflow_dispatch:
     inputs:
       mode:
