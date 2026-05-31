@@ -992,4 +992,43 @@ window.SCREENING_DEEP_ANALYSIS = {
     "priceLimitAware": true,
     "priceLimitGuardPct": 0.5,
     "pullbackDays": 2,
-    "summary": "Không có mua/bán mới cho 2026-06-01; hiện là kế hoạch giữ danh mục và theo dõi giá
+    "summary": "Không có mua/bán mới cho 2026-06-01; hiện là kế hoạch giữ danh mục và theo dõi giá.",
+    "rows": [
+      {
+        "planDate": "2026-06-01",
+        "symbol": "MSB",
+        "exchange": "HOSE",
+        "action": "GIỮ",
+        "status": "DỰ KIẾN",
+        "currentPrice": 15.1,
+        "priceAsOf": "2026-05-28",
+        "entryPrice": 14.084,
+        "referenceClose": 15.1,
+        "referenceDate": "2026-05-28",
+        "maxBuyPrice": 16.081,
+        "limitPrice": 15.326,
+        "gapPct": null,
+        "baseGapThresholdPct": 9.0,
+        "effectiveGapThresholdPct": 6.5,
+        "currentWeight": 5.5,
+        "targetWeight": 5.5,
+        "deltaWeight": 0.0,
+        "currentCopyShares": 3800,
+        "targetCopyShares": 3800,
+        "orderShares": 0,
+        "orderValueMil": 0.0,
+        "targetPrice": 19.046,
+        "stopPrice": 12.152,
+        "note": "Tín hiệu kỳ tới không đổi mã này; tiếp tục giữ và theo dõi target/stop."
+      }
+    ]
+  },
+  "initialCapital": {
+    "amount_vnd": 1000000000,
+    "start_date": "2021-01-01"
+  },
+  "portfolioPlan": {
+    "rule": "Dashboard này chỉ hiển thị lệnh copy theo policy đang chọn. Không trộn thêm tín hiệu screening rời rạc để tránh mâu thuẫn.",
+    "nav_vnd": 1000000000
+  }
+};
