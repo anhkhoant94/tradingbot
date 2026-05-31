@@ -150,14 +150,6 @@ window.SCREENING_DEEP_ANALYSIS = {
           [
             "10. Hiệu suất verified (2021-2026)",
             "CAGR 76.47%, MaxDD -25.62%, Sharpe 2.19. Pass +30pp 6/6 năm: 2021 +153.93pp, 2022 +67.24pp, 2023 +34.34pp, 2024 +45.95pp, 2025 +33.11pp, 2026 YTD +32.77pp. T+2.5 violations: 0/1,821 trades. Full 2016-2026: CAGR 46.75%, pass +30pp 7/11 (fail 2016/2017/2019/2020 — pre-strategy era)."
-          ],
-          [
-            "11. Caveats & Risk",
-            "(a) Stress 20bps slippage: recent 6/6 +30pp giảm còn 5/6 — cần monitor cost thực tế; (b) Liquidity bias: ADV20 từ cache under-estimate cho mã có bonus history (factor 2.1x do VCI adjust price không adjust volume), live broker cần verify trước khi vào lệnh; (c) Single-name concentration: max single-stock weight per-date có thể tới 55% (cap M-core) — concentrated tactical model; (d) Universe matrix từ 2016-02 trở đi (509 mã đủ data)."
-          ],
-          [
-            "12. Trạng thái production & audit",
-            "Verdict tổng: PASS_PRODUCTION_GRADE. Engine md5 pin: 096afbf65c0a3c3cf1b38dce7d7d665b (pass30_direct_search.py). R46 Bear Stop = M-core target (R15 plateau mega-2_mid-2) + R23 flexible exec + R18 NAV-aware cap + Phase1 v4 regime bear stop 5%. Paper-trade kickoff cleared; copy-trade live blocked đến khi 4 tuần paper-trade gate (a) pass + anh approve bằng văn bản. Full spec: output/r46_filter_spec/R46_FILTER_SPEC_20260530.md."
           ]
         ]
       },
@@ -1032,3 +1024,4 @@ window.SCREENING_DEEP_ANALYSIS = {
     "nav_vnd": 1000000000
   }
 };
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        
