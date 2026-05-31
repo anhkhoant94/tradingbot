@@ -1558,22 +1558,18 @@ def build_r46_bear_stop_policy(full_by_symbol: dict[str, pd.Series]) -> dict | N
         "failYears": [],
     }
     methodology_cards = [
-        ["1. Tài sản được phép", "Chỉ mua cổ phiếu thường trên HOSE/HNX/UPCoM có dữ liệu giá và thanh khoản đủ dùng. Không ETF, trái phiếu, margin, bán khống hay phái sinh. Tiền chưa dùng để cash, không tính lãi."],
-        ["2. Bộ máy xếp hạng M-core/Pair657", "M-core là bộ lọc chọn cổ phiếu theo tuần. Pair657 là hạ tầng xếp hạng tổng hợp phía sau M-core: chấm điểm từng mã bằng valuation, quality, catalyst, technical, ngành, thanh khoản và trạng thái giao dịch; sau đó xuất ra danh sách target weight cho tuần tới."],
-        ["3. Điểm valuation", "Ưu tiên cổ phiếu đang rẻ tương đối so với nền tảng kế toán gần nhất: P/E, P/B, EV/EBIT và các biến valuation tương tự. Đây là phần alpha mạnh nhất trong audit R8, vì có yếu tố giá thị trường trong mẫu số/tử số."],
-        ["4. Điểm quality", "Quality dùng các chỉ số như ROE, ROA, biên lợi nhuận, đòn bẩy và ổn định tài chính. Điểm này không được xem là alpha độc lập ở Việt Nam, nhưng vẫn là lớp kiểm tra để tránh mã quá yếu hoặc dữ liệu bất thường."],
-        ["5. Điểm catalyst", "Catalyst dùng tăng trưởng doanh thu/lợi nhuận và cải thiện kết quả gần đây. Audit cho thấy catalyst đơn lẻ không đủ mạnh, nên nó chỉ góp vào rank tổng hợp, không dùng làm lý do mua riêng."],
-        ["6. Điểm technical", "Technical kiểm tra xu hướng giá, vị trí so với đỉnh/đáy, động lượng và dòng tiền. Các indicator như RSI/MACD/nến không được dùng làm hard filter chính vì đã test nhiều biến thể và dễ làm mất winner; hiện chỉ dùng như ngữ cảnh phụ trong rank/alert."],
-        ["7. Ngành và cụm ngành", "Mã được cộng/trừ điểm theo sức mạnh ngành và industry context. Model tránh lấy quá nhiều mã cùng một cụm rủi ro khi rank tương đương, để giảm việc cả danh mục bị lệch vào một theme."],
-        ["8. Thanh khoản và khả năng khớp", "Policy live giả định NAV 3 tỷ và phù hợp nhóm tài khoản dưới 5 tỷ. Mỗi mã bị giới hạn theo 20% giá trị giao dịch bình quân 20 phiên (ADV) để tránh mua/bán quá lớn so với thanh khoản."],
-        ["9. Retention", "Không đảo danh mục chỉ vì rank dao động nhỏ. Nếu mã đang nắm vẫn còn đạt chuẩn và chưa bị tín hiệu xấu rõ ràng, model có thể giữ lại để giảm churn, phí và rủi ro bán đúng trước nhịp tăng."],
-        ["10. Chọn danh mục tuần", "Cuối tuần, model lấy danh sách target M-core sau các lớp rank, thanh khoản, status flag, sector/industry và retention. Mỗi mã có target weight riêng; phần không đủ điều kiện hoặc không đủ lô thì để cash."],
-        ["11. Giá mua", "Không mua đuổi vô điều kiện. Sau close thứ 6, nếu thứ 2 mở cửa tăng không quá 9% so với tham chiếu thì được mua. Nếu gap cao hơn, model chờ giá pullback về vùng limit trong tối đa 2 phiên; không về thì bỏ qua."],
-        ["12. Giá bán", "Bán khi target tuần mới giảm/loại mã, hoặc khi rule risk kích hoạt. Lệnh bán tôn trọng T+2.5: cổ phiếu chưa đủ thời gian bán thì tiếp tục giữ tới khi bán hợp lệ."],
-        ["13. Stop-loss", "Không dùng stop-loss thường xuyên trong mọi thị trường. R46 chỉ bật stop-loss 5% khi regime thị trường là bear theo Phase1 v4; mục tiêu là cắt các cú rơi trong thị trường yếu mà không làm mất convexity ở thị trường bình thường."],
-        ["14. Làm tròn lệnh", "Tất cả lệnh copy trade làm tròn xuống lô 100 cổ phiếu. Nếu tỷ trọng mục tiêu tạo ra phần nhỏ hơn 100 cổ phiếu thì phần đó không đặt lệnh và giữ thành cash."],
-        ["15. Chi phí", "Dashboard dùng giả định trượt giá/chi phí thêm 15bps mỗi chiều vì live NAV dưới 5 tỷ. 18bps plateau vẫn pass 4/4 cell nhưng buffer mỏng: cell yếu nhất chỉ còn min edge +30.13pp, sát gate +30pp. Nếu chi phí thực tế thường xuyên vượt 15bps thì phải cảnh báo và re-audit."],
-        ["16. Audit hiện tại", "R46 Bear Stop đã được Claude audit PASS. Plateau 15bps pass 4/4 cell, 18bps pass 4/4 cell, nhưng 20bps fail recent VNI+30 6/6. Dashboard chỉ trình bày hiệu quả từ 2021-hiện tại để khớp đúng giai đoạn anh theo dõi."],
+        ["1. Vũ trụ cổ phiếu (Universe)", "Sàn áp dụng: HOSE, HNX, UPCoM. Chỉ cổ phiếu thường, KHÔNG ETF, trái phiếu, margin, bán khống, phái sinh. Tiền chưa dùng để cash, lãi 0%. Mã phải có thanh khoản trung bình 20 phiên (ADV20) tối thiểu 5 tỷ đồng/ngày. Có nhánh ngoại lệ cho mã 3-5 tỷ/ngày nếu composite score ≥ 70 và (ret13 ≥ 20% hoặc ret26 ≥ 30% hoặc đang trong cụm breakout ngành). Date constraint: score chỉ được tính từ dữ liệu có trước ngày tín hiệu (no future leak)."],
+        ["2. Bộ lọc điểm số (Score Gates)", "Mỗi cổ phiếu có 7 score thành phần range 0-100 (fa_rank: tài chính; mom_rank: động lượng; rs_rank: sức mạnh tương đối; high_rank: gần đỉnh 52W; flow_rank: dòng tiền; industry_score: ngành; tech_score: kỹ thuật nền). Hard gates: composite_score ≥ 70 (tổng hợp BCTC + định giá + momentum theo công thức 0.30×Quality + 0.25×Valuation + 0.20×Catalyst + 0.25×Technical), industry_score ≥ 40, industry rank ≤ top 10, hard_gate==PASS (ROE bank ≥ 12%, ROA bank ≥ 0.8%, D/E phi ngân hàng ≤ 400%, không gap data), RSI14 trong khoảng 35-78 (mở rộng tới 95 nếu mã đang breakout sát đỉnh 52W)."],
+        ["3. Điều kiện MUA (Entry — family sector_cluster)", "Sau khi qua universe + score gates, candidate được chấm score sector_cluster: ưu tiên mã sát đỉnh 52W (high_rank weight 0.45), cộng điểm mạnh cho cụm ngành breakout (35 điểm khi cluster_breakout_flag=1, +6×cluster_strength_4w), cộng momentum ret4 (14×ret4). Cluster breakout active khi trong cùng ngành có ≥ 2 mã đồng thời gần đỉnh ≥ 97% và ret4 ≥ -2%. Rule one-per-industry: nếu bật, mỗi ngành chỉ giữ 1 mã có tech_score cao nhất, chống concentration."],
+        ["4. Quy mô vị thế (Position Sizing)", "Max holdings: 5 mã. Max weight per stock (M-core cap): 55% per signal date. Cap thanh khoản (R18 NAV-aware): max_weight_by_liq = (20% × ADV20) / NAV_deployment 3 tỷ; final weight = min(M-core weight, max_weight_by_liq). Trung bình exposure thực tế ~60%; cash residual cao trong tuần regime yếu. Không có riskoff exposure floor — cash buffer có thể lên 95%+ (như tuần 25/05/2026: MSB 5.525% + cash 94.475%)."],
+        ["5. Điều kiện BÁN (Exit)", "Ba lớp: (a) Weekly rebalance: mỗi thứ 2, nếu weight hiện tại vượt target + 0.1% NAV thì bán phần dư tại giá mở cửa; (b) T+2.5 settle: mỗi lot phải giữ tối thiểu 4 phiên trước khi được bán (HOSE rule); (c) Bear regime daily stop 5%: nếu regime hôm nay = bear VÀ lot đã qua T+2.5 VÀ low_today ≤ entry × 0.95 → bán tại min(open, entry × 0.95). KHÔNG có stop trong regime bull/recovery/sideways."],
+        ["6. Regime Gate (M-core Phase 1 v4)", "Classifier weekly phân loại VN-Index thành 5 trạng thái theo priority. BEAR: vni_ret_13w < -5% HOẶC (vni_ret_4w < -8% VÀ breadth_top200 < 30%). BULL_BROAD: breadth_top200 > 25% VÀ vni_ret_13w > 8% VÀ dispersion_4w < 15% VÀ vni_ret_4w > 0. BULL_NARROW: mega_cap_leadership > 8% VÀ vni_ret_13w > 3% VÀ breadth_top200 < 50% VÀ vni_ret_4w > 0. RECOVERY: breadth_recovery_2w ≥ 1 VÀ vni_ret_4w > 0 VÀ vni_ret_13w < 0. SIDEWAYS: mặc định. Daily date → weekly regime gần nhất qua backward asof (no future leak)."],
+        ["7. Cash overlay (passive)", "Không có rule \"force 100% cash\" khi VNI rơi. Cash xuất hiện tự nhiên qua filter: khi regime weak, số mã qua được score gates giảm → sum target weight giảm → phần còn lại = cash. Cash yield giả định 0% (không gửi TGTK/bond — constraint của user). Model luôn cho phép giữ vị thế nếu có mã pass gate, không tự ý đứng ngoài."],
+        ["8. Rebalance & Execution (R23 flexible exec)", "Tần suất: signal generate tối Chủ Nhật (sau Friday close), execute Monday. Quy tắc: nếu Monday open ≤ Friday close × 1.09 → mua tại open (HOSE thực tế cap ở ~6.5% do biên độ sàn 7%). Nếu gap > 9% → chờ pullback trong 2 phiên kế tiếp, limit = Friday close × 1.015. Nếu trong window low ≤ limit → fill tại min(open, limit). Hết window không khớp → skip (MISS_BUY). Lot size: 100 cổ phiếu, làm tròn xuống. Settlement T+2.5."],
+        ["9. Chi phí giao dịch", "Phí buy: 0.15% phí + 0.15% slippage = 0.30% per side. Phí sell: 0.15% phí + 0.10% thuế TNCN + 0.15% slippage = 0.40% per side. Dashboard giả định extra slippage 15bps/side. Robust ở 15-18bps; tại 20bps recent +30pp gate giảm còn 5/6. Live broker phải đạt cost ≤ 18bps/side để giữ gate strict."],
+        ["10. Hiệu suất verified (2021-2026)", "CAGR 76.47%, MaxDD -25.62%, Sharpe 2.19. Pass +30pp 6/6 năm: 2021 +153.93pp, 2022 +67.24pp, 2023 +34.34pp, 2024 +45.95pp, 2025 +33.11pp, 2026 YTD +32.77pp. T+2.5 violations: 0/1,821 trades. Full 2016-2026: CAGR 46.75%, pass +30pp 7/11 (fail 2016/2017/2019/2020 — pre-strategy era)."],
+        ["11. Caveats & Risk", "(a) Stress 20bps slippage: recent 6/6 +30pp giảm còn 5/6 — cần monitor cost thực tế; (b) Liquidity bias: ADV20 từ cache under-estimate cho mã có bonus history (factor 2.1x do VCI adjust price không adjust volume), live broker cần verify trước khi vào lệnh; (c) Single-name concentration: max single-stock weight per-date có thể tới 55% (cap M-core) — concentrated tactical model; (d) Universe matrix từ 2016-02 trở đi (509 mã đủ data)."],
+        ["12. Trạng thái production & audit", "Verdict tổng: PASS_PRODUCTION_GRADE. Engine md5 pin: 096afbf65c0a3c3cf1b38dce7d7d665b (pass30_direct_search.py). R46 Bear Stop = M-core target (R15 plateau mega-2_mid-2) + R23 flexible exec + R18 NAV-aware cap + Phase1 v4 regime bear stop 5%. Paper-trade kickoff cleared; copy-trade live blocked đến khi 4 tuần paper-trade gate (a) pass + anh approve bằng văn bản. Full spec: output/r46_filter_spec/R46_FILTER_SPEC_20260530.md."],
     ]
     policy = {
         "key": "r46_bear_stop_mcore",
@@ -1945,36 +1941,4 @@ def main() -> None:
     r23 = build_r23_nav3b_policy(full_by_symbol)
     t2_v13 = build_t2_vni30_research_policy(full_by_symbol)
     tier_a = build_tier_a_baseline_policy(full_by_symbol)
-    policies = [policy for policy in [r46, r23, t2_v13, tier_a] if policy]
-    if not policies:
-        policies = [build_policy(spec, full_by_symbol) for spec in POLICY_SPECS[:1]]
-    default_policy = r46.get("key") if r46 else (r23.get("key") if r23 else (t2_v13.get("key") if t2_v13 else (tier_a.get("key") if tier_a else "phase18_meanreversion_boost")))
-    payload = {
-        "memos": build_latest_trade_memos(full_by_symbol),
-        "strategyPolicies": policies,
-        "defaultPolicy": default_policy,
-        "plannedOrders": policies[0].get("plannedOrders") if policies else {},
-        "initialCapital": {
-            "amount_vnd": DEFAULT_NAV_VND,
-            "start_date": "2021-01-01",
-        },
-        "portfolioPlan": {
-            "rule": "Dashboard này chỉ hiển thị lệnh copy theo policy đang chọn. Không trộn thêm tín hiệu screening rời rạc để tránh mâu thuẫn.",
-            "nav_vnd": DEFAULT_NAV_VND,
-        },
-    }
-    (DASH / "analysis.js").write_text(
-        "window.SCREENING_DEEP_ANALYSIS = "
-        + json.dumps(payload, ensure_ascii=False, indent=2)
-        + ";\n",
-        encoding="utf-8",
-    )
-    (OUT / "deep_analysis.json").write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-    print(f"Wrote {DASH / 'analysis.js'} with {len(policies)} execution policies")
-
-
-if __name__ == "__main__":
-    main()
+    po
