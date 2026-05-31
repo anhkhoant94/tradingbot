@@ -41,7 +41,11 @@ FILES_TO_PUSH = [
     ".github/workflows/screening-weekly.yml",
     ".github/workflows/bctc-monthly.yml",
     ".github/workflows/weekly-signal.yml",
+    "generate_dashboard_data.py",
+    "generate_deep_analysis.py",
+    "generate_model_history.py",
     "dashboard/app.js",
+    "dashboard/analysis.js",
     "dashboard/history.js",
     "dashboard/index.html",
     "dashboard/styles.css",
@@ -233,4 +237,21 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.all:
-        args.push = args.
+        args.push = args.build = args.deploy = args.verify = True
+
+    secrets = load_secrets()
+
+    if args.push:
+        for rel_path in FILES_TO_PUSH:
+            push_file(secrets["repo"], secrets["branch"], rel_path, secrets["github_token"])
+    if args.build:
+        build_dashboard()
+    if args.deploy:
+        deploy_vercel(secrets)
+    if args.verify:
+        verify_public()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
