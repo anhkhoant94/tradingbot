@@ -1,0 +1,25 @@
+{
+  "as_of": "2026-05-31",
+  "score_date": "2026-05-29",
+  "nav_vnd": 1000000000.0,
+  "overlay": {
+    "decision": "BULL",
+    "trade_date": "2026-06-01",
+    "signal_date": null,
+    "vni_close_signal": null,
+    "vni_ret_8w_pct": null,
+    "overlay_exposure": 0.95,
+    "reason": "insufficient_vni_history_default_bull",
+    "latest_vni_date": "1970-01-01",
+    "latest_vni_close": 1863.49
+  },
+  "eligible_count": 0,
+  "final_exposure": 0.0,
+  "exposure_reason": "eligible_count_0_full_cash",
+  "outputs": {
+    "signals_top50": "/home/runner/work/tradingbot/tradingbot/output/live_signals/2026-05-31/signals_top50.csv",
+    "target_portfolio": "/home/runner/work/tradingbot/tradingbot/output/live_signals/2026-05-31/target_portfolio.csv",
+    "orders": "/home/runner/work/tradingbot/tradingbot/output/live_signals/2026-05-31/orders.csv",
+    "briefing": "/home/runner/work/tradingbot/tradingbot/output/live_signals/2026-05-31/briefing.md"
+  }
+}
