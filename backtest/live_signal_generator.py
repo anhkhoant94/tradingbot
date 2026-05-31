@@ -22,6 +22,7 @@ DEFAULT_SCORES_DIR = BACKTEST_CACHE / "scores_2016_v4"
 DEFAULT_HISTORY_DIR = BACKTEST_CACHE / "history_clean"
 DEFAULT_VNI_PATH = BACKTEST_CACHE / "vnindex_daily.parquet"
 DEFAULT_OUT_DIR = ROOT / "output" / "live_signals"
+DEFAULT_SCREENING_RESULTS = ROOT / "output" / "screening_full_results.csv"
 
 FEE_BUY = 0.0015
 FEE_SELL = 0.0015
@@ -106,13 +107,25 @@ def next_monday(as_of: pd.Timestamp) -> pd.Timestamp:
     return as_of + pd.Timedelta(days=days)
 
 
-def load_score_snapshot(scores_dir: Path, as_of: pd.Timestamp) -> tuple[pd.Timestamp, pd.DataFrame]:
+def load_score_snapshot(
+    scores_dir: Path,
+    as_of: pd.Timestamp,
+    fallback_csv: Path = DEFAULT_SCREENING_RESULTS,
+) -> tuple[pd.Timestamp, pd.DataFrame]:
     files = sorted(scores_dir.glob("*.parquet"))
     dated = [(clean_date(p.stem), p) for p in files if clean_date(p.stem) <= as_of]
-    if not dated:
-        raise FileNotFoundError(f"No score snapshot <= {as_of.date()} in {scores_dir}")
-    score_date, path = dated[-1]
-    return score_date, pd.read_parquet(path)
+    if dated:
+        score_date, path = dated[-1]
+        return score_date, pd.read_parquet(path)
+    if fallback_csv.exists():
+        df = pd.read_csv(fallback_csv)
+        score_date = as_of
+        if "history_last_date" in df.columns:
+            ts = _valid_signal_date(pd.to_datetime(df["history_last_date"], errors="coerce").max())
+            if ts is not None and ts <= as_of:
+                score_date = ts
+        return score_date, df
+    raise FileNotFoundError(f"No score snapshot <= {as_of.date()} in {scores_dir}; missing fallback {fallback_csv}")
 
 
 def load_holdings(path: str | None) -> pd.DataFrame:
