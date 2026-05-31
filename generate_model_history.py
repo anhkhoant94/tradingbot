@@ -200,6 +200,11 @@ def load_vnindex() -> pd.Series:
             df = pd.read_parquet(path).copy()
             df["date"] = pd.to_datetime(df["date"])
             return pd.Series(pd.to_numeric(df["close"], errors="coerce").values, index=df["date"]).dropna()
+    fallback = OUT / "vnindex_daily.csv"
+    if fallback.exists():
+        df = pd.read_csv(fallback).copy()
+        df["date"] = pd.to_datetime(df["date"])
+        return pd.Series(pd.to_numeric(df["close"], errors="coerce").values, index=df["date"]).dropna()
     return pd.Series(dtype=float)
 
 
