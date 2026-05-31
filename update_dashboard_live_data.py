@@ -16,6 +16,13 @@ OUT = ROOT / "output"
 BACKTEST_CACHE = ROOT / ".cache" / "backtest"
 STATUS_PATH = OUT / "dashboard_live_update_status.json"
 DASHBOARD_STATUS_PATH = ROOT / "dashboard" / "dashboard_live_update_status.json"
+
+
+def atomic_write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(text, encoding="utf-8")
+    tmp.replace(path)
 POLICY_DIR = OUT / "dashboard_policies" / "r46_bear_stop_mcore"
 
 PRICE_DIRS = [
@@ -299,9 +306,9 @@ def main() -> None:
         "vnindex": vni_result,
         "bctc": bctc_results,
     }
-    STATUS_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    DASHBOARD_STATUS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    DASHBOARD_STATUS_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    status_text = json.dumps(payload, ensure_ascii=False, indent=2)
+    atomic_write_text(STATUS_PATH, status_text)
+    atomic_write_text(DASHBOARD_STATUS_PATH, status_text)
     ok_prices = sum(1 for row in price_results if row.get("ok"))
     ok_bctc = sum(1 for row in bctc_results if row.get("ok"))
     print(
