@@ -36,6 +36,20 @@ CACHE.mkdir(exist_ok=True)
 AS_OF = date.today().isoformat()
 START_HISTORY = "2026-01-01"
 MODE = "conservative" if "--conservative" in sys.argv else "opportunity"
+
+
+def cli_int(name: str, default: int) -> int:
+    if name not in sys.argv:
+        return default
+    idx = sys.argv.index(name)
+    try:
+        return int(sys.argv[idx + 1])
+    except Exception:
+        return default
+
+
+WORKERS = max(1, cli_int("--workers", 1))
+LIMIT_PRELIM = max(0, cli_int("--limit-prelim", 0))
 FILTERS = {
     "opportunity": {"market_cap_bil": 1_500, "avg_value_20d_bil": 5, "price_k": 5},
     "conservative": {"market_cap_bil": 3_000, "avg_value_20d_bil": 10, "price_k": 5},
@@ -605,8 +619,11 @@ def main() -> None:
         f"mode={MODE}; precheck pass by current market cap/liquidity: "
         f"{len(prelim)}/{len(symbols)}"
     )
+    if LIMIT_PRELIM:
+        prelim = prelim[:LIMIT_PRELIM]
+        log(f"limit-prelim active: scoring first {len(prelim)} symbols")
 
-    log("loading price history for precheck pass symbols")
+    log(f"loading price history for precheck pass symbols (workers={WORKERS})")
     if use_existing_cache:
         rows = []
         for idx, symbol in enumerate(prelim, 1):
@@ -624,9 +641,9 @@ def main() -> None:
                 log(f"incremental history {idx}/{len(prelim)}")
         hist_metrics = pd.DataFrame(rows)
     else:
-        hist_metrics = enrich_history_metrics(prelim, max_workers=1)
+        hist_metrics = enrich_history_metrics(prelim, max_workers=WORKERS)
 
-    log("loading financial ratios for precheck pass symbols")
+    log(f"loading financial ratios for precheck pass symbols (workers={WORKERS})")
     if use_existing_cache:
         rows = []
         for symbol in prelim:
@@ -637,7 +654,7 @@ def main() -> None:
                 rows.append({"symbol": symbol, "ratio_ok": False, "ratio_error": "cache_missing"})
         ratios = pd.DataFrame(rows)
     else:
-        ratios = enrich_ratios(prelim, max_workers=1)
+        ratios = enrich_ratios(prelim, max_workers=WORKERS)
 
     log("scoring")
     df = universe.merge(board, on="symbol", how="left", suffixes=("", "_board"))
