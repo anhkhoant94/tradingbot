@@ -12,6 +12,14 @@ DASH = ROOT / "dashboard"
 BACKTEST_CACHE = ROOT / ".cache" / "backtest"
 BOARD_LOT = 100
 
+
+def atomic_write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(text, encoding="utf-8")
+    tmp.replace(path)
+
+
 POLICY_RUNS = [
     ("r46_bear_stop_mcore", "R46 Bear Stop", OUT / "dashboard_policies" / "r46_bear_stop_mcore"),
     ("r23_nav3b_mcore", "R23_NAV3B", OUT / "dashboard_policies" / "r23_nav3b_mcore"),
@@ -516,13 +524,13 @@ def main() -> None:
         policies.append(policy)
     payload = {"policies": policies}
     DASH.mkdir(exist_ok=True)
-    (DASH / "history.js").write_text(
+    history_text = (
         "window.MODEL_TRADE_HISTORY = "
         + json.dumps(payload, ensure_ascii=False, indent=2)
-        + ";\n",
-        encoding="utf-8",
+        + ";\n"
     )
-    (OUT / "model_trade_history.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    atomic_write_text(DASH / "history.js", history_text)
+    atomic_write_text(OUT / "model_trade_history.json", json.dumps(payload, ensure_ascii=False, indent=2))
     print(f"Wrote {DASH / 'history.js'}")
 
 
