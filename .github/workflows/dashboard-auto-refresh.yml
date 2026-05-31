@@ -107,4 +107,12 @@ jobs:
                   last_error = f"stale updatedAt={updated_at}"
               except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, json.JSONDecodeError, RuntimeError) as exc:
                   last_error = repr(exc)
-              pri
+              print(f"Waiting for Vercel alias propagation attempt {attempt}/12: {last_error}")
+              time.sleep(10)
+          print(f"Public dashboard freshness check failed after retries: {last_error}", file=sys.stderr)
+          sys.exit(1)
+          PY
+
+      - name: Verify public dashboard assets
+        working-directory: ${{ github.workspace }}
+        run: python tools/check_dashboard_public_health.py --require-vni-history
