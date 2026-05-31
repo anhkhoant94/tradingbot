@@ -5,13 +5,13 @@ window.SCREENING_DEEP_ANALYSIS = {
       "status": "THEO DÕI",
       "currentPrice": 56.4,
       "priceAsOf": "2026-05-28",
-      "targetPrice": 70.794,
-      "stopPrice": 50.103,
+      "targetPrice": 68.76,
+      "stopPrice": 51.57,
       "suggestedWeight": null,
       "industry": "SX Nhựa - Hóa chất",
       "sleeve": "non_financial",
-      "upsidePct": 25.52,
-      "downsidePct": 11.16,
+      "upsidePct": 21.91,
+      "downsidePct": 8.56,
       "plan": "Giá thị trường phục vụ bảng lệnh mới nhất.",
       "reasons": []
     },
@@ -19,59 +19,59 @@ window.SCREENING_DEEP_ANALYSIS = {
       "symbol": "DXP",
       "status": "THEO DÕI",
       "currentPrice": 13.3,
-      "priceAsOf": "2026-05-28",
-      "targetPrice": 17.68,
-      "stopPrice": 12.24,
+      "priceAsOf": "2026-05-29",
+      "targetPrice": 17.16,
+      "stopPrice": 11.88,
       "suggestedWeight": null,
       "industry": "Vận tải - kho bãi",
       "sleeve": "non_financial",
-      "upsidePct": 32.93,
-      "downsidePct": 7.97,
+      "upsidePct": 29.02,
+      "downsidePct": 10.68,
       "plan": "Giá thị trường phục vụ bảng lệnh mới nhất.",
       "reasons": []
     },
     {
       "symbol": "GEE",
       "status": "THEO DÕI",
-      "currentPrice": 107.8,
-      "priceAsOf": "2026-05-28",
-      "targetPrice": 150.066,
-      "stopPrice": 95.217,
+      "currentPrice": 108.1,
+      "priceAsOf": "2026-05-29",
+      "targetPrice": 142.051,
+      "stopPrice": 94.874,
       "suggestedWeight": null,
       "industry": "Thiết bị điện",
       "sleeve": "non_financial",
-      "upsidePct": 39.21,
-      "downsidePct": 11.67,
+      "upsidePct": 31.41,
+      "downsidePct": 12.23,
       "plan": "Giá thị trường phục vụ bảng lệnh mới nhất.",
       "reasons": []
     },
     {
       "symbol": "VIC",
       "status": "THEO DÕI",
-      "currentPrice": 210.8,
-      "priceAsOf": "2026-05-28",
-      "targetPrice": 281.348,
-      "stopPrice": 187.376,
+      "currentPrice": 210.5,
+      "priceAsOf": "2026-05-29",
+      "targetPrice": 255.278,
+      "stopPrice": 187.661,
       "suggestedWeight": null,
       "industry": "Bất động sản",
       "sleeve": "non_financial",
-      "upsidePct": 33.47,
-      "downsidePct": 11.11,
+      "upsidePct": 21.27,
+      "downsidePct": 10.85,
       "plan": "Giá thị trường phục vụ bảng lệnh mới nhất.",
       "reasons": []
     },
     {
       "symbol": "PVP",
       "status": "THEO DÕI",
-      "currentPrice": 17.5,
-      "priceAsOf": "2026-05-28",
-      "targetPrice": 29.43,
-      "stopPrice": 15.19,
+      "currentPrice": 17.35,
+      "priceAsOf": "2026-05-29",
+      "targetPrice": 24.186,
+      "stopPrice": 15.138,
       "suggestedWeight": null,
       "industry": "Vận tải - kho bãi",
       "sleeve": "oil_gas",
-      "upsidePct": 68.17,
-      "downsidePct": 13.2,
+      "upsidePct": 39.4,
+      "downsidePct": 12.75,
       "plan": "Giá thị trường phục vụ bảng lệnh mới nhất.",
       "reasons": []
     }
@@ -112,68 +112,52 @@ window.SCREENING_DEEP_ANALYSIS = {
         "audit": "R46 Bear Stop: user-approved dashboard default for NAV <5 ty under 15bps execution. Dashboard performance is displayed from 2021 onward; 20bps stress drops VNI+30 to 5/6.",
         "cards": [
           [
-            "1. Tài sản được phép",
-            "Chỉ mua cổ phiếu thường trên HOSE/HNX/UPCoM có dữ liệu giá và thanh khoản đủ dùng. Không ETF, trái phiếu, margin, bán khống hay phái sinh. Tiền chưa dùng để cash, không tính lãi."
+            "1. Vũ trụ cổ phiếu (Universe)",
+            "Sàn áp dụng: HOSE, HNX, UPCoM. Chỉ cổ phiếu thường, KHÔNG ETF, trái phiếu, margin, bán khống, phái sinh. Tiền chưa dùng để cash, lãi 0%. Mã phải có thanh khoản trung bình 20 phiên (ADV20) tối thiểu 5 tỷ đồng/ngày. Có nhánh ngoại lệ cho mã 3-5 tỷ/ngày nếu composite score ≥ 70 và (ret13 ≥ 20% hoặc ret26 ≥ 30% hoặc đang trong cụm breakout ngành). Date constraint: score chỉ được tính từ dữ liệu có trước ngày tín hiệu (no future leak)."
           ],
           [
-            "2. Bộ máy xếp hạng M-core/Pair657",
-            "M-core là bộ lọc chọn cổ phiếu theo tuần. Pair657 là hạ tầng xếp hạng tổng hợp phía sau M-core: chấm điểm từng mã bằng valuation, quality, catalyst, technical, ngành, thanh khoản và trạng thái giao dịch; sau đó xuất ra danh sách target weight cho tuần tới."
+            "2. Bộ lọc điểm số (Score Gates)",
+            "Mỗi cổ phiếu có 7 score thành phần range 0-100 (fa_rank: tài chính; mom_rank: động lượng; rs_rank: sức mạnh tương đối; high_rank: gần đỉnh 52W; flow_rank: dòng tiền; industry_score: ngành; tech_score: kỹ thuật nền). Hard gates: composite_score ≥ 70 (tổng hợp BCTC + định giá + momentum theo công thức 0.30×Quality + 0.25×Valuation + 0.20×Catalyst + 0.25×Technical), industry_score ≥ 40, industry rank ≤ top 10, hard_gate==PASS (ROE bank ≥ 12%, ROA bank ≥ 0.8%, D/E phi ngân hàng ≤ 400%, không gap data), RSI14 trong khoảng 35-78 (mở rộng tới 95 nếu mã đang breakout sát đỉnh 52W)."
           ],
           [
-            "3. Điểm valuation",
-            "Ưu tiên cổ phiếu đang rẻ tương đối so với nền tảng kế toán gần nhất: P/E, P/B, EV/EBIT và các biến valuation tương tự. Đây là phần alpha mạnh nhất trong audit R8, vì có yếu tố giá thị trường trong mẫu số/tử số."
+            "3. Điều kiện MUA (Entry — family sector_cluster)",
+            "Sau khi qua universe + score gates, candidate được chấm score sector_cluster: ưu tiên mã sát đỉnh 52W (high_rank weight 0.45), cộng điểm mạnh cho cụm ngành breakout (35 điểm khi cluster_breakout_flag=1, +6×cluster_strength_4w), cộng momentum ret4 (14×ret4). Cluster breakout active khi trong cùng ngành có ≥ 2 mã đồng thời gần đỉnh ≥ 97% và ret4 ≥ -2%. Rule one-per-industry: nếu bật, mỗi ngành chỉ giữ 1 mã có tech_score cao nhất, chống concentration."
           ],
           [
-            "4. Điểm quality",
-            "Quality dùng các chỉ số như ROE, ROA, biên lợi nhuận, đòn bẩy và ổn định tài chính. Điểm này không được xem là alpha độc lập ở Việt Nam, nhưng vẫn là lớp kiểm tra để tránh mã quá yếu hoặc dữ liệu bất thường."
+            "4. Quy mô vị thế (Position Sizing)",
+            "Max holdings: 5 mã. Max weight per stock (M-core cap): 55% per signal date. Cap thanh khoản (R18 NAV-aware): max_weight_by_liq = (20% × ADV20) / NAV_deployment 3 tỷ; final weight = min(M-core weight, max_weight_by_liq). Trung bình exposure thực tế ~60%; cash residual cao trong tuần regime yếu. Không có riskoff exposure floor — cash buffer có thể lên 95%+ (như tuần 25/05/2026: MSB 5.525% + cash 94.475%)."
           ],
           [
-            "5. Điểm catalyst",
-            "Catalyst dùng tăng trưởng doanh thu/lợi nhuận và cải thiện kết quả gần đây. Audit cho thấy catalyst đơn lẻ không đủ mạnh, nên nó chỉ góp vào rank tổng hợp, không dùng làm lý do mua riêng."
+            "5. Điều kiện BÁN (Exit)",
+            "Ba lớp: (a) Weekly rebalance: mỗi thứ 2, nếu weight hiện tại vượt target + 0.1% NAV thì bán phần dư tại giá mở cửa; (b) T+2.5 settle: mỗi lot phải giữ tối thiểu 4 phiên trước khi được bán (HOSE rule); (c) Bear regime daily stop 5%: nếu regime hôm nay = bear VÀ lot đã qua T+2.5 VÀ low_today ≤ entry × 0.95 → bán tại min(open, entry × 0.95). KHÔNG có stop trong regime bull/recovery/sideways."
           ],
           [
-            "6. Điểm technical",
-            "Technical kiểm tra xu hướng giá, vị trí so với đỉnh/đáy, động lượng và dòng tiền. Các indicator như RSI/MACD/nến không được dùng làm hard filter chính vì đã test nhiều biến thể và dễ làm mất winner; hiện chỉ dùng như ngữ cảnh phụ trong rank/alert."
+            "6. Regime Gate (M-core Phase 1 v4)",
+            "Classifier weekly phân loại VN-Index thành 5 trạng thái theo priority. BEAR: vni_ret_13w < -5% HOẶC (vni_ret_4w < -8% VÀ breadth_top200 < 30%). BULL_BROAD: breadth_top200 > 25% VÀ vni_ret_13w > 8% VÀ dispersion_4w < 15% VÀ vni_ret_4w > 0. BULL_NARROW: mega_cap_leadership > 8% VÀ vni_ret_13w > 3% VÀ breadth_top200 < 50% VÀ vni_ret_4w > 0. RECOVERY: breadth_recovery_2w ≥ 1 VÀ vni_ret_4w > 0 VÀ vni_ret_13w < 0. SIDEWAYS: mặc định. Daily date → weekly regime gần nhất qua backward asof (no future leak)."
           ],
           [
-            "7. Ngành và cụm ngành",
-            "Mã được cộng/trừ điểm theo sức mạnh ngành và industry context. Model tránh lấy quá nhiều mã cùng một cụm rủi ro khi rank tương đương, để giảm việc cả danh mục bị lệch vào một theme."
+            "7. Cash overlay (passive)",
+            "Không có rule \"force 100% cash\" khi VNI rơi. Cash xuất hiện tự nhiên qua filter: khi regime weak, số mã qua được score gates giảm → sum target weight giảm → phần còn lại = cash. Cash yield giả định 0% (không gửi TGTK/bond — constraint của user). Model luôn cho phép giữ vị thế nếu có mã pass gate, không tự ý đứng ngoài."
           ],
           [
-            "8. Thanh khoản và khả năng khớp",
-            "Policy live giả định NAV 3 tỷ và phù hợp nhóm tài khoản dưới 5 tỷ. Mỗi mã bị giới hạn theo 20% giá trị giao dịch bình quân 20 phiên (ADV) để tránh mua/bán quá lớn so với thanh khoản."
+            "8. Rebalance & Execution (R23 flexible exec)",
+            "Tần suất: signal generate tối Chủ Nhật (sau Friday close), execute Monday. Quy tắc: nếu Monday open ≤ Friday close × 1.09 → mua tại open (HOSE thực tế cap ở ~6.5% do biên độ sàn 7%). Nếu gap > 9% → chờ pullback trong 2 phiên kế tiếp, limit = Friday close × 1.015. Nếu trong window low ≤ limit → fill tại min(open, limit). Hết window không khớp → skip (MISS_BUY). Lot size: 100 cổ phiếu, làm tròn xuống. Settlement T+2.5."
           ],
           [
-            "9. Retention",
-            "Không đảo danh mục chỉ vì rank dao động nhỏ. Nếu mã đang nắm vẫn còn đạt chuẩn và chưa bị tín hiệu xấu rõ ràng, model có thể giữ lại để giảm churn, phí và rủi ro bán đúng trước nhịp tăng."
+            "9. Chi phí giao dịch",
+            "Phí buy: 0.15% phí + 0.15% slippage = 0.30% per side. Phí sell: 0.15% phí + 0.10% thuế TNCN + 0.15% slippage = 0.40% per side. Dashboard giả định extra slippage 15bps/side. Robust ở 15-18bps; tại 20bps recent +30pp gate giảm còn 5/6. Live broker phải đạt cost ≤ 18bps/side để giữ gate strict."
           ],
           [
-            "10. Chọn danh mục tuần",
-            "Cuối tuần, model lấy danh sách target M-core sau các lớp rank, thanh khoản, status flag, sector/industry và retention. Mỗi mã có target weight riêng; phần không đủ điều kiện hoặc không đủ lô thì để cash."
+            "10. Hiệu suất verified (2021-2026)",
+            "CAGR 76.47%, MaxDD -25.62%, Sharpe 2.19. Pass +30pp 6/6 năm: 2021 +153.93pp, 2022 +67.24pp, 2023 +34.34pp, 2024 +45.95pp, 2025 +33.11pp, 2026 YTD +32.77pp. T+2.5 violations: 0/1,821 trades. Full 2016-2026: CAGR 46.75%, pass +30pp 7/11 (fail 2016/2017/2019/2020 — pre-strategy era)."
           ],
           [
-            "11. Giá mua",
-            "Không mua đuổi vô điều kiện. Sau close thứ 6, nếu thứ 2 mở cửa tăng không quá 9% so với tham chiếu thì được mua. Nếu gap cao hơn, model chờ giá pullback về vùng limit trong tối đa 2 phiên; không về thì bỏ qua."
+            "11. Caveats & Risk",
+            "(a) Stress 20bps slippage: recent 6/6 +30pp giảm còn 5/6 — cần monitor cost thực tế; (b) Liquidity bias: ADV20 từ cache under-estimate cho mã có bonus history (factor 2.1x do VCI adjust price không adjust volume), live broker cần verify trước khi vào lệnh; (c) Single-name concentration: max single-stock weight per-date có thể tới 55% (cap M-core) — concentrated tactical model; (d) Universe matrix từ 2016-02 trở đi (509 mã đủ data)."
           ],
           [
-            "12. Giá bán",
-            "Bán khi target tuần mới giảm/loại mã, hoặc khi rule risk kích hoạt. Lệnh bán tôn trọng T+2.5: cổ phiếu chưa đủ thời gian bán thì tiếp tục giữ tới khi bán hợp lệ."
-          ],
-          [
-            "13. Stop-loss",
-            "Không dùng stop-loss thường xuyên trong mọi thị trường. R46 chỉ bật stop-loss 5% khi regime thị trường là bear theo Phase1 v4; mục tiêu là cắt các cú rơi trong thị trường yếu mà không làm mất convexity ở thị trường bình thường."
-          ],
-          [
-            "14. Làm tròn lệnh",
-            "Tất cả lệnh copy trade làm tròn xuống lô 100 cổ phiếu. Nếu tỷ trọng mục tiêu tạo ra phần nhỏ hơn 100 cổ phiếu thì phần đó không đặt lệnh và giữ thành cash."
-          ],
-          [
-            "15. Chi phí",
-            "Dashboard dùng giả định trượt giá/chi phí thêm 15bps mỗi chiều vì live NAV dưới 5 tỷ. 18bps plateau vẫn pass 4/4 cell nhưng buffer mỏng: cell yếu nhất chỉ còn min edge +30.13pp, sát gate +30pp. Nếu chi phí thực tế thường xuyên vượt 15bps thì phải cảnh báo và re-audit."
-          ],
-          [
-            "16. Audit hiện tại",
-            "R46 Bear Stop đã được Claude audit PASS. Plateau 15bps pass 4/4 cell, 18bps pass 4/4 cell, nhưng 20bps fail recent VNI+30 6/6. Dashboard chỉ trình bày hiệu quả từ 2021-hiện tại để khớp đúng giai đoạn anh theo dõi."
+            "12. Trạng thái production & audit",
+            "Verdict tổng: PASS_PRODUCTION_GRADE. Engine md5 pin: 096afbf65c0a3c3cf1b38dce7d7d665b (pass30_direct_search.py). R46 Bear Stop = M-core target (R15 plateau mega-2_mid-2) + R23 flexible exec + R18 NAV-aware cap + Phase1 v4 regime bear stop 5%. Paper-trade kickoff cleared; copy-trade live blocked đến khi 4 tuần paper-trade gate (a) pass + anh approve bằng văn bản. Full spec: output/r46_filter_spec/R46_FILTER_SPEC_20260530.md."
           ]
         ]
       },
@@ -184,8 +168,8 @@ window.SCREENING_DEEP_ANALYSIS = {
           "status": "MUA",
           "rating": "R46_BEAR_STOP",
           "suggestedWeight": 5.5,
-          "currentPrice": 15.1,
-          "priceAsOf": "2026-05-28",
+          "currentPrice": 15.0,
+          "priceAsOf": "2026-05-29",
           "signalDate": "2026-05-25",
           "entryDate": "2026-05-25",
           "entryPrice": 14.084,
@@ -193,19 +177,19 @@ window.SCREENING_DEEP_ANALYSIS = {
           "entryGapPct": 0.0,
           "sellableFrom": null,
           "isSellableNow": true,
-          "targetPrice": 19.046,
-          "stopPrice": 12.152,
+          "targetPrice": 20.5,
+          "stopPrice": 12.25,
           "modelShares": 3800,
           "copyShares": 3800,
           "modelValueMil": 55.2,
-          "currentValueMil": 57.4,
+          "currentValueMil": 57.0,
           "costMil": 53.5,
-          "currentPnlMil": 3.9,
-          "currentPnlPct": 7.22,
+          "currentPnlMil": 3.5,
+          "currentPnlPct": 6.51,
           "industry": "Ngân hàng",
           "sleeve": "bank",
-          "upsidePct": 26.13,
-          "downsidePct": 19.52,
+          "upsidePct": 36.67,
+          "downsidePct": 18.33,
           "plan": "R46 Bear Stop dang nam 3,800 co phieu MSB quy doi theo NAV 1 ty.",
           "reasons": [
             "R46 Bear Stop: M-core target, R46 execution gap 9%, buffer 1.5%, pullback 2 phien.",
@@ -215,7 +199,7 @@ window.SCREENING_DEEP_ANALYSIS = {
         }
       ],
       "plannedOrders": {
-        "asOf": "2026-05-28",
+        "asOf": "2026-05-29",
         "planDate": "2026-06-01",
         "stage": "pre_open",
         "source": "current_policy",
@@ -231,13 +215,13 @@ window.SCREENING_DEEP_ANALYSIS = {
             "exchange": "HOSE",
             "action": "GIỮ",
             "status": "DỰ KIẾN",
-            "currentPrice": 15.1,
-            "priceAsOf": "2026-05-28",
+            "currentPrice": 15.0,
+            "priceAsOf": "2026-05-29",
             "entryPrice": 14.084,
-            "referenceClose": 15.1,
-            "referenceDate": "2026-05-28",
-            "maxBuyPrice": 16.081,
-            "limitPrice": 15.326,
+            "referenceClose": 15.0,
+            "referenceDate": "2026-05-29",
+            "maxBuyPrice": 15.975,
+            "limitPrice": 15.225,
             "gapPct": null,
             "baseGapThresholdPct": 9.0,
             "effectiveGapThresholdPct": 6.5,
@@ -248,8 +232,8 @@ window.SCREENING_DEEP_ANALYSIS = {
             "targetCopyShares": 3800,
             "orderShares": 0,
             "orderValueMil": 0.0,
-            "targetPrice": 19.046,
-            "stopPrice": 12.152,
+            "targetPrice": 20.5,
+            "stopPrice": 12.25,
             "note": "Tín hiệu kỳ tới không đổi mã này; tiếp tục giữ và theo dõi target/stop."
           }
         ]
@@ -293,8 +277,8 @@ window.SCREENING_DEEP_ANALYSIS = {
           "status": "MUA",
           "rating": "R23_NAV3B",
           "suggestedWeight": 5.5,
-          "currentPrice": 15.1,
-          "priceAsOf": "2026-05-28",
+          "currentPrice": 15.0,
+          "priceAsOf": "2026-05-29",
           "signalDate": "2026-05-25",
           "entryDate": "2026-05-25",
           "entryPrice": 14.081,
@@ -302,19 +286,19 @@ window.SCREENING_DEEP_ANALYSIS = {
           "entryGapPct": 0.0,
           "sellableFrom": null,
           "isSellableNow": true,
-          "targetPrice": 19.046,
-          "stopPrice": 12.152,
+          "targetPrice": 20.5,
+          "stopPrice": 12.25,
           "modelShares": 3800,
           "copyShares": 3800,
           "modelValueMil": 55.2,
-          "currentValueMil": 57.4,
+          "currentValueMil": 57.0,
           "costMil": 53.5,
-          "currentPnlMil": 3.9,
-          "currentPnlPct": 7.24,
+          "currentPnlMil": 3.5,
+          "currentPnlPct": 6.53,
           "industry": "Ngân hàng",
           "sleeve": "bank",
-          "upsidePct": 26.13,
-          "downsidePct": 19.52,
+          "upsidePct": 36.67,
+          "downsidePct": 18.33,
           "plan": "R23_NAV3B dang nam 3,800 co phieu MSB quy doi theo NAV 1 ty.",
           "reasons": [
             "R23_NAV3B: M-core + conditional retention, co dinh live NAV 3 ty, cap 20% ADV.",
@@ -324,7 +308,7 @@ window.SCREENING_DEEP_ANALYSIS = {
         }
       ],
       "plannedOrders": {
-        "asOf": "2026-05-28",
+        "asOf": "2026-05-29",
         "planDate": "2026-06-01",
         "stage": "pre_open",
         "source": "current_policy",
@@ -340,13 +324,13 @@ window.SCREENING_DEEP_ANALYSIS = {
             "exchange": "HOSE",
             "action": "GIỮ",
             "status": "DỰ KIẾN",
-            "currentPrice": 15.1,
-            "priceAsOf": "2026-05-28",
+            "currentPrice": 15.0,
+            "priceAsOf": "2026-05-29",
             "entryPrice": 14.081,
-            "referenceClose": 15.1,
-            "referenceDate": "2026-05-28",
-            "maxBuyPrice": 16.081,
-            "limitPrice": 15.1,
+            "referenceClose": 15.0,
+            "referenceDate": "2026-05-29",
+            "maxBuyPrice": 15.975,
+            "limitPrice": 15.0,
             "gapPct": null,
             "baseGapThresholdPct": 9.0,
             "effectiveGapThresholdPct": 6.5,
@@ -357,8 +341,8 @@ window.SCREENING_DEEP_ANALYSIS = {
             "targetCopyShares": 3800,
             "orderShares": 0,
             "orderValueMil": 0.0,
-            "targetPrice": 19.046,
-            "stopPrice": 12.152,
+            "targetPrice": 20.5,
+            "stopPrice": 12.25,
             "note": "Tín hiệu kỳ tới không đổi mã này; tiếp tục giữ và theo dõi target/stop."
           }
         ]
@@ -373,8 +357,8 @@ window.SCREENING_DEEP_ANALYSIS = {
       "totalReturn": 2106.93,
       "lastUpdate": "2026-05-22",
       "stopMode": "Bán/giảm tỷ trọng khi target tuần mới đổi; chỉ mua trong vùng limit theo close thứ 6; strict T+2.5 và lô 100 cổ.",
-      "totalSuggestedWeight": 74.0,
-      "cashBuffer": 26.0,
+      "totalSuggestedWeight": 73.5,
+      "cashBuffer": 26.5,
       "componentWeight": 100.0,
       "productionAudit": {
         "status": "RESEARCH_ONLY",
@@ -447,9 +431,9 @@ window.SCREENING_DEEP_ANALYSIS = {
           "exchange": "HOSE",
           "status": "MUA",
           "rating": "ĐANG NẮM THEO T2 VNI+30",
-          "suggestedWeight": 74.0,
-          "currentPrice": 15.1,
-          "priceAsOf": "2026-05-28",
+          "suggestedWeight": 73.5,
+          "currentPrice": 15.0,
+          "priceAsOf": "2026-05-29",
           "signalDate": "2026-05-22",
           "entryDate": "2026-05-18",
           "entryPrice": 13.8,
@@ -457,19 +441,19 @@ window.SCREENING_DEEP_ANALYSIS = {
           "entryGapPct": 0.0,
           "sellableFrom": null,
           "isSellableNow": true,
-          "targetPrice": 19.046,
-          "stopPrice": 12.152,
+          "targetPrice": 20.5,
+          "stopPrice": 12.25,
           "modelShares": 49000,
           "copyShares": 49000,
-          "modelValueMil": 739.9,
-          "currentValueMil": 739.9,
+          "modelValueMil": 735.0,
+          "currentValueMil": 735.0,
           "costMil": 676.2,
-          "currentPnlMil": 63.7,
-          "currentPnlPct": 9.42,
+          "currentPnlMil": 58.8,
+          "currentPnlPct": 8.7,
           "industry": "Ngân hàng",
           "sleeve": "Pure technical T2",
-          "upsidePct": 26.13,
-          "downsidePct": 19.52,
+          "upsidePct": 36.67,
+          "downsidePct": 18.33,
           "plan": "Model T2 đang nắm 49,000 cổ phiếu MSB quy đổi NAV 1 tỷ, giá vốn bình quân 13.80k.",
           "reasons": [
             "Pure technical: chỉ dùng giá, thanh khoản, sức mạnh tương đối, breadth và trạng thái thị trường tới cuối tuần trước.",
@@ -479,7 +463,7 @@ window.SCREENING_DEEP_ANALYSIS = {
         }
       ],
       "plannedOrders": {
-        "asOf": "2026-05-28",
+        "asOf": "2026-05-29",
         "planDate": "2026-05-25",
         "signalDate": "2026-05-22",
         "stage": "closed_window",
@@ -487,7 +471,7 @@ window.SCREENING_DEEP_ANALYSIS = {
         "entryGapThresholdPct": null,
         "priceLimitAware": true,
         "pullbackDays": 2,
-        "summary": "Kế hoạch 2026-05-25 đã được đánh giá theo giá đến 2026-05-28: 3 lệnh đã xử lý.",
+        "summary": "Kế hoạch 2026-05-25 đã được đánh giá theo giá đến 2026-05-29: 3 lệnh đã xử lý.",
         "rows": [
           {
             "planDate": "2026-05-25",
@@ -496,29 +480,29 @@ window.SCREENING_DEEP_ANALYSIS = {
             "exchange": "HOSE",
             "action": "BÁN 1 PHẦN",
             "status": "ĐÃ BÁN",
-            "currentPrice": 15.1,
-            "priceAsOf": "2026-05-28",
+            "currentPrice": 15.0,
+            "priceAsOf": "2026-05-29",
             "entryPrice": 13.8,
             "referenceClose": 14.4,
             "referenceDate": "2026-05-22",
             "maxBuyPrice": 14.544,
             "limitPrice": 14.4,
-            "gapPct": 4.86,
+            "gapPct": 4.17,
             "executionDate": "2026-05-25",
             "executionPrice": 14.35,
             "executionMode": "open",
             "executed": true,
             "baseGapThresholdPct": 1.0,
             "effectiveGapThresholdPct": 1.0,
-            "currentWeight": 73.99,
+            "currentWeight": 73.5,
             "targetWeight": 44.2,
-            "deltaWeight": -29.79,
+            "deltaWeight": -29.3,
             "currentCopyShares": 49000,
-            "targetCopyShares": 29200,
-            "orderShares": 19800,
-            "orderValueMil": 284.1,
-            "targetPrice": 19.046,
-            "stopPrice": 12.152,
+            "targetCopyShares": 29400,
+            "orderShares": 19600,
+            "orderValueMil": 281.3,
+            "targetPrice": 20.5,
+            "stopPrice": 12.25,
             "note": "Đã bán mở cửa @ 14.35k theo kế hoạch 2026-05-25."
           },
           {
@@ -549,7 +533,7 @@ window.SCREENING_DEEP_ANALYSIS = {
             "targetCopyShares": 500,
             "orderShares": 500,
             "orderValueMil": 77.5,
-            "targetPrice": 205.0,
+            "targetPrice": 204.4,
             "stopPrice": 137.2,
             "note": "Đã khớp mở cửa @ 155.00k; dùng kế hoạch 2026-05-25, tín hiệu 2026-05-22."
           },
@@ -560,14 +544,14 @@ window.SCREENING_DEEP_ANALYSIS = {
             "exchange": "HOSE",
             "action": "MUA MỚI",
             "status": "ĐÃ KHỚP",
-            "currentPrice": 210.8,
-            "priceAsOf": "2026-05-28",
-            "entryPrice": 210.8,
+            "currentPrice": 210.5,
+            "priceAsOf": "2026-05-29",
+            "entryPrice": 210.5,
             "referenceClose": 216.5,
             "referenceDate": "2026-05-22",
             "maxBuyPrice": 222.995,
             "limitPrice": 216.5,
-            "gapPct": -2.63,
+            "gapPct": -2.77,
             "executionDate": "2026-05-25",
             "executionPrice": 216.6,
             "executionMode": "open",
@@ -581,8 +565,8 @@ window.SCREENING_DEEP_ANALYSIS = {
             "targetCopyShares": 400,
             "orderShares": 400,
             "orderValueMil": 86.6,
-            "targetPrice": 281.348,
-            "stopPrice": 187.376,
+            "targetPrice": 255.278,
+            "stopPrice": 187.661,
             "note": "Đã khớp mở cửa @ 216.60k; dùng kế hoạch 2026-05-25, tín hiệu 2026-05-22."
           }
         ]
@@ -625,8 +609,8 @@ window.SCREENING_DEEP_ANALYSIS = {
           "entryGapPct": 0.0,
           "sellableFrom": null,
           "isSellableNow": true,
-          "targetPrice": 49.74,
-          "stopPrice": 37.305,
+          "targetPrice": 48.3,
+          "stopPrice": 36.225,
           "modelShares": 4900,
           "copyShares": 4900,
           "modelValueMil": 218.6,
@@ -636,8 +620,8 @@ window.SCREENING_DEEP_ANALYSIS = {
           "currentPnlPct": 3.06,
           "industry": "SX Nhựa - Hóa chất",
           "sleeve": "non_financial",
-          "upsidePct": 23.12,
-          "downsidePct": 7.66,
+          "upsidePct": 19.55,
+          "downsidePct": 10.33,
           "plan": "Model sạch hiện đang nắm 4,900 cổ phiếu DCM quy đổi theo NAV 1 tỷ, giá vốn bình quân 39.20k.",
           "reasons": [
             "Policy này là best sạch hiện tại: rank_best_full, cash overlay, không ETF/bond/margin/short.",
@@ -660,8 +644,8 @@ window.SCREENING_DEEP_ANALYSIS = {
           "entryGapPct": 0.0,
           "sellableFrom": null,
           "isSellableNow": true,
-          "targetPrice": 70.56,
-          "stopPrice": 52.92,
+          "targetPrice": 70.8,
+          "stopPrice": 53.1,
           "modelShares": 3200,
           "copyShares": 3200,
           "modelValueMil": 202.3,
@@ -671,8 +655,8 @@ window.SCREENING_DEEP_ANALYSIS = {
           "currentPnlPct": -0.17,
           "industry": "Chế biến Thủy sản",
           "sleeve": "non_financial",
-          "upsidePct": 17.6,
-          "downsidePct": 11.8,
+          "upsidePct": 18.0,
+          "downsidePct": 11.5,
           "plan": "Model sạch hiện đang nắm 3,200 cổ phiếu VHC quy đổi theo NAV 1 tỷ, giá vốn bình quân 60.10k.",
           "reasons": [
             "Policy này là best sạch hiện tại: rank_best_full, cash overlay, không ETF/bond/margin/short.",
@@ -695,8 +679,8 @@ window.SCREENING_DEEP_ANALYSIS = {
           "entryGapPct": 0.0,
           "sellableFrom": null,
           "isSellableNow": true,
-          "targetPrice": 14.336,
-          "stopPrice": 10.607,
+          "targetPrice": 13.8,
+          "stopPrice": 10.35,
           "modelShares": 14900,
           "copyShares": 14900,
           "modelValueMil": 187.9,
@@ -706,8 +690,8 @@ window.SCREENING_DEEP_ANALYSIS = {
           "currentPnlPct": -10.9,
           "industry": "Bán buôn",
           "sleeve": "non_financial",
-          "upsidePct": 20.98,
-          "downsidePct": 10.49,
+          "upsidePct": 16.46,
+          "downsidePct": 12.66,
           "plan": "Model sạch hiện đang nắm 14,900 cổ phiếu HHS quy đổi theo NAV 1 tỷ, giá vốn bình quân 13.30k.",
           "reasons": [
             "Policy này là best sạch hiện tại: rank_best_full, cash overlay, không ETF/bond/margin/short.",
@@ -730,8 +714,8 @@ window.SCREENING_DEEP_ANALYSIS = {
           "entryGapPct": 0.0,
           "sellableFrom": null,
           "isSellableNow": true,
-          "targetPrice": 24.96,
-          "stopPrice": 18.72,
+          "targetPrice": 24.66,
+          "stopPrice": 18.495,
           "modelShares": 6700,
           "copyShares": 6700,
           "modelValueMil": 148.2,
@@ -741,8 +725,8 @@ window.SCREENING_DEEP_ANALYSIS = {
           "currentPnlPct": -8.95,
           "industry": "Xây dựng",
           "sleeve": "non_financial",
-          "upsidePct": 19.71,
-          "downsidePct": 10.22,
+          "upsidePct": 18.27,
+          "downsidePct": 11.29,
           "plan": "Model sạch hiện đang nắm 6,700 cổ phiếu VCG quy đổi theo NAV 1 tỷ, giá vốn bình quân 22.90k.",
           "reasons": [
             "Policy này là best sạch hiện tại: rank_best_full, cash overlay, không ETF/bond/margin/short.",
@@ -765,8 +749,8 @@ window.SCREENING_DEEP_ANALYSIS = {
           "entryGapPct": 0.0,
           "sellableFrom": null,
           "isSellableNow": true,
-          "targetPrice": 49.98,
-          "stopPrice": 37.485,
+          "targetPrice": 49.68,
+          "stopPrice": 37.26,
           "modelShares": 2500,
           "copyShares": 2500,
           "modelValueMil": 111.2,
@@ -776,8 +760,8 @@ window.SCREENING_DEEP_ANALYSIS = {
           "currentPnlPct": 13.33,
           "industry": "SX Nhựa - Hóa chất",
           "sleeve": "non_financial",
-          "upsidePct": 20.0,
-          "downsidePct": 10.0,
+          "upsidePct": 19.28,
+          "downsidePct": 10.54,
           "plan": "Model sạch hiện đang nắm 2,500 cổ phiếu DPR quy đổi theo NAV 1 tỷ, giá vốn bình quân 36.75k.",
           "reasons": [
             "Policy này là best sạch hiện tại: rank_best_full, cash overlay, không ETF/bond/margin/short.",
@@ -800,8 +784,8 @@ window.SCREENING_DEEP_ANALYSIS = {
           "entryGapPct": 0.0,
           "sellableFrom": null,
           "isSellableNow": true,
-          "targetPrice": 42.54,
-          "stopPrice": 31.905,
+          "targetPrice": 41.16,
+          "stopPrice": 30.87,
           "modelShares": 2300,
           "copyShares": 2300,
           "modelValueMil": 85.6,
@@ -811,8 +795,8 @@ window.SCREENING_DEEP_ANALYSIS = {
           "currentPnlPct": 1.26,
           "industry": "SX Hàng gia dụng",
           "sleeve": "non_financial",
-          "upsidePct": 21.54,
-          "downsidePct": 8.84,
+          "upsidePct": 17.6,
+          "downsidePct": 11.8,
           "plan": "Model sạch hiện đang nắm 2,300 cổ phiếu MSH quy đổi theo NAV 1 tỷ, giá vốn bình quân 34.56k.",
           "reasons": [
             "Policy này là best sạch hiện tại: rank_best_full, cash overlay, không ETF/bond/margin/short.",
@@ -855,8 +839,8 @@ window.SCREENING_DEEP_ANALYSIS = {
             "targetCopyShares": 4900,
             "orderShares": 0,
             "orderValueMil": 0.0,
-            "targetPrice": 49.74,
-            "stopPrice": 37.305,
+            "targetPrice": 48.3,
+            "stopPrice": 36.225,
             "note": "Tín hiệu kỳ tới không đổi mã này; tiếp tục giữ và theo dõi target/stop."
           },
           {
@@ -882,8 +866,8 @@ window.SCREENING_DEEP_ANALYSIS = {
             "targetCopyShares": 2500,
             "orderShares": 0,
             "orderValueMil": 0.0,
-            "targetPrice": 49.98,
-            "stopPrice": 37.485,
+            "targetPrice": 49.68,
+            "stopPrice": 37.26,
             "note": "Tín hiệu kỳ tới không đổi mã này; tiếp tục giữ và theo dõi target/stop."
           },
           {
@@ -909,8 +893,8 @@ window.SCREENING_DEEP_ANALYSIS = {
             "targetCopyShares": 14900,
             "orderShares": 0,
             "orderValueMil": 0.0,
-            "targetPrice": 14.336,
-            "stopPrice": 10.607,
+            "targetPrice": 13.8,
+            "stopPrice": 10.35,
             "note": "Tín hiệu kỳ tới không đổi mã này; tiếp tục giữ và theo dõi target/stop."
           },
           {
@@ -936,8 +920,8 @@ window.SCREENING_DEEP_ANALYSIS = {
             "targetCopyShares": 2300,
             "orderShares": 0,
             "orderValueMil": 0.0,
-            "targetPrice": 42.54,
-            "stopPrice": 31.905,
+            "targetPrice": 41.16,
+            "stopPrice": 30.87,
             "note": "Tín hiệu kỳ tới không đổi mã này; tiếp tục giữ và theo dõi target/stop."
           },
           {
@@ -963,8 +947,8 @@ window.SCREENING_DEEP_ANALYSIS = {
             "targetCopyShares": 6700,
             "orderShares": 0,
             "orderValueMil": 0.0,
-            "targetPrice": 24.96,
-            "stopPrice": 18.72,
+            "targetPrice": 24.66,
+            "stopPrice": 18.495,
             "note": "Tín hiệu kỳ tới không đổi mã này; tiếp tục giữ và theo dõi target/stop."
           },
           {
@@ -990,8 +974,8 @@ window.SCREENING_DEEP_ANALYSIS = {
             "targetCopyShares": 3200,
             "orderShares": 0,
             "orderValueMil": 0.0,
-            "targetPrice": 70.56,
-            "stopPrice": 52.92,
+            "targetPrice": 70.8,
+            "stopPrice": 53.1,
             "note": "Tín hiệu kỳ tới không đổi mã này; tiếp tục giữ và theo dõi target/stop."
           }
         ]
@@ -1000,7 +984,7 @@ window.SCREENING_DEEP_ANALYSIS = {
   ],
   "defaultPolicy": "r46_bear_stop_mcore",
   "plannedOrders": {
-    "asOf": "2026-05-28",
+    "asOf": "2026-05-29",
     "planDate": "2026-06-01",
     "stage": "pre_open",
     "source": "current_policy",
@@ -1008,43 +992,4 @@ window.SCREENING_DEEP_ANALYSIS = {
     "priceLimitAware": true,
     "priceLimitGuardPct": 0.5,
     "pullbackDays": 2,
-    "summary": "Không có mua/bán mới cho 2026-06-01; hiện là kế hoạch giữ danh mục và theo dõi giá.",
-    "rows": [
-      {
-        "planDate": "2026-06-01",
-        "symbol": "MSB",
-        "exchange": "HOSE",
-        "action": "GIỮ",
-        "status": "DỰ KIẾN",
-        "currentPrice": 15.1,
-        "priceAsOf": "2026-05-28",
-        "entryPrice": 14.084,
-        "referenceClose": 15.1,
-        "referenceDate": "2026-05-28",
-        "maxBuyPrice": 16.081,
-        "limitPrice": 15.326,
-        "gapPct": null,
-        "baseGapThresholdPct": 9.0,
-        "effectiveGapThresholdPct": 6.5,
-        "currentWeight": 5.5,
-        "targetWeight": 5.5,
-        "deltaWeight": 0.0,
-        "currentCopyShares": 3800,
-        "targetCopyShares": 3800,
-        "orderShares": 0,
-        "orderValueMil": 0.0,
-        "targetPrice": 19.046,
-        "stopPrice": 12.152,
-        "note": "Tín hiệu kỳ tới không đổi mã này; tiếp tục giữ và theo dõi target/stop."
-      }
-    ]
-  },
-  "initialCapital": {
-    "amount_vnd": 1000000000,
-    "start_date": "2021-01-01"
-  },
-  "portfolioPlan": {
-    "rule": "Dashboard này chỉ hiển thị lệnh copy theo policy đang chọn. Không trộn thêm tín hiệu screening rời rạc để tránh mâu thuẫn.",
-    "nav_vnd": 1000000000
-  }
-};
+    "summary": "Không có mua/bán mới cho 2026-06-01; hiện là kế hoạch giữ danh mục và theo dõi giá
