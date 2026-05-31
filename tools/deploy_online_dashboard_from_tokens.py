@@ -64,6 +64,7 @@ FILES_TO_PUSH = [
     "output/screening_summary.json",
     "output/screening_candidates.csv",
     "output/screening_full_results.csv",
+    "output/vnindex_daily.csv",
     "dashboard/data.js",
     "dashboard/dashboard_live_update_status.json",
 ]
