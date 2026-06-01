@@ -1848,6 +1848,13 @@ function historyNavBilAt(date) {
   return selected && Number(selected.navBil) > 0 ? Number(selected.navBil) : null;
 }
 
+function tradeWeightPctAtDate(row, grossMil) {
+  const navBil = historyNavBilAt(row?.date);
+  const valueMil = Number(grossMil);
+  if (!navBil || !Number.isFinite(valueMil) || valueMil <= 0) return null;
+  return valueMil / (navBil * 1000) * 100;
+}
+
 function rebalanceTradeSignals() {
   return latestTradeSignals().map((row) => {
     const sym = String(row.symbol || "").toUpperCase();
@@ -2412,6 +2419,7 @@ function renderModelLedger() {
     const shares = roundLot(displayTradeShares(row));
     const priceK = Number(row.executionPriceK || row.priceK || 0);
     const grossMil = displayTradeValueMil(row, shares, priceK) || null;
+    const weightPct = tradeWeightPctAtDate(row, grossMil);
     const label = displayAction(row.actionLabel || row.side);
     const cls = actionClass(row.actionLabel || row.side);
     const isSell = isSellAction(label);
@@ -2421,18 +2429,19 @@ function renderModelLedger() {
     const returnPct = isSell ? returnPctRaw : null;
     return `
     <tr>
-      <td>${row.triggerDate || row.date}</td>
+      <td>${row.date || row.triggerDate}</td>
       <td><strong>${row.symbol}</strong></td>
       <td><span class="action-pill ${cls}">${label}</span></td>
       <td class="num">${shares ? f(shares, 0) : "-"}</td>
       <td class="num">${priceK ? f(priceK) : "-"}${priceK ? "k" : ""}</td>
       <td class="num">${grossMil === null ? "-" : f(grossMil, 1)}</td>
+      <td class="num">${weightPct === null ? "-" : `${f(weightPct)}%`}</td>
       <td class="num ${pnlMil === null || pnlMil >= 0 ? "target" : "stop"}">${pnlMil === null ? "-" : f(pnlMil, 1)}</td>
       <td class="num ${returnPct === null || returnPct >= 0 ? "target" : "stop"}">${returnPct === null ? "-" : `${f(returnPct)}%`}</td>
       <td class="num">${row.holdDays === null || row.holdDays === undefined ? "-" : `${f(row.holdDays, 0)} ngày`}</td>
     </tr>
   `;
-  }).join("") : `<tr><td colspan="9" class="empty-state">Chưa có dữ liệu mua bán cho policy này.</td></tr>`;
+  }).join("") : `<tr><td colspan="10" class="empty-state">Chưa có dữ liệu mua bán cho policy này.</td></tr>`;
 }
 
 function activate(view) {
