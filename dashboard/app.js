@@ -1373,13 +1373,14 @@ function renderWatchlistTab() {
         ? `<span class="action-pill buy">${row.gatePassCount}/${row.gateTotal}</span>`
         : `<span class="action-pill watch">${row.gatePassCount}/${row.gateTotal}</span>`}</td>
       <td class="num ${row.upsideOk ? "target" : ""}">${row.upsidePct === null ? "-" : `${f(row.upsidePct)}%`}</td>
+      <td class="num target">${row.targetPriceK === null ? "-" : `${f(row.targetPriceK)}k`}</td>
       <td class="num ${row.rrOk ? "target" : ""}">${row.riskReward === null ? "-" : `${f(row.riskReward, 2)}x`}</td>
       <td class="num ${row.liquidityOk ? "target" : ""}">${row.liq20dBil === null ? "-" : f(row.liq20dBil)}</td>
       <td>${plannedMap.has(row.symbol) ? "Có" : "Không"}</td>
       <td>${(row.status.includes("BUY") || row.status.includes("ACCUMULATE") || row.action.includes("MUA")) ? "Có" : "Không"}</td>
       <td>${esc(watchNote(row))}</td>
     </tr>
-  `).join("") : `<tr><td colspan="9" class="empty-state">Chưa có mã phù hợp cho watchlist.</td></tr>`;
+  `).join("") : `<tr><td colspan="10" class="empty-state">Chưa có mã phù hợp cho watchlist.</td></tr>`;
 }
 
 function currentPriceK(symbol) {
