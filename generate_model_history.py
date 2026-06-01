@@ -192,6 +192,13 @@ def load_vnindex() -> pd.Series:
             df = pd.read_parquet(path).copy()
             df["date"] = pd.to_datetime(df["date"])
             return pd.Series(pd.to_numeric(df["close"], errors="coerce").values, index=df["date"]).dropna()
+    csv_path = OUT / "vnindex_daily.csv"
+    if csv_path.exists():
+        df = pd.read_csv(csv_path).copy()
+        if {"date", "close"}.issubset(df.columns):
+            df["date"] = pd.to_datetime(df["date"], errors="coerce")
+            series = pd.Series(pd.to_numeric(df["close"], errors="coerce").values, index=df["date"]).dropna()
+            return series[series.index.notna()]
     return pd.Series(dtype=float)
 
 
