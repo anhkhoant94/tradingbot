@@ -72,6 +72,20 @@ jobs:
             echo "generate_dashboard_data.py not present in this repo checkout; keeping existing dashboard/data.js"
           fi
 
+      - name: Preflight dashboard history
+        working-directory: ${{ github.workspace }}
+        run: |
+          python - <<'PY'
+          import re
+          from pathlib import Path
+
+          history = Path("dashboard/history.js").read_text(encoding="utf-8", errors="replace")
+          count = len(re.findall(r'"vniClose"\s*:\s*[0-9]', history))
+          if count <= 0:
+              raise SystemExit("dashboard/history.js has no numeric VN-Index points; refusing to deploy broken chart")
+          print(f"dashboard/history.js VN-Index points: {count}")
+          PY
+
       - name: Deploy dashboard to Vercel
         run: python tools/deploy_vercel_dashboard.py --dashboard-dir dashboard --target production --wait
 
