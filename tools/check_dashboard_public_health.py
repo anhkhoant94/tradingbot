@@ -9,7 +9,7 @@ import re
 import urllib.request
 
 
-DEFAULT_BASE_URL = "https://trading-execution-desk-khoa.vercel.app"
+DEFAULT_BASE_URL = "https://ez-trading.vercel.app"
 
 
 def fetch_bytes(base_url: str, path: str) -> tuple[int, bytes]:
