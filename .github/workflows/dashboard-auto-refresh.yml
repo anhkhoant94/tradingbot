@@ -32,7 +32,7 @@ jobs:
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_PROJECT: ${{ vars.VERCEL_PROJECT || 'trading-execution-desk-khoa' }}
-      VERCEL_PUBLIC_URL: ${{ vars.VERCEL_PUBLIC_URL || 'https://trading-execution-desk-khoa.vercel.app' }}
+      VERCEL_PUBLIC_URL: ${{ vars.VERCEL_PUBLIC_URL || 'https://ez-trading.vercel.app' }}
       VERCEL_TEAM_SLUG: ${{ vars.VERCEL_TEAM_SLUG }}
       VERCEL_TEAM_ID: ${{ vars.VERCEL_TEAM_ID }}
       PYTHONIOENCODING: utf-8
