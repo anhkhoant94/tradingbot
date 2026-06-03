@@ -14,7 +14,7 @@ Example secret JSON:
   "repo": "anhkhoant94/tradingbot",
   "branch": "main",
   "vercel_project": "trading-execution-desk-khoa",
-  "vercel_public_url": "https://trading-execution-desk-khoa.vercel.app"
+  "vercel_public_url": "https://ez-trading.vercel.app"
 }
 """
 
@@ -79,7 +79,7 @@ def load_secrets() -> dict:
     data.setdefault("repo", "anhkhoant94/tradingbot")
     data.setdefault("branch", "main")
     data.setdefault("vercel_project", "trading-execution-desk-khoa")
-    data.setdefault("vercel_public_url", "https://trading-execution-desk-khoa.vercel.app")
+    data.setdefault("vercel_public_url", "https://ez-trading.vercel.app")
     missing = [k for k in ["github_token", "vercel_token"] if not data.get(k)]
     if missing:
         raise SystemExit(f"Missing required secret keys: {', '.join(missing)}")
