@@ -4578,3 +4578,9 @@ Changes:
 Verification:
 - Public `https://ez-trading.vercel.app` HTML: `Be Vietnam Pro` 1, `Inter` 0, `JetBrains` 0, `monospace` 0, `orderShares: 3000` 1.
 - Public health check passes and final screenshot saved at `dashboard/_preview/online-vix-font-final-nowrap.png`.
+
+Correction 2026-06-03:
+- The VIX `orderShares: 3000` sizing was invalid because it used week-1 paper exposure (5.51% NAV) as an ad-hoc starter sleeve, not the current R46 copy-trade rule.
+- Removed watchlist BUY_SOON rows from the Copy Trade `Dự kiến giao dịch thứ 2 tới` table.
+- The forecast table now only renders policy `plannedOrders` from R46. Current public state is MSB `GIỮ` only; VIX remains in `Theo dõi mua` as a screening/watchlist candidate, not a copy-trade order.
+- Public verification after correction: `orderShares: 3000` count is 0 in `plannedOrders`; `Be Vietnam Pro` remains active; screenshot `dashboard/_preview/online-planned-policy-only.png`.
