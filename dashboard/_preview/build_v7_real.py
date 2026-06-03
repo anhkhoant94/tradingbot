@@ -375,7 +375,6 @@ model_summary_cards = [
 ]
 forecast_date = next_monday(live_status.get("latestPriceDate") or signal_w1.get("execution_date"))
 planned_symbols = {str(row.get("symbol", "")).upper() for row in planned_rows}
-starter_weight_pct = as_float(signal_w1.get("exposure_pct"), 5.5) or 5.5
 forecast_rows = [{
     "displayPlanDate": forecast_date,
     "planDate": row.get("planDate"),
@@ -390,29 +389,6 @@ forecast_rows = [{
     "orderShares": row.get("orderShares"),
     "note": row.get("note"),
 } for row in planned_rows]
-
-for row in watchlist_rows:
-    if row["bucket"] != "BUY_SOON" or row["symbol"] in planned_symbols:
-        continue
-    current_price = as_float(row.get("currentPrice"))
-    starter_shares = None
-    if current_price and current_price > 0:
-        starter_shares = int(math.floor((1000 * starter_weight_pct / 100) * 1000 / current_price / 100) * 100)
-    forecast_rows.append({
-        "displayPlanDate": forecast_date,
-        "planDate": forecast_date,
-        "symbol": row["symbol"],
-        "action": "MUA DỰ KIẾN",
-        "status": "TẠM TÍNH",
-        "currentPrice": current_price,
-        "targetPrice": row.get("targetPrice"),
-        "stopPrice": row.get("stopPrice"),
-        "currentCopyShares": None,
-        "targetCopyShares": starter_shares,
-        "orderShares": starter_shares,
-        "targetWeightPct": starter_weight_pct,
-        "note": f"Đạt gate theo giá hiện tại; KL tạm tính theo tỷ trọng khởi tạo {fmt_num(starter_weight_pct, 1)}% NAV copy, chờ close thứ 6 để chốt.",
-    })
 
 planned_public = {
     "asOf": policy.get("plannedOrders", {}).get("asOf"),
@@ -614,7 +590,7 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
       <section class="sec"><div class="sech"><h2>Danh mục copy đang nắm giữ</h2><span class="meta">{len(holdings)} mã · quy đổi theo NAV copy</span></div><table><thead><tr><th>Mã</th><th>Ngành</th><th class="num">KL</th><th class="num">Giá vốn</th><th class="num">Giá TT</th><th class="num">Giá trị</th><th class="num">Tỷ trọng</th><th class="num">P/L</th><th class="num">P/L %</th></tr></thead><tbody id="holdRows"></tbody></table></section>
       <section class="sec"><div class="sech"><h2>Paper Trade · Tuần 1 <span class="scaletag">{data['paperStatus']}</span></h2><span class="meta">NAV ảo 1 tỷ · bắt đầu {data['paperTrade']['startDate']}</span></div><div class="ptgrid" id="ptGrid"></div><table><thead><tr><th>Mã</th><th class="num">KL</th><th class="num">Signal</th><th class="num">Fresh</th><th class="num">P/L</th></tr></thead><tbody id="paperRows"></tbody></table></section>
     </div>
-    <section class="sec"><div class="sech"><h2>Dự kiến giao dịch thứ 2 tới</h2><span class="meta">Tạm tính theo giá hiện tại; thay đổi trong tuần, chốt sau close thứ 6</span></div><table class="forecast-table"><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá TT</th><th class="num">Target</th><th class="num">Stop</th><th>Ghi chú</th></tr></thead><tbody id="plannedRows"></tbody></table></section>
+    <section class="sec"><div class="sech"><h2>Dự kiến giao dịch thứ 2 tới</h2><span class="meta">Lệnh copy-trade từ policy hiện tại; candidate riêng xem ở tab Theo dõi mua</span></div><table class="forecast-table"><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá TT</th><th class="num">Target</th><th class="num">Stop</th><th>Ghi chú</th></tr></thead><tbody id="plannedRows"></tbody></table></section>
     <section class="sec"><div class="sech"><h2>Lệnh đã khớp gần nhất <span class="scaletag">QUY MÔ MODEL</span></h2><span class="meta">8 dòng mới nhất từ history.js · KL &amp; P/L theo NAV model (~44 tỷ), không scale theo NAV copy</span></div><table><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá</th><th class="num">P/L</th><th>Lý do</th></tr></thead><tbody id="latestRows"></tbody></table></section>
   </section>
   <section class="view" data-view="watch"><div class="pageh"><div><h1>Theo dõi mua</h1><div class="sub">{len(watchlist_rows)} mã từ dashboard online `data.js` + live shortlist · loại {watchlist_summary['excludedHeld']} mã đang nắm</div></div></div><section class="sec"><div class="sech"><h2>Mã đáng theo dõi và có thể mua sắp tới</h2><span class="meta">Không phải rule khớp lệnh live của R46</span></div><div class="watchSummary" id="watchSummary"></div><div class="watchRules" id="watchRules"></div><table><thead><tr><th>Mã</th><th>Nhóm</th><th class="num">Điểm lọc</th><th class="num">Upside</th><th class="num">Target</th><th class="num">R:R</th><th class="num">TK 20D</th><th>Target tuần</th><th>Tín hiệu mua</th><th>Ghi chú</th></tr></thead><tbody id="watchRows"></tbody></table></section></section>
