@@ -1,0 +1,678 @@
+import json
+import math
+import re
+import sys
+import argparse
+from datetime import datetime, timedelta
+from pathlib import Path
+
+import pandas as pd
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+ROOT = Path(__file__).resolve().parents[2]
+DASH = ROOT / "dashboard"
+PREVIEW = DASH / "_preview"
+PT_DIR = ROOT / "output" / "beat_vni30_parallel" / "paper_trade_v4_r46"
+
+
+parser = argparse.ArgumentParser(description="Build the Ez Trading v7 static dashboard HTML.")
+parser.add_argument(
+    "--out",
+    type=Path,
+    default=PREVIEW / "option-c-glass.html",
+    help="Output HTML path. Use dashboard/index.html for production.",
+)
+args = parser.parse_args()
+
+
+def load_js_object(path: Path, var_name: str):
+    text = path.read_text(encoding="utf-8")
+    match = re.search(re.escape(var_name) + r"\s*=\s*(.*?);\s*$", text, re.S)
+    if not match:
+        raise ValueError(f"Cannot parse {var_name} from {path}")
+    return json.loads(match.group(1))
+
+
+def fmt_num(value, digits=1):
+    if value is None:
+        return "-"
+    try:
+        x = float(value)
+    except (TypeError, ValueError):
+        return "-"
+    if not math.isfinite(x):
+        return "-"
+    s = f"{x:,.{digits}f}"
+    if digits == 0:
+        s = f"{x:,.0f}"
+    return s.replace(",", "_").replace(".", ",").replace("_", ".")
+
+
+def fmt_money_m(value):
+    if value is None:
+        return "-"
+    try:
+        x = float(value)
+    except (TypeError, ValueError):
+        return "-"
+    sign = "+" if x >= 0 else "-"
+    return f"{sign}{fmt_num(abs(x), 1)} tr"
+
+
+def fmt_bil_from_m(value):
+    if value is None:
+        return "-"
+    try:
+        x = float(value) / 1000
+    except (TypeError, ValueError):
+        return "-"
+    return f"{fmt_num(x, 3)} tỷ"
+
+
+def pct(value, digits=1):
+    if value is None:
+        return "-"
+    try:
+        x = float(value)
+    except (TypeError, ValueError):
+        return "-"
+    sign = "+" if x > 0 else ""
+    return f"{sign}{fmt_num(x, digits)}%"
+
+
+def as_float(value, default=None):
+    try:
+        x = float(value)
+    except (TypeError, ValueError):
+        return default
+    return x if math.isfinite(x) else default
+
+
+def next_monday(date_text):
+    try:
+        d = datetime.strptime(str(date_text)[:10], "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        d = datetime.now().date()
+    days = (7 - d.weekday()) % 7
+    if days == 0:
+        days = 7
+    return (d + timedelta(days=days)).strftime("%Y-%m-%d")
+
+
+dashboard_data = load_js_object(DASH / "data.js", "window.SCREENING_DASHBOARD_DATA")
+analysis = load_js_object(DASH / "analysis.js", "window.SCREENING_DEEP_ANALYSIS")
+history = load_js_object(DASH / "history.js", "window.MODEL_TRADE_HISTORY")
+live_status = json.loads((DASH / "dashboard_live_update_status.json").read_text(encoding="utf-8"))
+pt_state = json.loads((PT_DIR / "paper_trade_state.json").read_text(encoding="utf-8"))
+signal_w1 = json.loads((PT_DIR / "signal_week_1_20260601.json").read_text(encoding="utf-8"))
+paper_log_lines = (PT_DIR / "paper_trade_log.jsonl").read_text(encoding="utf-8").splitlines()
+paper_log_last = json.loads(paper_log_lines[-1]) if paper_log_lines else {}
+
+policy = next(p for p in analysis["strategyPolicies"] if p["key"] == "r46_bear_stop_mcore")
+hist = next(p for p in history["policies"] if p["key"] == "r46_bear_stop_mcore")
+quotes = live_status.get("quotes", {})
+
+# --- Regime: lấy từ tín hiệu thật, KHÔNG hardcode ---
+raw_regime = str(signal_w1.get("regime_at_signal", "") or "")
+if "to_be_classified" in raw_regime:
+    regime_label = "Chờ phân loại"
+elif raw_regime:
+    regime_label = raw_regime.replace("_", " ").upper()
+else:
+    regime_label = "—"
+
+holdings = []
+for row in policy.get("holdings", []):
+    sym = str(row.get("symbol", "")).upper()
+    quote = quotes.get(sym) or {}
+    live_px = quote.get("close") or row.get("currentPrice")
+    live_date = quote.get("date") or row.get("priceAsOf")
+    shares = int(row.get("copyShares") or row.get("modelShares") or 0)
+    entry = float(row.get("entryPrice") or 0)
+    current = float(live_px or 0)
+    cost_m = shares * entry / 1000 if shares and entry else None
+    value_m = shares * current / 1000 if shares and current else None
+    pnl_m = value_m - cost_m if value_m is not None and cost_m is not None else None
+    pnl_pct = pnl_m / cost_m * 100 if pnl_m is not None and cost_m else None
+    holdings.append({
+        **row,
+        "symbol": sym,
+        "currentPrice": current,
+        "priceAsOf": live_date,
+        "copyShares": shares,
+        "valueMil": value_m,
+        "costMilCalc": cost_m,
+        "pnlMilCalc": pnl_m,
+        "pnlPctCalc": pnl_pct,
+    })
+
+target = signal_w1["targets"][0] if signal_w1.get("targets") else {}
+paper_symbol = target.get("symbol", "MSB")
+paper_quote = quotes.get(paper_symbol, {})
+paper_signal_px = (target.get("prev_close_vnd_per_share") or 0) / 1000
+paper_fresh_px = paper_quote.get("close")
+paper_shares = int(target.get("target_shares_round_lot_100") or 0)
+paper_value_m = paper_shares * float(paper_fresh_px or 0) / 1000 if paper_shares and paper_fresh_px else None
+paper_ref_cost_m = paper_shares * paper_signal_px / 1000 if paper_shares and paper_signal_px else None
+paper_position_pnl_m = paper_value_m - paper_ref_cost_m if paper_value_m is not None and paper_ref_cost_m else None
+paper_position_pnl_pct = paper_position_pnl_m / paper_ref_cost_m * 100 if paper_position_pnl_m is not None and paper_ref_cost_m else None
+paper_cash_after_m = signal_w1.get("cash_after_planned_buy_vnd")
+paper_cash_after_m = paper_cash_after_m / 1e6 if paper_cash_after_m else None
+paper_nav_m = paper_cash_after_m + paper_value_m if paper_cash_after_m is not None and paper_value_m is not None else None
+paper_nav_pnl_m = paper_nav_m - 1000 if paper_nav_m is not None else None
+paper_nav_pnl_pct = paper_nav_pnl_m / 1000 * 100 if paper_nav_pnl_m is not None else None
+
+trades_full = list(hist.get("trades", []))
+curve = [
+    r for r in hist.get("equityCurve", [])
+    if r.get("date") and r.get("navBil") and r.get("vniClose")
+]
+curve_2021 = [r for r in curve if r["date"] >= "2021-01-01"] or curve
+nav_by_date = {r["date"]: float(r["navBil"]) for r in curve if r.get("date") and r.get("navBil")}
+
+
+def enrich_trade(row):
+    out = dict(row)
+    nav_bil = nav_by_date.get(out.get("date"))
+    gross_bil = as_float(out.get("grossBil"))
+    out["navBilAtTrade"] = nav_bil
+    out["tradeWeightPct"] = gross_bil / nav_bil * 100 if nav_bil and gross_bil is not None else None
+    return out
+
+
+trades_latest = [enrich_trade(row) for row in list(reversed(trades_full))[:8]]
+ledger_rows = [enrich_trade(row) for row in list(reversed(trades_full))]
+
+memos = analysis.get("memos", [])
+memo_by_symbol = {str(row.get("symbol", "")).upper(): row for row in memos}
+stock_by_symbol = {
+    str(row.get("symbol", "")).upper(): row
+    for row in (
+        list(dashboard_data.get("all") or [])
+        + list(dashboard_data.get("topAll") or [])
+        + list(dashboard_data.get("watch") or [])
+        + list(dashboard_data.get("candidates") or [])
+    )
+    if row.get("symbol")
+}
+held_symbols = {str(row.get("symbol", "")).upper() for row in holdings}
+planned_rows = policy.get("plannedOrders", {}).get("rows", [])
+shortlist_symbols = set(memo_by_symbol)
+shortlist_symbols.update(str(row.get("symbol", "")).upper() for row in planned_rows if row.get("symbol"))
+
+
+def normalize_watch_item(raw, source):
+    sym = str(raw.get("symbol", "")).upper().strip()
+    if not sym:
+        return None
+    cur = as_float(raw.get("current_price_k", raw.get("currentPrice")))
+    target_px = as_float(raw.get("target_price_k", raw.get("targetPrice")))
+    stop_px = as_float(raw.get("stop_price_k", raw.get("stopPrice")))
+    rr = as_float(raw.get("risk_reward", raw.get("riskReward")))
+    if (rr is None or rr <= 0) and cur and target_px and stop_px and cur > stop_px:
+        rr = (target_px - cur) / (cur - stop_px)
+    upside = as_float(raw.get("upside_pct", raw.get("upsidePct")))
+    if upside is not None and abs(upside) <= 2:
+        upside *= 100
+    liq = as_float(raw.get("avg_value_20d_bil"))
+    status = str(raw.get("status") or raw.get("qualitative_overlay") or "WATCH").upper()
+    action = str(raw.get("action") or raw.get("orderAction") or "").upper()
+    hard_gate = str(raw.get("hard_gate") or "PASS").upper()
+    in_portfolio = sym in held_symbols
+    strong_signal = any(x in status for x in ("BUY", "ACCUMULATE")) or "MUA" in action
+    pass_hard = "PASS" in hard_gate
+    not_avoid = "AVOID" not in status
+    liq_ok = liq is not None and liq >= 3
+    rr_ok = rr is not None and rr >= 2
+    upside_ok = upside is not None and upside >= 12
+    gate_pass = sum([not in_portfolio, pass_hard, not_avoid, strong_signal, liq_ok, rr_ok, upside_ok])
+    bucket = "BUY_SOON" if gate_pass == 7 else "WATCH"
+    note = "Đạt chuẩn mua" if bucket == "BUY_SOON" else "Theo dõi thêm"
+    if in_portfolio:
+        note = "Đang nắm"
+    elif not strong_signal:
+        note = "Chưa có tín hiệu mua"
+    elif not liq_ok:
+        note = "Thanh khoản thấp/thiếu"
+    elif not rr_ok:
+        note = "R:R < 2"
+    elif not upside_ok:
+        note = "Upside < 12%"
+    return {
+        "symbol": sym,
+        "source": source,
+        "bucket": bucket,
+        "gatePassCount": gate_pass,
+        "gateTotal": 7,
+        "status": status,
+        "action": action,
+        "hardGate": hard_gate,
+        "industry": raw.get("industry_name") or raw.get("industry") or raw.get("sleeve") or "-",
+        "currentPrice": cur,
+        "targetPrice": target_px,
+        "stopPrice": stop_px,
+        "upsidePct": upside,
+        "riskReward": rr,
+        "liq20dBil": liq,
+        "inPortfolio": in_portfolio,
+        "planned": any(str(row.get("symbol", "")).upper() == sym for row in planned_rows),
+        "buySignal": strong_signal,
+        "note": note,
+    }
+
+
+watch_merged = {}
+source_rank = {"watch": 1, "memo": 2, "candidate": 3, "live_shortlist": 4}
+
+
+def put_watch(row, source):
+    item = normalize_watch_item(row, source)
+    if not item:
+        return
+    prev = watch_merged.get(item["symbol"])
+    if prev is None or source_rank.get(source, 0) >= source_rank.get(prev["source"], 0):
+        watch_merged[item["symbol"]] = item
+
+
+for sym in shortlist_symbols:
+    put_watch({**stock_by_symbol.get(sym, {}), **memo_by_symbol.get(sym, {}), "symbol": sym}, "live_shortlist")
+for row in dashboard_data.get("candidates") or []:
+    put_watch(row, "candidate")
+for row in dashboard_data.get("watch") or []:
+    put_watch(row, "watch")
+for row in memos:
+    sym = str(row.get("symbol", "")).upper()
+    put_watch({**stock_by_symbol.get(sym, {}), **row}, "memo")
+
+watchlist_rows_all = sorted(
+    watch_merged.values(),
+    key=lambda r: (
+        r["inPortfolio"],
+        -(r.get("gatePassCount") or 0),
+        -(r.get("upsidePct") or 0),
+        -(r.get("riskReward") or 0),
+        r["symbol"],
+    ),
+)
+watchlist_rows = [row for row in watchlist_rows_all if not row["inPortfolio"]]
+watchlist_summary = {
+    "total": len(watchlist_rows),
+    "buySoon": sum(1 for row in watchlist_rows if row["bucket"] == "BUY_SOON"),
+    "watchMore": sum(1 for row in watchlist_rows if row["bucket"] != "BUY_SOON"),
+    "excludedHeld": sum(1 for row in watchlist_rows_all if row["inPortfolio"]),
+    "onlineCandidates": len(dashboard_data.get("candidates") or []),
+    "onlineWatch": len(dashboard_data.get("watch") or []),
+    "memoOnly": len(memos),
+}
+method_cards = policy.get("methodology", {}).get("cards", [])
+audit = policy.get("productionAudit", {})
+perf = {
+    "cagr": audit.get("cagr") or policy.get("historicalCagr"),
+    "maxDrawdown": audit.get("maxDrawdown") or policy.get("historicalMaxDrawdown"),
+    "sharpe": policy.get("historicalSharpe"),
+    "minEdge": audit.get("minEdgeVsVni"),
+    "passVni30": audit.get("passVni30"),
+    "slippageBps": audit.get("slippageBps"),
+}
+
+latest_curve = curve_2021[-1] if curve_2021 else {}
+vni_cache = pd.read_parquet(ROOT / ".cache" / "backtest" / "vnindex_daily.parquet")
+vni_cache["date"] = pd.to_datetime(vni_cache["date"])
+latest_vni = vni_cache.sort_values("date").iloc[-1]
+copy_nav_m = 1000
+copy_market_m = sum(h.get("valueMil") or 0 for h in holdings)
+copy_cost_m = sum(h.get("costMilCalc") or 0 for h in holdings)
+copy_cash_m = max(0, copy_nav_m - copy_cost_m)
+copy_total_m = copy_cash_m + copy_market_m
+copy_pnl_m = copy_total_m - copy_nav_m
+copy_pnl_pct = copy_pnl_m / copy_nav_m * 100
+
+# --- Data integrity flags (provenance) ---
+data_flags = []
+try:
+    cache_p = ROOT / ".cache" / "backtest" / "history_clean" / f"{paper_symbol}.parquet"
+    if cache_p.exists():
+        mc = pd.read_parquet(cache_p)
+        tcol = [c for c in mc.columns if c.lower() in ("time", "date")][0]
+        ccol = [c for c in mc.columns if c.lower() == "close"][0]
+        mc[tcol] = pd.to_datetime(mc[tcol])
+        last_c = mc.sort_values(tcol).iloc[-1]
+        cache_date = last_c[tcol].strftime("%Y-%m-%d")
+        cache_px = float(last_c[ccol])
+        fresh_d = paper_quote.get("date")
+        if fresh_d and fresh_d > cache_date:
+            data_flags.append(
+                f"Giá fresh {paper_symbol} {paper_fresh_px}k ({fresh_d}) lấy từ live status, "
+                f"CHƯA có trong cache giá (cache dừng {cache_date} @ {cache_px}k) — chưa cross-check được."
+            )
+except Exception as e:
+    data_flags.append(f"Không đọc được cache giá {paper_symbol}: {e}")
+
+upd = str(live_status.get("updatedAt", "") or "")
+lpd = str(live_status.get("latestPriceDate", "") or "")
+if upd and lpd and upd[:10] < lpd:
+    data_flags.append(
+        f"live status updatedAt {upd} đứng TRƯỚC latestPriceDate {lpd} — cần reconcile timestamp."
+    )
+
+# --- Paper position đã khớp hay mới là kế hoạch? ---
+paper_executed = bool(paper_log_last.get("holdings"))
+paper_status = "ĐÃ KHỚP" if paper_executed else "KẾ HOẠCH · chưa khớp"
+
+chart_rows = [{
+    "date": r["date"],
+    "model": float(r["navBil"]),
+    "vni": float(r["vniClose"]),
+} for r in curve_2021]
+
+model_summary_cards = [
+    ["Phạm vi", "Copy-trade cổ phiếu Việt Nam, không margin, không phái sinh, không ETF/trái phiếu."],
+    ["Tín hiệu", "Bộ lọc chạy theo dữ liệu giá, thanh khoản, chất lượng và trạng thái thị trường; tín hiệu tuần được cập nhật trước phiên thực hiện."],
+    ["Thực hiện", "Lệnh quy đổi theo NAV copy, làm tròn lot 100, theo dõi target/stop và trạng thái có thể bán."],
+    ["Kiểm soát", "Dashboard chỉ hiển thị kết quả và kỷ luật vận hành, không công bố công thức điểm số nội bộ."],
+]
+forecast_date = next_monday(live_status.get("latestPriceDate") or signal_w1.get("execution_date"))
+planned_symbols = {str(row.get("symbol", "")).upper() for row in planned_rows}
+forecast_rows = [{
+    "displayPlanDate": forecast_date,
+    "planDate": row.get("planDate"),
+    "symbol": row.get("symbol"),
+    "action": row.get("action"),
+    "status": row.get("status"),
+    "currentPrice": row.get("currentPrice"),
+    "targetPrice": row.get("targetPrice"),
+    "stopPrice": row.get("stopPrice"),
+    "currentCopyShares": row.get("currentCopyShares"),
+    "targetCopyShares": row.get("targetCopyShares"),
+    "orderShares": row.get("orderShares"),
+    "note": row.get("note"),
+} for row in planned_rows]
+
+for row in watchlist_rows:
+    if row["bucket"] != "BUY_SOON" or row["symbol"] in planned_symbols:
+        continue
+    forecast_rows.append({
+        "displayPlanDate": forecast_date,
+        "planDate": forecast_date,
+        "symbol": row["symbol"],
+        "action": "MUA DỰ KIẾN",
+        "status": "TẠM TÍNH",
+        "currentPrice": row.get("currentPrice"),
+        "targetPrice": row.get("targetPrice"),
+        "stopPrice": row.get("stopPrice"),
+        "currentCopyShares": None,
+        "targetCopyShares": None,
+        "orderShares": None,
+        "note": "Đạt gate theo giá hiện tại; chờ dữ liệu close thứ 6 để chốt lệnh.",
+    })
+
+planned_public = {
+    "asOf": policy.get("plannedOrders", {}).get("asOf"),
+    "planDate": forecast_date,
+    "stage": policy.get("plannedOrders", {}).get("stage"),
+    "summary": policy.get("plannedOrders", {}).get("summary"),
+    "rows": forecast_rows,
+}
+
+data = {
+    "asOf": live_status.get("latestPriceDate") or max([h.get("priceAsOf") or "" for h in holdings] + [""]),
+    "liveUpdatedAt": live_status.get("updatedAt"),
+    "regimeLabel": regime_label,
+    "paperStatus": paper_status,
+    "policy": {
+        "key": policy.get("key"),
+        "label": policy.get("label"),
+        "cashBuffer": policy.get("cashBuffer"),
+        "totalSuggestedWeight": policy.get("totalSuggestedWeight"),
+        "lastUpdate": policy.get("lastUpdate"),
+        "plannedOrders": planned_public,
+    },
+    "perf": perf,
+    "holdings": holdings,
+    "watchlist": watchlist_rows,
+    "watchlistSummary": watchlist_summary,
+    "modelSummaryCards": model_summary_cards,
+    "tradesLatest": trades_latest,
+    "ledger": ledger_rows,
+    "tradeCount": hist.get("tradeCount") or len(trades_full),
+    "firstTradeDate": hist.get("firstTradeDate"),
+    "lastTradeDate": hist.get("lastTradeDate"),
+    "chart": chart_rows,
+    "copyAccount": {
+        "navMil": copy_nav_m,
+        "marketMil": copy_market_m,
+        "cashMil": copy_cash_m,
+        "totalMil": copy_total_m,
+        "pnlMil": copy_pnl_m,
+        "pnlPct": copy_pnl_pct,
+    },
+    "paperTrade": {
+        "source": "signal_week_1_20260601.json + dashboard_live_update_status.json",
+        "startDate": pt_state.get("start_date"),
+        "endDate": pt_state.get("end_date"),
+        "logAsOf": paper_log_last.get("as_of"),
+        "symbol": paper_symbol,
+        "shares": paper_shares,
+        "signalPrice": paper_signal_px,
+        "signalDate": signal_w1.get("execution_date"),
+        "freshPrice": paper_fresh_px,
+        "freshDate": paper_quote.get("date"),
+        "positionValueMil": paper_value_m,
+        "positionPnlMil": paper_position_pnl_m,
+        "positionPnlPct": paper_position_pnl_pct,
+        "navMil": paper_nav_m,
+        "navPnlMil": paper_nav_pnl_m,
+        "navPnlPct": paper_nav_pnl_pct,
+        "cashPct": signal_w1.get("cash_pct"),
+        "exposurePct": signal_w1.get("exposure_pct"),
+        "tplusViolations": paper_log_last.get("tplus_violations_cum", 0),
+        "checkpoints": pt_state.get("weekly_checkpoint_due", {}),
+    },
+    "vni": {
+        "date": latest_vni["date"].strftime("%Y-%m-%d"),
+        "close": float(latest_vni["close"]),
+    },
+}
+
+data_js = json.dumps(data, ensure_ascii=False)
+
+# --- Sanity asserts: bắt lỗi sớm trước khi ghi HTML ---
+assert holdings, "FAIL: holdings rỗng — kiểm tra analysis.js policy r46_bear_stop_mcore"
+assert len(ledger_rows) == (hist.get("tradeCount") or len(trades_full)), "FAIL: ledger count lệch tradeCount"
+assert chart_rows and len(chart_rows) > 100, "FAIL: chart_rows quá ít — kiểm tra equityCurve"
+assert data["vni"]["close"] > 0, "FAIL: VNI close không hợp lệ"
+
+html = f"""<!doctype html>
+<html lang="vi" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ez Trading</title>
+<style>
+:root {{
+  --font: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --bg:#f6f8fa; --surface:#fff; --surface2:#f6f8fa; --border:#d0d7de; --soft:#eaeef2;
+  --text:#0f172a; --muted:#64748b; --muted2:#94a3b8; --accent:#0969da; --green:#1a7f37; --red:#cf222e; --amber:#9a6700; --violet:#8250df;
+  --greenSoft:#dafbe1; --redSoft:#ffebe9; --blueSoft:#ddf4ff; --amberSoft:#fff8c5;
+  --r:8px; --r2:6px; --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px;
+  --t1:11px; --t2:12px; --t3:13px; --t4:14px; --t5:15px; --t6:18px; --t7:22px; --t8:28px;
+}}
+[data-theme="dark"] {{
+  --bg:#151a22; --surface:#1f2630; --surface2:#18212b; --border:#3a4657; --soft:#2d3745;
+  --text:#f8fafc; --muted:#c2cedd; --muted2:#9eb0c5; --accent:#58a6ff; --green:#5ee787; --red:#ff7b72; --amber:#f2cc60;
+  --blueSoft:#173653; --greenSoft:#173d27; --redSoft:#4b2025; --amberSoft:#41340a;
+}}
+* {{ box-sizing:border-box; margin:0; padding:0; font-family:var(--font); font-feature-settings:"cv11","ss01","tnum"; }}
+body {{ background:var(--bg); color:var(--text); font-size:var(--t3); line-height:1.45; }}
+.app {{ display:grid; grid-template-columns:248px minmax(0,1fr); min-height:100vh; }}
+.sidebar {{ background:var(--surface); border-right:1px solid var(--border); padding:20px 12px; position:sticky; top:0; height:100vh; display:flex; flex-direction:column; gap:14px; }}
+.brand {{ display:flex; gap:10px; align-items:center; padding:4px 8px 16px; border-bottom:1px solid var(--soft); }}
+.mark {{ width:32px; height:32px; display:grid; place-items:center; border-radius:7px; color:#fff; background:var(--accent); font-weight:800; }}
+.brand b {{ display:block; font-size:var(--t4); }} .brand span {{ color:var(--muted); font-size:var(--t2); }}
+.navlabel {{ color:var(--muted); font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; padding:8px 8px 0; }}
+.nav {{ border:0; background:transparent; color:var(--text); width:100%; height:34px; border-radius:7px; display:flex; align-items:center; gap:10px; padding:0 9px; cursor:pointer; font:inherit; font-weight:600; }}
+.nav svg {{ width:15px; height:15px; color:var(--muted); }} .nav .ct {{ margin-left:auto; background:var(--surface2); color:var(--muted); border-radius:999px; padding:1px 7px; font-size:var(--t1); }}
+.nav.on {{ background:#ddf4ff; color:#0969da; }} .nav.on svg {{ color:#0969da; }} .nav.on .ct {{ background:#0969da; color:white; }}
+.sidefoot {{ margin-top:auto; border-top:1px solid var(--soft); padding:14px 8px 0; display:grid; gap:8px; }}
+.sfrow {{ display:flex; justify-content:space-between; color:var(--muted); }} .sfrow b {{ color:var(--text); }}
+.theme {{ border:1px solid var(--border); background:var(--surface2); color:var(--text); border-radius:7px; height:30px; font:inherit; font-weight:600; cursor:pointer; }}
+.main {{ min-width:0; }}
+.topbar {{ height:54px; display:flex; align-items:center; gap:16px; padding:0 24px; border-bottom:1px solid var(--border); background:var(--surface); position:sticky; top:0; z-index:5; }}
+.crumb a {{ color:var(--accent); text-decoration:none; font-weight:700; }} .crumb span {{ color:var(--muted); margin:0 6px; }}
+.spacer {{ flex:1; }} .search {{ width:min(420px,35vw); height:32px; border:1px solid var(--border); background:var(--surface2); border-radius:8px; display:flex; align-items:center; gap:8px; padding:0 10px; color:var(--muted); }}
+.search input {{ border:0; outline:0; background:transparent; color:var(--text); font:inherit; width:100%; }}
+.live {{ background:var(--greenSoft); color:var(--green); border-radius:999px; padding:4px 10px; font-weight:800; font-size:var(--t1); letter-spacing:.04em; }}
+.content {{ padding:20px 24px 28px; max-width:1540px; }}
+.view {{ display:none; }} .view.on {{ display:block; }}
+.pageh {{ display:flex; justify-content:space-between; align-items:start; gap:16px; margin-bottom:14px; }}
+h1 {{ font-size:var(--t7); letter-spacing:0; }} .sub {{ color:var(--muted); margin-top:2px; }}
+.btn,.select,.input {{ height:30px; border:1px solid var(--border); background:var(--surface); color:var(--text); border-radius:7px; padding:0 10px; font:inherit; font-weight:600; }}
+.btn.primary {{ background:var(--accent); color:white; border-color:var(--accent); }}
+.controls {{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px; }}
+.ctrl-lbl {{ color:var(--muted); font-weight:700; font-size:var(--t1); letter-spacing:.04em; text-transform:uppercase; }}
+.kpis {{ display:grid; grid-template-columns:repeat(4,1fr); border:1px solid var(--border); border-radius:var(--r); background:var(--surface); overflow:hidden; margin-bottom:16px; }}
+.kpi {{ padding:14px 16px; border-right:1px solid var(--soft); }} .kpi:last-child {{ border-right:0; }}
+.kpi .l {{ color:var(--muted); font-size:var(--t1); font-weight:800; letter-spacing:.06em; text-transform:uppercase; }} .kpi .v {{ margin-top:4px; font-size:var(--t7); font-weight:800; }} .kpi .s {{ color:var(--muted); font-size:var(--t2); }}
+.pos {{ color:var(--green)!important; }} .neg {{ color:var(--red)!important; }} .amb {{ color:var(--amber)!important; }}
+.scaletag {{ background:var(--amberSoft); color:var(--amber); border-radius:999px; padding:1px 8px; font-size:var(--t1); font-weight:800; letter-spacing:.04em; }}
+.sec {{ background:var(--surface); border:1px solid var(--border); border-radius:var(--r); overflow:hidden; margin-bottom:16px; }}
+.sech {{ min-height:44px; padding:12px 16px; border-bottom:1px solid var(--soft); display:flex; align-items:center; justify-content:space-between; gap:12px; }}
+.sech h2 {{ font-size:var(--t4); }} .meta {{ color:var(--muted); font-size:var(--t2); }}
+.secb {{ padding:16px; }}
+.chartTop {{ display:flex; justify-content:space-between; align-items:start; gap:12px; padding:14px 16px 8px; }}
+.chartVal {{ font-size:var(--t7); font-weight:800; color:var(--green); }} .chartSub {{ color:var(--muted); font-weight:700; font-size:var(--t1); letter-spacing:.04em; text-transform:uppercase; }}
+.ranges {{ display:flex; border:1px solid var(--border); border-radius:7px; background:var(--surface2); padding:2px; }}
+.ranges button {{ border:0; background:transparent; border-radius:5px; padding:4px 9px; font:inherit; font-size:var(--t1); font-weight:800; color:var(--muted); cursor:pointer; }}
+.ranges button.on {{ background:var(--surface); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,.05); }}
+.legend {{ display:flex; gap:18px; padding:0 16px 8px; color:var(--muted); font-size:var(--t2); font-weight:700; }} .legend i {{ display:inline-block; width:14px; height:2px; margin-right:6px; vertical-align:middle; }}
+.chartwrap {{ position:relative; padding:0 16px 10px 54px; }} svg {{ width:100%; height:248px; display:block; overflow:visible; }} .ylabels {{ position:absolute; left:14px; top:10px; bottom:38px; width:42px; display:flex; flex-direction:column; justify-content:space-between; align-items:flex-end; color:var(--muted); font-size:11px; font-weight:600; }} .xlabels {{ height:26px; display:flex; justify-content:space-between; align-items:center; color:var(--muted); font-size:12px; font-weight:600; padding-left:1px; }} .tip {{ display:none; position:absolute; pointer-events:none; z-index:10; min-width:170px; background:var(--surface); border:1px solid var(--border); border-radius:7px; padding:8px 10px; box-shadow:0 12px 28px rgba(15,23,42,.14); font-size:var(--t2); }}
+.tip .d {{ color:var(--muted); font-weight:800; margin-bottom:4px; }} .tip .r {{ display:flex; justify-content:space-between; gap:12px; }}
+.split {{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; align-items:start; }}
+table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding:9px 12px; color:var(--muted); font-size:var(--t1); letter-spacing:.06em; text-transform:uppercase; border-bottom:1px solid var(--border); background:var(--surface2); }} td {{ padding:9px 12px; border-bottom:1px solid var(--soft); vertical-align:middle; }} tr:last-child td {{ border-bottom:0; }} .num {{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }}
+.pill {{ display:inline-flex; align-items:center; min-height:20px; border-radius:999px; padding:2px 8px; font-size:11.5px; line-height:1.2; font-weight:700; letter-spacing:0; text-transform:none; white-space:nowrap; }} .buy {{ background:var(--greenSoft); color:var(--green); }} .sell {{ background:var(--redSoft); color:var(--red); }} .hold {{ background:var(--blueSoft); color:var(--accent); }} .skip {{ background:var(--surface2); color:var(--muted); }}
+.ptgrid {{ display:grid; grid-template-columns:repeat(4,1fr); border-bottom:1px solid var(--soft); }} .ptbox {{ padding:10px 12px; border-right:1px solid var(--soft); }} .ptbox:nth-child(4n) {{ border-right:0; }} .ptbox span {{ color:var(--muted); font-size:var(--t1); font-weight:800; letter-spacing:.06em; text-transform:uppercase; }} .ptbox b {{ display:block; margin-top:3px; font-size:var(--t5); }}
+.watchSummary {{ display:grid; grid-template-columns:repeat(5,1fr); border-bottom:1px solid var(--border); }}
+.watchSummary span {{ padding:12px 14px; border-right:1px solid var(--border); color:var(--muted); font-size:var(--t1); }}
+.watchSummary span:last-child {{ border-right:0; }}
+.watchSummary b {{ display:block; margin-top:2px; color:var(--text); font-size:var(--t4); }}
+.watchRules {{ display:flex; gap:8px; flex-wrap:wrap; padding:12px 16px; border-bottom:1px solid var(--border); }}
+.watchRules span {{ border:1px solid var(--border); background:var(--surface2); border-radius:999px; padding:5px 9px; font-size:var(--t1); color:var(--muted); }}
+.watchRules b {{ color:var(--accent); margin-right:5px; }}
+.logic {{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }} .logicCard {{ border:1px solid var(--border); border-radius:var(--r); padding:14px; background:var(--surface); }} .logicCard h3 {{ font-size:var(--t3); margin-bottom:6px; }} .logicCard p {{ color:var(--muted); font-size:var(--t2); line-height:1.5; }}
+.ledgerbar {{ display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid var(--soft); background:var(--surface2); }} .ledgerbar input {{ width:360px; max-width:45vw; height:30px; border:1px solid var(--border); border-radius:7px; padding:0 10px; background:var(--surface); color:var(--text); font:inherit; }} .pager {{ margin-left:auto; display:flex; gap:4px; }} .pager button {{ min-width:28px; height:28px; border:1px solid var(--border); border-radius:7px; background:var(--surface); color:var(--text); font:inherit; cursor:pointer; }} .pager button.on {{ background:var(--accent); color:white; border-color:var(--accent); }}
+.scroll {{ max-height:calc(100vh - 235px); overflow:auto; }}
+@media(max-width:900px) {{ .app {{ grid-template-columns:1fr; }} .sidebar {{ display:none; }} .topbar {{ padding:0 14px; }} .search {{ display:none; }} .content {{ padding:16px; }} .kpis,.split,.logic,.watchSummary {{ grid-template-columns:1fr; }} svg {{ height:220px; }} }}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="sidebar">
+  <div class="brand"><div class="mark">Ez</div><div><b>Ez Trading</b><span>R46 execution desk</span></div></div>
+  <div class="navlabel">Menu</div>
+  <button class="nav on" data-view="copy"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path d="M4 19V5m0 14h16M8 16l3-4 3 2 4-7"/></svg>Copy Trade<span class="ct">{len(holdings)}</span></button>
+  <button class="nav" data-view="watch"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/></svg>Theo dõi mua<span class="ct">{len(watchlist_rows)}</span></button>
+  <button class="nav" data-view="model"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path d="M3 4h18l-7 8v6l-4 2v-8L3 4z"/></svg>Bộ lọc model</button>
+  <button class="nav" data-view="ledger"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Lịch sử<span class="ct">{hist.get('tradeCount') or len(trades_full)}</span></button>
+  <div class="sidefoot">
+    <div class="sfrow"><span>Regime</span><b>{regime_label}</b></div>
+    <div class="sfrow"><span>Cash</span><b>{fmt_num(policy.get('cashBuffer'),1)}%</b></div>
+    <div class="sfrow"><span>CAGR</span><b class="pos">+{fmt_num(perf['cagr'],1)}%</b></div>
+    <button class="theme" onclick="toggleTheme()">Chuyển giao diện</button>
+  </div>
+</aside>
+<main class="main">
+<header class="topbar"><div class="crumb"><a>Ez Trading</a><span>/</span><b id="crumb">Copy Trade</b></div><div class="spacer"></div><label class="search"><span>⌕</span><input id="globalSearch" placeholder="Tìm mã, lệnh, ghi chú..." /></label><span class="live">LIVE {data['asOf']}</span></header>
+<div class="content">
+  <section class="view on" data-view="copy">
+    <div class="pageh"><div><h1>Copy Trade</h1><div class="sub">R46 Bear Stop 15bps · dữ liệu từ dashboard online hiện tại · {hist.get('tradeCount')} lệnh full history</div></div><div><button class="btn">In PDF</button></div></div>
+    <div class="controls"><span class="ctrl-lbl">NAV copy</span><input class="input" id="navInput" value="1" type="number" min="0.1" step="0.1" style="width:80px" /><span class="ctrl-lbl">tỷ</span><button class="btn primary navPreset" data-nav="1">1 tỷ</button><button class="btn navPreset" data-nav="3">3 tỷ</button><button class="btn navPreset" data-nav="5">5 tỷ</button></div>
+    <div class="kpis">
+      <div class="kpi"><div class="l">Copy NAV hiện tại</div><div class="v" id="copyNavValue">{fmt_bil_from_m(copy_total_m)}</div><div class="s {'pos' if copy_pnl_m >= 0 else 'neg'}" id="copyNavSub">{fmt_money_m(copy_pnl_m)} · {pct(copy_pnl_pct)}</div></div>
+      <div class="kpi"><div class="l">Paper NAV ước tính</div><div class="v">{fmt_bil_from_m(paper_nav_m) if paper_nav_m is not None else '-'}</div><div class="s {'pos' if (paper_nav_pnl_m or 0) >= 0 else 'neg'}">{fmt_money_m(paper_nav_pnl_m)} · {pct(paper_nav_pnl_pct)}</div></div>
+      <div class="kpi"><div class="l">VNI gần nhất</div><div class="v">{fmt_num(data['vni']['close'],2)}</div><div class="s">{data['vni']['date'] or '-'}</div></div>
+      <div class="kpi"><div class="l">Audit model</div><div class="v">VNI+30 {perf['passVni30']}/6</div><div class="s">Min edge +{fmt_num(perf['minEdge'],1)}pp · {perf['slippageBps']}bps</div></div>
+    </div>
+    <section class="sec">
+      <div class="sech"><h2>Performance · Model R46 vs VN-Index</h2><div class="ranges" id="ranges"><button data-r="ytd">YTD</button><button data-r="3m">3M</button><button data-r="6m">6M</button><button data-r="1y">1Y</button><button class="on" data-r="all">ALL</button></div></div>
+      <div class="chartTop"><div><div class="chartVal" id="chartVal">-</div><div class="chartSub" id="chartSub">Model vs VN-Index · % từ đầu kỳ</div></div><div class="meta" id="chartDates">-</div></div>
+      <div class="legend"><span><i style="background:var(--green)"></i>Model R46</span><span><i style="background:var(--muted2)"></i>VN-Index</span></div>
+      <div class="chartwrap"><div class="ylabels" id="yLabels"></div><svg id="chart" viewBox="0 0 820 236" preserveAspectRatio="none"><g id="grid"></g><polyline id="vniLine" fill="none" stroke="var(--muted2)" stroke-width="1.5" stroke-dasharray="5 4"/><polyline id="modelLine" fill="none" stroke="var(--green)" stroke-width="2.2"/><line id="cross" y1="18" y2="214" opacity="0" stroke="var(--accent)" stroke-dasharray="3 3"/></svg><div class="xlabels" id="xLabels"></div><div class="tip" id="tip"></div></div>
+    </section>
+    <div class="split">
+      <section class="sec"><div class="sech"><h2>Danh mục copy đang nắm giữ</h2><span class="meta">{len(holdings)} mã · quy đổi theo NAV copy</span></div><table><thead><tr><th>Mã</th><th>Ngành</th><th class="num">KL</th><th class="num">Giá vốn</th><th class="num">Giá TT</th><th class="num">Giá trị</th><th class="num">Tỷ trọng</th><th class="num">P/L</th><th class="num">P/L %</th></tr></thead><tbody id="holdRows"></tbody></table></section>
+      <section class="sec"><div class="sech"><h2>Paper Trade · Tuần 1 <span class="scaletag">{data['paperStatus']}</span></h2><span class="meta">NAV ảo 1 tỷ · bắt đầu {data['paperTrade']['startDate']}</span></div><div class="ptgrid" id="ptGrid"></div><table><thead><tr><th>Mã</th><th class="num">KL</th><th class="num">Signal</th><th class="num">Fresh</th><th class="num">P/L</th></tr></thead><tbody id="paperRows"></tbody></table></section>
+    </div>
+    <section class="sec"><div class="sech"><h2>Dự kiến giao dịch thứ 2 tới</h2><span class="meta">Tạm tính theo giá hiện tại; thay đổi trong tuần, chốt sau close thứ 6</span></div><table><thead><tr><th>Ngày dự kiến</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá TT</th><th class="num">Target</th><th class="num">Stop</th><th>Ghi chú</th></tr></thead><tbody id="plannedRows"></tbody></table></section>
+    <section class="sec"><div class="sech"><h2>Lệnh đã khớp gần nhất <span class="scaletag">QUY MÔ MODEL</span></h2><span class="meta">8 dòng mới nhất từ history.js · KL &amp; P/L theo NAV model (~44 tỷ), không scale theo NAV copy</span></div><table><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá</th><th class="num">P/L</th><th>Lý do</th></tr></thead><tbody id="latestRows"></tbody></table></section>
+  </section>
+  <section class="view" data-view="watch"><div class="pageh"><div><h1>Theo dõi mua</h1><div class="sub">{len(watchlist_rows)} mã từ dashboard online `data.js` + live shortlist · loại {watchlist_summary['excludedHeld']} mã đang nắm</div></div></div><section class="sec"><div class="sech"><h2>Mã đáng theo dõi và có thể mua sắp tới</h2><span class="meta">Không phải rule khớp lệnh live của R46</span></div><div class="watchSummary" id="watchSummary"></div><div class="watchRules" id="watchRules"></div><table><thead><tr><th>Mã</th><th>Nhóm</th><th class="num">Điểm lọc</th><th class="num">Upside</th><th class="num">Target</th><th class="num">R:R</th><th class="num">TK 20D</th><th>Target tuần</th><th>Tín hiệu mua</th><th>Ghi chú</th></tr></thead><tbody id="watchRows"></tbody></table></section></section>
+  <section class="view" data-view="model"><div class="pageh"><div><h1>Bộ lọc model · R46 Bear Stop 15bps</h1><div class="sub">Tóm tắt vận hành, không công bố công thức nội bộ</div></div><span class="pill buy">AUDIT {policy.get('productionAudit',{}).get('status','R46')}</span></div><section class="sec"><div class="sech"><h2>Tóm tắt</h2><span class="meta">Public view</span></div><div class="secb"><div class="logic" id="logicGrid"></div></div></section></section>
+  <section class="view" data-view="ledger"><div class="pageh"><div><h1>Lịch sử giao dịch</h1><div class="sub">{len(ledger_rows)} dòng từ {hist.get('firstTradeDate')} đến {hist.get('lastTradeDate')} · KL &amp; P/L theo NAV model (~44 tỷ)</div></div></div><section class="sec"><div class="ledgerbar"><b id="ledgerCount"></b><input id="ledgerSearch" placeholder="Tìm theo mã, lệnh, lý do..." /><div class="pager" id="pager"></div></div><div class="scroll"><table><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá</th><th class="num">Giá trị</th><th class="num">Tỷ trọng NAV</th><th class="num">P/L</th><th class="num">Nắm giữ</th><th>Lý do</th></tr></thead><tbody id="ledgerBody"></tbody></table></div></section></section>
+</div>
+</main>
+</div>
+<script>
+const D = {data_js};
+function f(v,d=1){{ if(v===null||v===undefined||Number.isNaN(Number(v))) return '-'; return Number(v).toLocaleString('vi-VN',{{maximumFractionDigits:d}}); }}
+function money(v){{ if(v===null||v===undefined) return '-'; return (Number(v)>=0?'+':'-') + f(Math.abs(Number(v)),1) + ' tr'; }}
+function pc(v,d=1){{ if(v===null||v===undefined) return '-'; return (Number(v)>0?'+':'') + f(Number(v),d) + '%'; }}
+function wp(v,d=1){{ if(v===null||v===undefined) return '-'; return f(Number(v),d) + '%'; }}
+function cls(v){{ return Number(v) >= 0 ? 'pos' : 'neg'; }}
+function esc(s){{ return String(s??'').replace(/[&<>"']/g,c=>({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[c])); }}
+function pill(side){{ const raw=String(side||'-'); const s=raw.toUpperCase(); const plain=s.normalize('NFD').replace(/[̀-ͯ]/g,''); const c=plain.includes('MUA')||plain==='BUY'?'buy':plain.includes('BAN')||plain==='SELL'?'sell':plain.includes('BO')||plain.includes('SKIP')?'skip':'hold'; let label=raw; if(plain.includes('MUA THEM')) label='Mua thêm'; else if(plain.includes('MUA MOI')||plain==='BUY') label='Mua mới'; else if(plain.includes('BAN HET')||plain==='SELL') label='Bán hết'; else if(plain.includes('BAN 1 PHAN')) label='Bán 1 phần'; else if(plain.includes('GIU')) label='Giữ'; else if(plain.includes('THEO DOI')) label='Theo dõi'; return `<span class="pill ${{c}}">${{esc(label)}}</span>`; }}
+function pill(side){{ const raw=String(side||'-'); const s=raw.toUpperCase(); const plain=s.normalize('NFD').replace(/[\u0300-\u036f]/g,''); const c=plain.includes('MUA')||plain==='BUY'?'buy':plain.includes('BAN')||plain==='SELL'?'sell':plain.includes('BO')||plain.includes('SKIP')?'skip':'hold'; let label=raw; if(plain.includes('MUA DU KIEN')) label='Mua dự kiến'; else if(plain.includes('MUA THEM')) label='Mua thêm'; else if(plain.includes('MUA MOI')||plain==='BUY') label='Mua mới'; else if(plain.includes('BAN HET')||plain==='SELL') label='Bán hết'; else if(plain.includes('BAN 1 PHAN')) label='Bán 1 phần'; else if(plain.includes('GIU')) label='Giữ'; else if(plain.includes('THEO DOI')) label='Theo dõi'; return `<span class="pill ${{c}}">${{esc(label)}}</span>`; }}
+function toggleTheme(){{ const h=document.documentElement; h.dataset.theme=h.dataset.theme==='light'?'dark':'light'; renderChart(currentRange); }}
+document.querySelectorAll('.nav').forEach(b=>b.addEventListener('click',()=>{{ document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('on',x===b)); document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.dataset.view===b.dataset.view)); document.getElementById('crumb').textContent=b.childNodes[1]?.textContent?.trim()||b.textContent.trim(); window.scrollTo(0,0); }}));
+function roundLot(x){{ return Math.max(0, Math.floor(Number(x || 0) / 100) * 100); }}
+function renderCopyForNav(navBilRaw){{ const navBil=Math.max(0.1, Number(navBilRaw)||1); document.getElementById('navInput').value=String(navBil).replace(/\\.0$/,''); document.querySelectorAll('.navPreset').forEach(b=>b.classList.toggle('primary', Number(b.dataset.nav)===navBil)); let market=0,cost=0; const holdHtml=D.holdings.length ? D.holdings.map(h=>{{ const baseShares=Number(h.copyShares||h.modelShares||0); const shares=roundLot(baseShares*navBil); const entry=Number(h.entryPrice||0); const px=Number(h.currentPrice||0); const value=shares*px/1000; const rowCost=shares*entry/1000; const weight=value/(navBil*1000)*100; const pnl=value-rowCost; const pnlPct=rowCost>0?pnl/rowCost*100:null; market+=value; cost+=rowCost; return `<tr><td><strong>${{esc(h.symbol)}}</strong></td><td>${{esc(h.industry||h.sleeve||'-')}}</td><td class="num">${{f(shares,0)}}</td><td class="num">${{f(entry,3)}}k</td><td class="num">${{f(px,2)}}k</td><td class="num">${{f(value,1)}} tr</td><td class="num">${{wp(weight)}}</td><td class="num ${{cls(pnl)}}">${{money(pnl)}}</td><td class="num ${{cls(pnlPct)}}">${{pc(pnlPct)}}</td></tr>`; }}).join('') : '<tr><td colspan="9">Chưa có vị thế.</td></tr>'; document.getElementById('holdRows').innerHTML=holdHtml; const cash=Math.max(0, navBil*1000-cost); const total=cash+market; const pnl=total-navBil*1000; const pnlPct=pnl/(navBil*1000)*100; document.getElementById('copyNavValue').textContent=f(total/1000,3)+' tỷ'; const sub=document.getElementById('copyNavSub'); sub.textContent=money(pnl)+' · '+pc(pnlPct); sub.className='s '+cls(pnl); renderPlannedRows(navBil); }}
+const pt = D.paperTrade;
+document.getElementById('ptGrid').innerHTML = [
+  ['NAV', pt.navMil===null?'-':f(pt.navMil,1)+' tr'],
+  ['P/L', money(pt.navPnlMil)+' · '+pc(pt.navPnlPct,2)],
+  ['Cash', f(pt.cashPct,1)+'%'],
+  ['Exposure', f(pt.exposurePct,1)+'%']
+].map(x=>`<div class="ptbox"><span>${{x[0]}}</span><b>${{x[1]}}</b></div>`).join('');
+document.getElementById('paperRows').innerHTML = `<tr><td><strong>${{esc(pt.symbol)}}</strong><div class="meta">${{esc(pt.signalDate)}} → ${{esc(pt.freshDate)}}</div></td><td class="num">${{f(pt.shares,0)}}</td><td class="num">${{f(pt.signalPrice,1)}}k</td><td class="num">${{f(pt.freshPrice,1)}}k</td><td class="num ${{cls(pt.positionPnlMil)}}">${{money(pt.positionPnlMil)}} · ${{pc(pt.positionPnlPct)}}</td></tr>`;
+const planned = D.policy.plannedOrders?.rows || [];
+function renderPlannedRows(navBil=Number(document.getElementById('navInput')?.value)||1){{ document.getElementById('plannedRows').innerHTML = planned.length ? planned.map(r=>{{ const baseShares=Number(r.orderShares||r.currentCopyShares||r.targetCopyShares||0); const shares=roundLot(baseShares*navBil); return `<tr><td>${{esc(r.planDate)}}</td><td><strong>${{esc(r.symbol)}}</strong></td><td>${{pill(r.action||r.status)}}</td><td class="num">${{f(shares,0)}}</td><td class="num">${{f(r.currentPrice,2)}}k</td><td class="num pos">${{f(r.targetPrice,2)}}k</td><td class="num neg">${{f(r.stopPrice,2)}}k</td><td>${{esc(r.note)}}</td></tr>`; }}).join('') : '<tr><td colspan="8">Không có lệnh mới.</td></tr>'; }}
+function renderPlannedRows(navBil=Number(document.getElementById('navInput')?.value)||1){{ document.getElementById('plannedRows').innerHTML = planned.length ? planned.map(r=>{{ const baseShares=Number(r.orderShares||r.currentCopyShares||r.targetCopyShares||0); const shares=baseShares>0?roundLot(baseShares*navBil):null; return `<tr><td>${{esc(r.displayPlanDate||r.planDate)}}</td><td><strong>${{esc(r.symbol)}}</strong></td><td>${{pill(r.action||r.status)}}</td><td class="num">${{shares===null?'-':f(shares,0)}}</td><td class="num">${{f(r.currentPrice,2)}}k</td><td class="num pos">${{f(r.targetPrice,2)}}k</td><td class="num neg">${{f(r.stopPrice,2)}}k</td><td>${{esc(r.note)}}</td></tr>`; }}).join('') : '<tr><td colspan="8">Chưa có mã vào tầm ngắm.</td></tr>'; }}
+document.querySelectorAll('.navPreset').forEach(btn=>btn.addEventListener('click',()=>renderCopyForNav(btn.dataset.nav)));
+document.getElementById('navInput').addEventListener('input',e=>renderCopyForNav(e.target.value));
+renderCopyForNav(1);
+document.getElementById('latestRows').innerHTML = D.tradesLatest.map(r=>`<tr><td>${{esc(r.date)}}</td><td><strong>${{esc(r.symbol)}}</strong></td><td>${{pill(r.actionLabel||r.side)}}</td><td class="num">${{f(r.shares,0)}}</td><td class="num">${{r.executionPriceK?f(r.executionPriceK,2)+'k':'-'}}</td><td class="num ${{cls(r.pnlBil)}}">${{r.pnlBil==null?'-':money(Number(r.pnlBil)*1000)}}</td><td>${{esc(r.reason)}}</td></tr>`).join('');
+const ws = D.watchlistSummary || {{}};
+document.getElementById('watchSummary').innerHTML = [
+  ['Tổng watchlist', ws.total || 0],
+  ['Có thể mua sớm', ws.buySoon || 0],
+  ['Cần theo dõi thêm', ws.watchMore || 0],
+  ['Nguồn online', `${{ws.onlineCandidates || 0}} candidate · ${{ws.onlineWatch || 0}} watch · ${{ws.memoOnly || 0}} memo`],
+  ['Đã loại đang nắm', ws.excludedHeld || 0],
+].map(x=>`<span>${{x[0]}}<b>${{x[1]}}</b></span>`).join('');
+document.getElementById('watchRules').innerHTML = ['Không nắm','Gate PASS','Không AVOID','Có tín hiệu mua','Thanh khoản >= 3 tỷ','R:R >= 2','Upside >= 12%'].map((x,i)=>`<span><b>${{i+1}}</b>${{x}}</span>`).join('');
+document.getElementById('watchRows').innerHTML = D.watchlist.length ? D.watchlist.map(w=>`<tr><td><strong>${{esc(w.symbol)}}</strong><div class="meta">${{esc(w.industry||'-')}}</div></td><td>${{w.bucket==='BUY_SOON'?'<span class="pill buy">Có thể mua</span>':'<span class="pill hold">Theo dõi</span>'}}</td><td class="num">${{w.gatePassCount}}/${{w.gateTotal}}</td><td class="num ${{Number(w.upsidePct)>=12?'pos':''}}">${{pc(w.upsidePct)}}</td><td class="num pos">${{f(w.targetPrice,2)}}k</td><td class="num ${{Number(w.riskReward)>=2?'pos':''}}">${{w.riskReward==null?'-':f(w.riskReward,2)+'x'}}</td><td class="num">${{w.liq20dBil==null?'-':f(w.liq20dBil,1)}}</td><td>${{w.planned?'Có':'Không'}}</td><td>${{w.buySignal?'Có':'Không'}}</td><td>${{esc(w.note)}}</td></tr>`).join('') : '<tr><td colspan="10">Chưa có mã phù hợp cho watchlist.</td></tr>';
+document.getElementById('logicGrid').innerHTML = D.modelSummaryCards.map((c,i)=>`<article class="logicCard"><h3>${{esc(c[0]||('Card '+(i+1)))}}</h3><p>${{esc(c[1]||'')}}</p></article>`).join('');
+let currentRange='all';
+function rangeRows(r){{ const rows=D.chart; if(!rows.length) return []; const last=new Date(rows[rows.length-1].date+'T00:00:00'); let cutoff=null; if(r==='ytd') cutoff=new Date(last.getFullYear(),0,1); if(r==='3m') cutoff=new Date(last), cutoff.setMonth(cutoff.getMonth()-3); if(r==='6m') cutoff=new Date(last), cutoff.setMonth(cutoff.getMonth()-6); if(r==='1y') cutoff=new Date(last), cutoff.setFullYear(cutoff.getFullYear()-1); return cutoff?rows.filter(x=>new Date(x.date+'T00:00:00')>=cutoff):rows; }}
+function makePts(rows,key){{ const base=Number(rows[0][key]); const vals=rows.map(r=>Number(r[key])/base*100); const min=Math.min(...vals), max=Math.max(...vals); return {{vals,min,max}}; }}
+function renderChart(r='all'){{ currentRange=r; document.querySelectorAll('#ranges button').forEach(b=>b.classList.toggle('on',b.dataset.r===r)); let rows=rangeRows(r); if(rows.length>500) rows=rows.filter((_,i)=>i%Math.ceil(rows.length/360)===0 || i===rows.length-1); if(rows.length<2) return; const m=makePts(rows,'model'), v=makePts(rows,'vni'); const mPct=m.vals.map(x=>x-100), vPct=v.vals.map(x=>x-100); const lo=Math.min(...mPct,...vPct), hi=Math.max(...mPct,...vPct); const niceStep=(span,n)=>{{ const raw=Math.max(span,1)/n; const mag=Math.pow(10,Math.floor(Math.log10(raw))); const norm=raw/mag; return (norm>=5?10:norm>=2?5:norm>=1?2:1)*mag; }}; const step=niceStep((hi-lo)*1.16,4); const min=Math.floor((lo-(hi-lo)*.08)/step)*step, max=Math.ceil((hi+(hi-lo)*.08)/step)*step; const x0=16,x1=804,y0=214,y1=18; const xy=(val,i)=>{{ const x=x0+i/(rows.length-1)*(x1-x0); const y=y0-(val-min)/(max-min)*(y0-y1); return [x,y]; }}; document.getElementById('modelLine').setAttribute('points',mPct.map((val,i)=>xy(val,i).join(',')).join(' ')); document.getElementById('vniLine').setAttribute('points',vPct.map((val,i)=>xy(val,i).join(',')).join(' ')); document.getElementById('chartVal').textContent=(mPct[mPct.length-1]>=0?'+':'')+f(mPct[mPct.length-1],1)+'%'; document.getElementById('chartSub').textContent='Model '+(mPct[mPct.length-1]>=0?'+':'')+f(mPct[mPct.length-1],1)+'% · VN-Index '+(vPct[vPct.length-1]>=0?'+':'')+f(vPct[vPct.length-1],1)+'% · từ đầu kỳ'; document.getElementById('chartDates').textContent=rows[0].date+' → '+rows[rows.length-1].date; const ticks=[]; for(let val=max; val>=min-1e-9; val-=step) ticks.push(val); document.getElementById('grid').innerHTML=ticks.map(t=>{{ const y=xy(t,0)[1]; return `<line x1="${{x0}}" x2="${{x1}}" y1="${{y}}" y2="${{y}}" stroke="var(--soft)" stroke-width="1"/>`; }}).join(''); document.getElementById('yLabels').innerHTML=ticks.map(t=>`<span>${{t>=0?'+':''}}${{f(t,0)}}%</span>`).join(''); document.getElementById('xLabels').innerHTML=[0,1,2,3,4].map(i=>{{ const idx=Math.floor(i*(rows.length-1)/4); return `<span>${{rows[idx].date.slice(5,7)}}/${{rows[idx].date.slice(2,4)}}</span>`; }}).join(''); const svg=document.getElementById('chart'), cross=document.getElementById('cross'), tip=document.getElementById('tip'); svg.onmousemove=e=>{{ const rect=svg.getBoundingClientRect(); const mx=(e.clientX-rect.left)*820/rect.width; let best=0,dist=1e9; rows.forEach((row,i)=>{{ const p=xy(mPct[i],i); const d=Math.abs(p[0]-mx); if(d<dist){{dist=d;best=i;}} }}); const p=xy(mPct[best],best), pv=xy(vPct[best],best); cross.setAttribute('x1',p[0]); cross.setAttribute('x2',p[0]); cross.setAttribute('opacity','1'); tip.style.display='block'; tip.style.left=(p[0]/820*rect.width+62)+'px'; tip.style.top=(Math.min(p[1],pv[1])/236*rect.height+4)+'px'; tip.innerHTML=`<div class="d">${{rows[best].date}}</div><div class="r"><span>Model</span><b>${{mPct[best]>=0?'+':''}}${{f(mPct[best],2)}}%</b></div><div class="r"><span>VN-Index</span><b>${{vPct[best]>=0?'+':''}}${{f(vPct[best],2)}}%</b></div>`; }}; svg.onmouseleave=()=>{{ cross.setAttribute('opacity','0'); tip.style.display='none'; }}; }}
+document.querySelectorAll('#ranges button').forEach(b=>b.addEventListener('click',()=>renderChart(b.dataset.r))); renderChart('all');
+let ledgerPage=1, ledgerQ=''; const PAGE=50;
+function renderLedger(){{ const q=ledgerQ.toLowerCase(); const rows=q?D.ledger.filter(r=>Object.values(r).some(v=>String(v??'').toLowerCase().includes(q))):D.ledger; const pages=Math.max(1,Math.ceil(rows.length/PAGE)); if(ledgerPage>pages) ledgerPage=pages; const slice=rows.slice((ledgerPage-1)*PAGE,ledgerPage*PAGE); document.getElementById('ledgerCount').textContent=rows.length+' lệnh'; document.getElementById('ledgerBody').innerHTML=slice.map(r=>`<tr><td>${{esc(r.date)}}</td><td><strong>${{esc(r.symbol)}}</strong></td><td>${{pill(r.actionLabel||r.side)}}</td><td class="num">${{f(r.shares,0)}}</td><td class="num">${{r.executionPriceK?f(r.executionPriceK,2)+'k':'-'}}</td><td class="num">${{r.grossBil?f(Number(r.grossBil)*1000,1)+' tr':'-'}}</td><td class="num">${{r.tradeWeightPct==null?'-':wp(r.tradeWeightPct,1)}}</td><td class="num ${{cls(r.pnlBil)}}">${{r.pnlBil==null?'-':money(Number(r.pnlBil)*1000)}}</td><td class="num">${{r.holdDays==null?'-':f(r.holdDays,0)+' ngày'}}</td><td>${{esc(r.reason)}}</td></tr>`).join(''); const start=Math.max(1,ledgerPage-2), end=Math.min(pages,ledgerPage+2); let html=`<button onclick="ledgerPage=1;renderLedger()">«</button>`; for(let p=start;p<=end;p++) html+=`<button class="${{p===ledgerPage?'on':''}}" onclick="ledgerPage=${{p}};renderLedger()">${{p}}</button>`; html+=`<button onclick="ledgerPage=${{pages}};renderLedger()">»</button>`; document.getElementById('pager').innerHTML=html; }}
+document.getElementById('ledgerSearch').addEventListener('input',e=>{{ledgerQ=e.target.value; ledgerPage=1; renderLedger();}}); renderLedger();
+</script>
+</body>
+</html>"""
+
+out = args.out
+if not out.is_absolute():
+    out = ROOT / out
+out.parent.mkdir(parents=True, exist_ok=True)
+out.write_text(html, encoding="utf-8")
+print(f"Wrote {out}")
+print(f"Data: holdings={len(holdings)}, watchlist={len(watchlist_rows)}, ledger={len(ledger_rows)}, chart={len(chart_rows)}")
+print(f"Regime: {regime_label} | paper_status: {paper_status} | flags: {len(data_flags)}")
+for fl in data_flags:
+    print("  FLAG:", fl)
+print(f"Paper: {paper_symbol} {paper_shares} @ {paper_signal_px} -> {paper_fresh_px} ({paper_quote.get('date')})")
