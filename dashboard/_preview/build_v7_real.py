@@ -375,6 +375,7 @@ model_summary_cards = [
 ]
 forecast_date = next_monday(live_status.get("latestPriceDate") or signal_w1.get("execution_date"))
 planned_symbols = {str(row.get("symbol", "")).upper() for row in planned_rows}
+starter_weight_pct = as_float(signal_w1.get("exposure_pct"), 5.5) or 5.5
 forecast_rows = [{
     "displayPlanDate": forecast_date,
     "planDate": row.get("planDate"),
@@ -393,19 +394,24 @@ forecast_rows = [{
 for row in watchlist_rows:
     if row["bucket"] != "BUY_SOON" or row["symbol"] in planned_symbols:
         continue
+    current_price = as_float(row.get("currentPrice"))
+    starter_shares = None
+    if current_price and current_price > 0:
+        starter_shares = int(math.floor((1000 * starter_weight_pct / 100) * 1000 / current_price / 100) * 100)
     forecast_rows.append({
         "displayPlanDate": forecast_date,
         "planDate": forecast_date,
         "symbol": row["symbol"],
         "action": "MUA DỰ KIẾN",
         "status": "TẠM TÍNH",
-        "currentPrice": row.get("currentPrice"),
+        "currentPrice": current_price,
         "targetPrice": row.get("targetPrice"),
         "stopPrice": row.get("stopPrice"),
         "currentCopyShares": None,
-        "targetCopyShares": None,
-        "orderShares": None,
-        "note": "Đạt gate theo giá hiện tại; chờ dữ liệu close thứ 6 để chốt lệnh.",
+        "targetCopyShares": starter_shares,
+        "orderShares": starter_shares,
+        "targetWeightPct": starter_weight_pct,
+        "note": f"Đạt gate theo giá hiện tại; KL tạm tính theo tỷ trọng khởi tạo {fmt_num(starter_weight_pct, 1)}% NAV copy, chờ close thứ 6 để chốt.",
     })
 
 planned_public = {
@@ -490,9 +496,12 @@ html = f"""<!doctype html>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Ez Trading</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap&subset=vietnamese" rel="stylesheet" />
 <style>
 :root {{
-  --font: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font: "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, sans-serif;
   --bg:#f6f8fa; --surface:#fff; --surface2:#f6f8fa; --border:#d0d7de; --soft:#eaeef2;
   --text:#0f172a; --muted:#64748b; --muted2:#94a3b8; --accent:#0969da; --green:#1a7f37; --red:#cf222e; --amber:#9a6700; --violet:#8250df;
   --greenSoft:#dafbe1; --redSoft:#ffebe9; --blueSoft:#ddf4ff; --amberSoft:#fff8c5;
