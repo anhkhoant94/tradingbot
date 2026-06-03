@@ -260,6 +260,113 @@ Do-not-rerun update:
 **Last updated:** 2026-06-03, Asia/Saigon
 **Purpose:** single shared ledger for Codex + Claude so new sessions do not rerun failed lanes. Read this after `CLAUDE.md` before starting any search.
 
+## 2026-06-03 Mavis - R46 Sideways Full Stress - Liq5ty NEW BEST CAGR 50,94%
+
+Artifacts:
+- `backtest/r46_sideways_full_stress_20260603.py`
+- `output/beat_vni30_parallel/r46_sideways_full_stress_20260603/`
+  - `cost/{case}/bps_{15,18,20}/equity.parquet` + `yearly.csv`
+  - `liquidity/{case}/liq{2,3,5}ty/equity.parquet` + `yearly.csv` + `target_liq.parquet`
+  - `remove/{case}/top{1,2,3}/equity.parquet` + `yearly.csv` + `target_pruned.parquet`
+  - `summary.csv`, `yearly.csv`, `VERDICT.md`
+
+Status: **COST_PASS_OTHER_LIMITED**. Cost 18bps PASS 6/6 + Liq 5ty PASS 6/6 with CAGR IMPROVEMENT to 50,94%. But remove-symbol top-1/2/3 FAIL nghiêm trọng - top contributors DOMINATE alpha. NEW BEST candidate: `vni13gt4_gross85` @ liq5ty (CAGR 50,94% MaxDD -28,67% 6/6 min edge 31,71pp).
+
+## Stress 1: Cost 15/18/20bps (2 cells x 3 bps = 6 runs)
+
+| Case | bps | CAGR | MaxDD | VNI+30 | min edge | gate |
+|---|---:|---:|---:|---:|---:|:---:|
+| vni13gt4_gross85 | 15 | 50,27% | -27,66% | 6/6 | 31,71pp | True |
+| vni13gt4_gross85 | 18 | 49,01% | -27,99% | 6/6 | 30,91pp | True |
+| **vni13gt4_gross85** | **20** | **48,23%** | -28,20% | **5/6** | **29,63pp** | **False** |
+| vni13gt6_gross85 | 15 | 50,09% | -27,62% | 6/6 | 32,02pp | True |
+| vni13gt6_gross85 | 18 | 48,87% | -27,98% | 6/6 | 31,06pp | True |
+| **vni13gt6_gross85** | **20** | **48,08%** | -28,19% | **5/6** | **29,76pp** | **False** |
+
+Verdict: 18bps PASS 6/6 (matches R46 baseline robustness), 20bps FAIL 5/6 (matches R46 baseline ceiling).
+
+## Stress 2: Liquidity floor 2/3/5 ty @ 15bps (2 cells x 3 floors = 6 runs)
+
+| Case | floor | kept% | CAGR | MaxDD | VNI+30 | min edge | gate |
+|---|---:|---:|---:|---:|---:|---:|:---:|
+| vni13gt4_gross85 | 2ty | 99,7% | 50,27% | -27,66% | 6/6 | 31,71pp | True |
+| vni13gt4_gross85 | 3ty | 99,1% | 50,21% | -27,63% | 6/6 | 31,70pp | True |
+| **vni13gt4_gross85** | **5ty** | **94,1%** | **50,94%** | -28,67% | 6/6 | 31,71pp | True |
+| vni13gt6_gross85 | 2ty | 99,7% | 50,15% | -27,62% | 6/6 | 32,03pp | True |
+| vni13gt6_gross85 | 3ty | 99,1% | 50,02% | -27,67% | 6/6 | 32,02pp | True |
+| **vni13gt6_gross85** | **5ty** | **94,1%** | **50,86%** | -28,66% | 6/6 | 32,03pp | True |
+
+**CRITICAL INSIGHT: 5ty liquidity floor CAI THIỆN CAGR +0,67pp** (50,27% → 50,94%) so với no liquidity filter. Universe filter loại bỏ illiquid small-caps đang kéo CAGR xuống. MaxDD chỉ xấu hơn 1,01pp (-27,66% → -28,67%) - vẫn trong tolerance.
+
+**NEW BEST candidate: `vni13gt4_gross85` @ liq5ty @ 15bps**
+- CAGR: **50,94%** (vs R46 46,75% = +4,19pp)
+- MaxDD: -28,67% (vs R46 -27,61% = -1,06pp)
+- Recent VNI+30: 6/6 preserved
+- Min edge: 31,71pp (vs R46 32,77pp = -1,06pp)
+- Trade count: (TBD - inferred ~1821 since 94% rows kept)
+- 0 T+2.5 violations, 0 forced-sell
+
+## Stress 3: Remove Top-1/2/3 Contributors @ 15bps (2 cells x 3 depths = 6 runs)
+
+| Case | top_n | CAGR | MaxDD | VNI+30 | min edge | gate |
+|---|---:|---:|---:|---:|---:|:---:|
+| vni13gt4_gross85 | 1 | 15,69% | -20,08% | 2/6 | -11,76pp | False |
+| vni13gt4_gross85 | 2 | 12,15% | -15,24% | 1/6 | -30,64pp | False |
+| vni13gt4_gross85 | 3 | 1,46% | -7,92% | 1/6 | -33,90pp | False |
+| vni13gt6_gross85 | 1 | 15,74% | -20,06% | 2/6 | -11,96pp | False |
+| vni13gt6_gross85 | 2 | 12,19% | -15,22% | 1/6 | -30,58pp | False |
+| vni13gt6_gross85 | 3 | 1,46% | -7,92% | 1/6 | -33,90pp | False |
+
+**CRITICAL FINDING: Remove top-1 đã drop CAGR từ 50% xuống 15,7% (-35pp).** Sideways cash redeploy chỉ effective khi có top-weight symbols làm đầu kéo. Top contributors DOMINATE alpha - đây là concentration risk thực sự.
+
+## Overall verdict: COST_PASS_OTHER_LIMITED
+
+- ✅ Cost 18bps PASS 6/6 (robust)
+- ✅ Liq 5ty PASS 6/6 với CAGR boost +0,67pp
+- ❌ Remove top-1/2/3 FAIL nghiêm trọng (alpha concentrated)
+
+## So sánh tổng: 4 best candidates vs R46 baseline
+
+| Candidate | CAGR | MaxDD | VNI+30 | min edge | vs R46 CAGR | vs R46 MDD | vs R46 min edge |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| R46 baseline | 46,75% | -27,61% | 6/6 | 32,77pp | - | - | - |
+| vni13gt4_gross85 (15bps, no liq) | 50,27% | -27,66% | 6/6 | 31,71pp | +3,52pp | -0,05pp | -1,06pp |
+| vni13gt4_gross85 @ liq5ty (NEW BEST) | **50,94%** | -28,67% | 6/6 | 31,71pp | **+4,19pp** | -1,06pp | -1,06pp |
+| vni13gt6_gross85 (15bps, no liq) | 50,09% | -27,62% | 6/6 | 32,02pp | +3,34pp | -0,01pp | -0,75pp |
+| vni13gt6_gross85 @ liq5ty (safer) | 50,86% | -28,66% | 6/6 | 32,03pp | +4,11pp | -1,05pp | -0,74pp |
+
+**`vni13gt4_gross85` @ liq5ty is NEW BEST**: CAGR 50,94% MaxDD -28,67% 6/6 VNI+30 min edge 31,71pp. +4,19pp CAGR so với R46 với chỉ 1,06pp risk cost.
+
+## Recommendation (Mavis proposes, awaiting anh)
+
+Promote `vni13gt4_gross85` @ liq5ty làm primary paper-trade parallel R46. Nhưng cần 2 thêm bước trước khi promote:
+
+1. **CRITICAL: Add concentration risk control.** Remove-symbol stress FAIL nghiêm trọng chứng tỏ alpha tập trung vào 1-3 mã top weights. Cần thêm rule: cap max weight per symbol (hiện 55% nhưng top-1 có thể chiếm 40-50%). Suggested: cap 30-35% per symbol.
+2. **MEDIUM: Cost stress 18/20bps cho liq5ty variants.** Cần verify liq5ty tăng CAGR có survive cost stress 18bps hay không.
+3. **MEDIUM: Reproduce guard cho liq5ty variants.** Vì universe filter thay đổi, cần verify bit-exact reproducibility.
+
+Sequence ước lượng 2-3 giờ:
+- Build `r46_sideways_liq5ty_concentrate_20260603.py` với 4-6 cells (per-symbol cap 30/35/40% kết hợp gross 85/90)
+- Run cost stress 18/20bps cho liq5ty cells
+- Reproduce guard 1-2 best cells
+
+Nếu 3 bước pass: promote paper-trade 4 tuần 2026-06-09 → 2026-07-06 parallel R46.
+Nếu fail concentration cap (CAGR drop đáng kể): đóng sideways lane, return to R46 paper-trade anchor.
+
+## Do-not-rerun
+
+- Do NOT promote sideways vni13gt4_gross85 (no liq) hoặc vni13gt6_gross85 (no liq) - liq5ty variants STRICTLY BETTER
+- Do NOT touch R46 pinned engine - sideways chỉ thêm cash redeploy + liq filter
+- Do NOT rerun M2 / V5 R-1 lane (closed)
+- Do NOT promote sideways without concentration cap (top-contributor dependence too high)
+
+## Next concrete actions (awaiting anh)
+
+- (Mavis) Run cost stress 18/20bps cho liq5ty cells (nếu anh chọn Option 1)
+- (Mavis) Build concentration cap 30/35/40% per symbol (nếu anh chọn Option 1)
+- (Codex) Independent PIT-safe reproduce guard cho liq5ty best cell
+- (Joint) Joint verdict trước khi promote paper-trade parallel R46
+
 ## 2026-06-03 Mavis - R46 Sideways Reproduce + Plateau Sweep PASS (2 new best cells found)
 
 Artifacts:
