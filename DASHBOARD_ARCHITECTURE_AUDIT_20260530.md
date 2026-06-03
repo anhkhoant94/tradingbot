@@ -4,7 +4,7 @@
 
 ## 1. Trạng thái hiện tại (snapshot 2026-05-30 11:00 ICT)
 
-Public dashboard: `https://trading-execution-desk-khoa.vercel.app/`
+Public dashboard: `https://ez-trading.vercel.app/`
 
 | Endpoint | Giá trị hiện tại | Trạng thái |
 |---|---|---|
@@ -49,7 +49,7 @@ Kết luận sơ bộ: workflow `dashboard-auto-refresh.yml` chạy thành công
    generate_deep_analysis.py     ──> dashboard/analysis.js     (đọc trades/holdings policies)
    generate_model_history.py     ──> dashboard/history.js      (đọc equity_curve_honest)
    tools/deploy_vercel_dashboard.py ──> Vercel REST API upload
-        └─ alias https://trading-execution-desk-khoa.vercel.app
+        └─ alias https://ez-trading.vercel.app
 
 [F. CI/CD — đã cloud (partial)]
    .github/workflows/dashboard-auto-refresh.yml
@@ -79,7 +79,7 @@ Kết luận sơ bộ: workflow `dashboard-auto-refresh.yml` chạy thành công
 - Holdings P&L recompute (giá vốn từ trades.parquet, giá TT từ live cache)
 - Dashboard re-deploy lên Vercel sau mỗi workflow run
 - VN-Index history merge vào dashboard `history.js`
-- Vercel alias `trading-execution-desk-khoa.vercel.app` ổn định 24/7
+- Vercel alias `ez-trading.vercel.app` ổn định 24/7
 
 ## 5. Cost & quota hiện tại
 
