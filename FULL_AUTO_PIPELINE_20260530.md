@@ -18,10 +18,10 @@
             [GitHub repo anhkhoant94/tradingbot]
                        |
                        v
-            [Vercel project trading-execution-desk-khoa]
+            [Vercel project ez-trading]
                        |
                        v
-            https://trading-execution-desk-khoa.vercel.app
+            https://ez-trading.vercel.app
 ```
 
 ## 2. Workflow files đã tạo
@@ -100,7 +100,7 @@ Tổng size cp68 = 15 MB, VNI = 40 KB → ổn cho repo. Nếu anh không muốn
 
 Sau khi push lên main, anh hoặc Codex bấm Manual workflow_dispatch:
 
-1. `dashboard-auto-refresh.yml` → verify `https://trading-execution-desk-khoa.vercel.app/data.js` đổi sang `as_of=2026-05-29`
+1. `dashboard-auto-refresh.yml` → verify `https://ez-trading.vercel.app/data.js` đổi sang `as_of=2026-05-29`
 2. `screening-weekly.yml` → verify `output/screening_summary.json` được commit với `as_of=2026-05-30` (hoặc ngày trigger)
 3. `weekly-signal.yml` → verify thư mục `output/live_signals/<date>/briefing.md` mới được commit
 4. `bctc-monthly.yml` → manual dispatch với `sample_size=5` để test nhanh, verify 5 file .parquet được update trong `.cache/backtest/cp68/`
@@ -124,7 +124,7 @@ Sau khi 4 workflow trên active:
 - Weekly signal Monday orders: AUTO (Chủ Nhật)
 - Dashboard deploy Vercel: AUTO (sau mỗi commit + cron 5p)
 
-Còn lại 0 thao tác manual. Anh chỉ cần mở `https://trading-execution-desk-khoa.vercel.app` xem signal sáng thứ Hai và đặt lệnh thủ công (vì broker SSI/VPS không cho phép API trade tự động cho cá nhân — đây là rào cản pháp lý, không phải kỹ thuật).
+Còn lại 0 thao tác manual. Anh chỉ cần mở `https://ez-trading.vercel.app` xem signal sáng thứ Hai và đặt lệnh thủ công (vì broker SSI/VPS không cho phép API trade tự động cho cá nhân — đây là rào cản pháp lý, không phải kỹ thuật).
 
 ## 8. Edge cases + rollback
 
