@@ -2,7 +2,7 @@
 
 ## Latest Diagnosis 2026-05-29
 
-- Public dashboard URL: `https://trading-execution-desk-khoa.vercel.app/`.
+- Public dashboard URL: `https://ez-trading.vercel.app/`.
 - GitHub Actions runs are reported as successful, but the public URL is still stale:
   - `/data.js` is still `as_of=2026-05-21`.
   - `/dashboard_live_update_status.json` is still `updatedAt=2026-05-28 18:38:03`.
@@ -25,8 +25,8 @@ Required secret:
 
 Required variables:
 
-- `VERCEL_PROJECT=trading-execution-desk-khoa`
-- `VERCEL_PUBLIC_URL=https://trading-execution-desk-khoa.vercel.app`
+- `VERCEL_PROJECT=ez-trading`
+- `VERCEL_PUBLIC_URL=https://ez-trading.vercel.app`
 
 Optional, only if the Vercel project is under a team:
 
@@ -47,8 +47,8 @@ The workflow `.github/workflows/dashboard-auto-refresh.yml` must:
 The local patched workflow uses:
 
 - schedule: `2-59/5 * * * *`
-- default project: `trading-execution-desk-khoa`
-- freshness URL: `https://trading-execution-desk-khoa.vercel.app`
+- default project: `ez-trading`
+- freshness URL: `https://ez-trading.vercel.app`
 
 ## Verification
 
@@ -64,4 +64,4 @@ Expected:
 - `live_latest_price_date=2026-05-29` or current trading date
 - `/data.js` no longer stuck at `2026-05-21`
 
-If the workflow is green but this check still fails, inspect Vercel project/team alias routing and force redeploy the project that owns `trading-execution-desk-khoa.vercel.app`.
+If the workflow is green but this check still fails, inspect Vercel project/team alias routing and force redeploy the project that owns `ez-trading.vercel.app`.
