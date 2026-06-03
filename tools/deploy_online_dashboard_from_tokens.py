@@ -49,6 +49,7 @@ FILES_TO_PUSH = [
     "dashboard/history.js",
     "dashboard/index.html",
     "dashboard/styles.css",
+    "dashboard/_preview/build_v7_real.py",
     "update_dashboard_live_data.py",
     "run_stock_screen.py",
     "backtest/__init__.py",
@@ -173,6 +174,7 @@ def build_dashboard() -> None:
     run_step([sys.executable, "generate_deep_analysis.py"])
     run_step([sys.executable, "generate_model_history.py"])
     run_step([sys.executable, "generate_dashboard_data.py"])
+    run_step([sys.executable, "dashboard/_preview/build_v7_real.py", "--out", "dashboard/index.html"])
 
 
 def deploy_vercel(secrets: dict) -> None:
