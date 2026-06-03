@@ -4475,3 +4475,16 @@ Verification:
 - `https://ez-trading.vercel.app` returns 200 with title `Ez Trading`.
 - `https://trading-execution-desk-khoa.vercel.app` returns 404 `DEPLOYMENT_NOT_FOUND`.
 - `tools/check_dashboard_public_health.py --require-fresh-live --require-vni-history` passes against Ez.
+
+2026-06-03 Codex - Dashboard forecast sizing and Vietnamese font polish.
+
+Changes:
+- Replaced Inter with `Be Vietnam Pro` via Google Fonts Vietnamese subset. Keep one CSS font family only; no JetBrains/monospace.
+- Monday forecast BUY_SOON rows now receive a provisional copy quantity using the week-1 paper exposure as starter weight (currently 5.51% NAV copy), rounded down to 100-share lots.
+- VIX forecast at NAV copy 1 tỷ now shows 3,000 shares at current price 18.05k, target 23.465k, stop 15.884k.
+- Forecast note is Vietnamese-only: `tỷ trọng khởi tạo`, no English `starter sleeve`.
+- Forecast date column is no-wrap to avoid breaking `2026-06-08`.
+
+Verification:
+- Public `https://ez-trading.vercel.app` HTML: `Be Vietnam Pro` 1, `Inter` 0, `JetBrains` 0, `monospace` 0, `orderShares: 3000` 1.
+- Public health check passes and final screenshot saved at `dashboard/_preview/online-vix-font-final-nowrap.png`.
