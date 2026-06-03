@@ -13,7 +13,7 @@ Example secret JSON:
   "vercel_token": "...",
   "repo": "anhkhoant94/tradingbot",
   "branch": "main",
-  "vercel_project": "trading-execution-desk-khoa",
+  "vercel_project": "ez-trading",
   "vercel_public_url": "https://ez-trading.vercel.app"
 }
 """
@@ -78,7 +78,7 @@ def load_secrets() -> dict:
     data = json.loads(SECRET_PATH.read_text(encoding="utf-8-sig"))
     data.setdefault("repo", "anhkhoant94/tradingbot")
     data.setdefault("branch", "main")
-    data.setdefault("vercel_project", "trading-execution-desk-khoa")
+    data.setdefault("vercel_project", "ez-trading")
     data.setdefault("vercel_public_url", "https://ez-trading.vercel.app")
     missing = [k for k in ["github_token", "vercel_token"] if not data.get(k)]
     if missing:
@@ -214,13 +214,26 @@ def deploy_vercel(secrets: dict) -> None:
     deploy_id = deployment.get("id")
     public_host = urllib.parse.urlparse(secrets["vercel_public_url"]).netloc
     if deploy_id and public_host:
-        vercel_json(
-            "POST",
-            f"/v2/deployments/{deploy_id}/aliases",
-            secrets,
-            {"alias": public_host, "redirect": None},
-        )
-        print(f"assigned alias https://{public_host} -> {deploy_id}")
+        aliases = [
+            urllib.parse.urlparse(url).netloc
+            for url in deployment.get("aliases", [])
+            if urllib.parse.urlparse(url).netloc
+        ]
+        if public_host in aliases:
+            print(f"alias already assigned https://{public_host} -> {deploy_id}")
+        else:
+            try:
+                vercel_json(
+                    "POST",
+                    f"/v2/deployments/{deploy_id}/aliases",
+                    secrets,
+                    {"alias": public_host, "redirect": None},
+                )
+                print(f"assigned alias https://{public_host} -> {deploy_id}")
+            except RuntimeError as exc:
+                if "not_modified" not in str(exc):
+                    raise
+                print(f"alias already assigned https://{public_host} -> {deploy_id}")
 
 
 def verify_public() -> None:
