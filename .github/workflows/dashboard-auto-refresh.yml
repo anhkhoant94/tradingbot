@@ -86,6 +86,10 @@ jobs:
           print(f"dashboard/history.js VN-Index points: {count}")
           PY
 
+      - name: Build v7 static dashboard
+        working-directory: ${{ github.workspace }}
+        run: python dashboard/_preview/build_v7_real.py --out dashboard/index.html
+
       - name: Deploy dashboard to Vercel
         run: python tools/deploy_vercel_dashboard.py --dashboard-dir dashboard --target production --wait
 
