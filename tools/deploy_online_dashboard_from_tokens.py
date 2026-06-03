@@ -59,6 +59,7 @@ FILES_TO_PUSH = [
     "tools/deploy_vercel_dashboard.py",
     "tools/deploy_online_dashboard_from_tokens.py",
     "ONLINE_AUTO_REFRESH_SETUP.md",
+    "AI_SHARED_RESEARCH_LEDGER.md",
     "requirements.txt",
     "DASHBOARD_ARCHITECTURE_AUDIT_20260530.md",
     "FULL_AUTO_PIPELINE_20260530.md",
