@@ -5,6 +5,7 @@ const nf = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 });
 const nf0 = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 });
 const LIVE_STATUS_FILE = "./dashboard_live_update_status.json";
 const portfolioStorageKey = "hose_hnx_portfolio_v1";
+const themeStorageKey = "hose_hnx_dashboard_theme";
 const PERFORMANCE_START_DATE = "2021-01-01";
 const LIVE_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const BUNDLED_LIVE_STALE_MS = 15 * 60 * 1000;
@@ -31,6 +32,19 @@ if (storedVersion !== DASHBOARD_VERSION) {
 const storedStrategyMode = localStorage.getItem("hose_hnx_strategy_mode");
 let strategyMode = storedStrategyMode || deep.defaultPolicy || ACTIVE_POLICY_KEYS[0];
 let resizeRenderTimer = null;
+
+function setDashboardTheme(theme) {
+  const resolved = theme === "light" ? "light" : "dark";
+  document.documentElement.dataset.theme = resolved;
+  localStorage.setItem(themeStorageKey, resolved);
+  document.querySelectorAll(".theme-option").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.themeValue === resolved);
+    btn.setAttribute("aria-pressed", btn.dataset.themeValue === resolved ? "true" : "false");
+  });
+  setTimeout(renderPerformanceChart, 0);
+}
+
+setDashboardTheme(document.documentElement.dataset.theme || localStorage.getItem(themeStorageKey) || "dark");
 // Force-upgrade legacy strategy modes to the current champion default
 const LEGACY_MODES_TO_UPGRADE = [
   "phase18_meanreversion_boost",
@@ -51,7 +65,8 @@ if (!ACTIVE_POLICY_KEYS.includes(strategyMode)) {
   strategyMode = ACTIVE_POLICY_KEYS.includes(deep.defaultPolicy) ? deep.defaultPolicy : ACTIVE_POLICY_KEYS[0];
   localStorage.setItem("hose_hnx_strategy_mode", strategyMode);
 }
-let performanceRange = localStorage.getItem("hose_hnx_performance_range") || "all";
+const initialUrlParams = new URLSearchParams(window.location.search);
+let performanceRange = initialUrlParams.get("range") || localStorage.getItem("hose_hnx_performance_range") || "all";
 const memoBySymbol = new Map((deep.memos || []).map((item) => [String(item.symbol || "").toUpperCase(), item]));
 const stockBySymbol = new Map((data.all || []).map((item) => [String(item.symbol || "").toUpperCase(), item]));
 
@@ -68,6 +83,27 @@ function esc(value) {
     "\"": "&quot;",
     "'": "&#39;"
   })[char]);
+}
+
+function cssColor(name, fallback) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+}
+
+function chartPalette() {
+  return {
+    grid: cssColor("--chart-grid", "#263241"),
+    gridSoft: cssColor("--chart-grid-soft", "rgba(142, 160, 180, 0.16)"),
+    muted: cssColor("--chart-muted", "#8d9aaa"),
+    text: cssColor("--chart-text", "#edf3f8"),
+    zero: cssColor("--chart-zero", "rgba(238, 245, 251, 0.72)"),
+    model: cssColor("--chart-model", "#29d391"),
+    vni: cssColor("--chart-vni", "#6aa7ff"),
+  };
+}
+
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
 }
 
 function n(value, fallback = 0) {
@@ -490,12 +526,30 @@ function renderKpis() {
   document.getElementById("asOf").textContent = liveClock
     ? `Giá đến ${liveDate || marketDate} lúc ${liveClock}`
     : `Giá đến ${marketDate}`;
+  const policyLabel = policyName(policy);
+  const cagrText = perf ? `${f(perf.cagr)}%` : (audit ? `${f(audit.cagr)}%` : "-");
+  const maxDdText = perf ? `${f(perf.maxDrawdown)}%` : (audit ? `${f(audit.maxDrawdown)}%` : "-");
+  const pnlText = `${asset.gainPct >= 0 ? "+" : ""}${f(asset.gainPct)}%`;
+  const minEdgeText = audit && Number.isFinite(Number(audit.minEdgeVsVni)) ? `+${f(audit.minEdgeVsVni)} pp` : "-";
+  const yearsText = audit && Number.isFinite(Number(audit.passVni30)) ? `${f(audit.passVni30, 0)}/6` : "-";
+  setText("sidePolicy", policyLabel);
+  setText("sideCash", `${holdings.length} mã · Cash ${f(cashPct)}%`);
+  setText("sideHoldingsCount", String(holdings.length));
+  setText("heroPolicy", policyLabel);
+  setText("heroNav", moneyMilLabel(asset.currentAssetMil));
+  setText("heroPnl", pnlText);
+  setText("heroEdge", minEdgeText);
+  setText("heroYears", yearsText);
+  setText("heroCagr", cagrText);
+  setText("heroMdd", maxDdText);
+  setText("heroHoldings", `${holdings.length} mã`);
+  setText("heroCash", `${f(cashPct)}%`);
   document.getElementById("kpis").innerHTML = [
-    ["Policy", policyName(policy)],
+    ["Policy", policyLabel],
     ["Tài sản", moneyMilLabel(asset.currentAssetMil)],
-    ["Lãi/lỗ", `${asset.gainPct >= 0 ? "+" : ""}${f(asset.gainPct)}%`],
-    [`CAGR ${perfWindow}`, perf ? `${f(perf.cagr)}%` : (audit ? `${f(audit.cagr)}%` : "-")],
-    [`MaxDD ${perfWindow}`, perf ? `${f(perf.maxDrawdown)}%` : (audit ? `${f(audit.maxDrawdown)}%` : "-")],
+    ["Lãi/lỗ", pnlText],
+    [`CAGR ${perfWindow}`, cagrText],
+    [`MaxDD ${perfWindow}`, maxDdText],
     ["Vị thế / Cash", `${holdings.length} mã / ${f(cashPct)}%`]
   ].map(([label, value, note]) => `
     <article class="kpi">
@@ -680,6 +734,7 @@ async function triggerUpdate(mode) {
 function drawBarChart(canvasId, rows, colors) {
   const canvas = document.getElementById(canvasId);
   const ctx = canvas.getContext("2d");
+  const palette = chartPalette();
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
   canvas.width = rect.width * dpr;
@@ -690,7 +745,7 @@ function drawBarChart(canvasId, rows, colors) {
   const pad = 34;
   const max = Math.max(...rows.map((r) => r.value), 1);
   ctx.clearRect(0, 0, width, height);
-  ctx.font = "12px Segoe UI";
+  ctx.font = "12px Inter, sans-serif";
   rows.forEach((row, i) => {
     const barW = (width - pad * 2) / rows.length - 16;
     const x = pad + i * ((width - pad * 2) / rows.length) + 8;
@@ -698,10 +753,10 @@ function drawBarChart(canvasId, rows, colors) {
     const y = height - pad - h;
     ctx.fillStyle = colors[i % colors.length];
     ctx.fillRect(x, y, barW, h);
-    ctx.fillStyle = "#8d9aaa";
+    ctx.fillStyle = palette.muted;
     ctx.textAlign = "center";
     ctx.fillText(row.name, x + barW / 2, height - 12);
-    ctx.fillStyle = "#edf3f8";
+    ctx.fillStyle = palette.text;
     ctx.fillText(row.value, x + barW / 2, y - 7);
   });
 }
@@ -724,6 +779,22 @@ function chartTickLabel(date, range) {
   return `${mm}/${yy}`;
 }
 
+function chartDateTicks(points, range, width) {
+  const valid = (points || [])
+    .filter((point) => point.date && Number.isFinite(new Date(point.date).getTime()))
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+  if (!valid.length) return [];
+  const start = new Date(valid[0].date);
+  const end = new Date(valid[valid.length - 1].date);
+  const tickCount = Math.min(chartTickCount(range, width), valid.length);
+  if (tickCount <= 1) return [valid[0]];
+  const step = (end.getTime() - start.getTime()) / (tickCount - 1);
+  return Array.from({ length: tickCount }, (_, i) => {
+    const target = start.getTime() + step * i;
+    return nearestPoint(valid, (target - start.getTime()) / Math.max(1, end.getTime() - start.getTime()));
+  }).filter(Boolean);
+}
+
 function nearestPoint(points, x) {
   if (!points.length) return null;
   return points.reduce((best, point) => (
@@ -740,6 +811,7 @@ function installChartTooltip(canvas, series, helpers, options = {}) {
     tooltip.className = "chart-tooltip";
     host.appendChild(tooltip);
   }
+  tooltip.hidden = true;
   let crosshair = document.getElementById("performanceCrosshair");
   if (!crosshair) {
     crosshair = document.createElement("div");
@@ -747,6 +819,7 @@ function installChartTooltip(canvas, series, helpers, options = {}) {
     crosshair.className = "chart-crosshair";
     host.appendChild(crosshair);
   }
+  crosshair.hidden = true;
   const modelPoints = series[0]?.points || [];
   const vniPoints = series[1]?.points || [];
   const { padL, padR, padT, plotW, plotH, xFor } = helpers;
@@ -759,9 +832,11 @@ function installChartTooltip(canvas, series, helpers, options = {}) {
     const hostRect = host.getBoundingClientRect();
     const canvasLeft = rect.left - hostRect.left;
     const canvasTop = rect.top - hostRect.top;
-    const mouseX = event.clientX - rect.left;
-    const mouseY = event.clientY - rect.top;
-    if (mouseX < padL || mouseX > rect.width - padR || mouseY < padT || mouseY > padT + plotH) {
+    const cssScaleX = rect.width / (canvas.width / (window.devicePixelRatio || 1));
+    const cssScaleY = rect.height / (canvas.height / (window.devicePixelRatio || 1));
+    const mouseX = (event.clientX - rect.left) / Math.max(0.0001, cssScaleX);
+    const mouseY = (event.clientY - rect.top) / Math.max(0.0001, cssScaleY);
+    if (mouseX < padL || mouseX > helpers.width - padR || mouseY < padT || mouseY > padT + plotH) {
       tooltip.hidden = true;
       crosshair.hidden = true;
       return;
@@ -785,11 +860,14 @@ function installChartTooltip(canvas, series, helpers, options = {}) {
     const tooltipW = tooltip.offsetWidth || 220;
     const tooltipH = tooltip.offsetHeight || 92;
     const px = xFor(model.x);
-    const tooltipLeft = canvasLeft + Math.max(8, Math.min(rect.width - tooltipW - 8, px + 12));
-    const tooltipTop = canvasTop + Math.max(8, Math.min(rect.height - tooltipH - 8, mouseY - tooltipH - 10));
-    crosshair.style.left = `${canvasLeft + px}px`;
-    crosshair.style.top = `${canvasTop + padT}px`;
-    crosshair.style.height = `${plotH}px`;
+    const cssPx = px * cssScaleX;
+    const cssPadT = padT * cssScaleY;
+    const cssPlotH = plotH * cssScaleY;
+    const tooltipLeft = canvasLeft + Math.max(8, Math.min(rect.width - tooltipW - 8, cssPx + 12));
+    const tooltipTop = canvasTop + Math.max(8, Math.min(rect.height - tooltipH - 8, mouseY * cssScaleY - tooltipH - 10));
+    crosshair.style.left = `${canvasLeft + cssPx}px`;
+    crosshair.style.top = `${canvasTop + cssPadT}px`;
+    crosshair.style.height = `${cssPlotH}px`;
     tooltip.style.left = `${tooltipLeft}px`;
     tooltip.style.top = `${tooltipTop}px`;
   };
@@ -798,6 +876,7 @@ function installChartTooltip(canvas, series, helpers, options = {}) {
 function drawLineChart(canvasId, series, colors, options = {}) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
+  const palette = chartPalette();
   const rect = canvas.getBoundingClientRect();
   if (!rect.width) return;
   const ctx = canvas.getContext("2d");
@@ -820,15 +899,11 @@ function drawLineChart(canvasId, series, colors, options = {}) {
   const plotH = height - padT - padB;
   const yFor = (value) => padT + plotH * (1 - (value - minVal) / span);
   const xFor = (x) => padL + plotW * x;
-  const allDates = [...new Set(series.flatMap((s) => s.points.map((p) => p.date).filter(Boolean)))]
-    .sort((a, b) => new Date(a) - new Date(b));
-  const tickCount = Math.min(chartTickCount(options.range, width), allDates.length);
-  const dateTicks = tickCount > 1
-    ? Array.from({ length: tickCount }, (_, i) => allDates[Math.round(i * (allDates.length - 1) / (tickCount - 1))])
-    : allDates;
+  const modelPoints = series[0]?.points || [];
+  const dateTicks = chartDateTicks(modelPoints, options.range, width);
   ctx.clearRect(0, 0, width, height);
 
-  ctx.strokeStyle = "#263241";
+  ctx.strokeStyle = palette.grid;
   ctx.lineWidth = 1;
   ctx.beginPath();
   for (let i = 0; i <= 4; i++) {
@@ -839,11 +914,10 @@ function drawLineChart(canvasId, series, colors, options = {}) {
   ctx.stroke();
 
   if (dateTicks.length) {
-    ctx.strokeStyle = "rgba(142, 160, 180, 0.16)";
+    ctx.strokeStyle = palette.gridSoft;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    dateTicks.forEach((date) => {
-      const p = series.flatMap((s) => s.points).find((point) => point.date === date);
+    dateTicks.forEach((p) => {
       if (!p) return;
       const x = xFor(p.x);
       ctx.moveTo(x, padT);
@@ -855,7 +929,7 @@ function drawLineChart(canvasId, series, colors, options = {}) {
   const zeroY = yFor(0);
   ctx.save();
   ctx.setLineDash([5, 5]);
-  ctx.strokeStyle = "rgba(238, 245, 251, 0.72)";
+  ctx.strokeStyle = palette.zero;
   ctx.lineWidth = 1.4;
   ctx.beginPath();
   ctx.moveTo(padL, zeroY);
@@ -863,29 +937,29 @@ function drawLineChart(canvasId, series, colors, options = {}) {
   ctx.stroke();
   ctx.restore();
 
-  ctx.font = "11px Segoe UI";
-  ctx.fillStyle = "#8d9aaa";
+  ctx.font = "11px Inter, sans-serif";
+  ctx.fillStyle = palette.muted;
   ctx.textAlign = "right";
   for (let i = 0; i <= 4; i++) {
     const value = maxVal - (span / 4) * i;
     const y = padT + (plotH / 4) * i + 4;
     ctx.fillText(`${f(value)}%`, padL - 8, y);
   }
-  ctx.fillStyle = "#edf3f8";
+  ctx.fillStyle = palette.text;
   ctx.fillText("0%", padL - 8, zeroY + 4);
 
   if (options.rightAxis) {
     const initialMil = Number(options.rightAxis.initialMil) || 1000;
     const axisX = width - padR + 10;
     ctx.save();
-    ctx.strokeStyle = "rgba(142, 160, 180, 0.38)";
+    ctx.strokeStyle = palette.grid;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(width - padR, padT);
     ctx.lineTo(width - padR, padT + plotH);
     ctx.stroke();
-    ctx.font = "11px Segoe UI";
-    ctx.fillStyle = "#8d9aaa";
+    ctx.font = "11px Inter, sans-serif";
+    ctx.fillStyle = palette.muted;
     ctx.textAlign = "left";
     for (let i = 0; i <= 4; i++) {
       const retValue = maxVal - (span / 4) * i;
@@ -893,21 +967,20 @@ function drawLineChart(canvasId, series, colors, options = {}) {
       const y = padT + (plotH / 4) * i + 4;
       ctx.fillText(moneyMilLabel(navMil), axisX, y);
     }
-    ctx.fillStyle = "#edf3f8";
+    ctx.fillStyle = palette.text;
     ctx.fillText(moneyMilLabel(initialMil), axisX, zeroY + 4);
     ctx.restore();
   }
 
   if (dateTicks.length) {
-    ctx.fillStyle = "#8d9aaa";
+    ctx.fillStyle = palette.muted;
     ctx.textAlign = "center";
-    dateTicks.forEach((date, idx) => {
-      const p = series.flatMap((s) => s.points).find((point) => point.date === date);
+    dateTicks.forEach((p) => {
       if (!p) return;
-      const label = chartTickLabel(date, options.range);
+      const label = chartTickLabel(p.date, options.range);
       const x = Math.max(padL + 18, Math.min(width - padR - 18, xFor(p.x)));
       ctx.fillText(label, x, height - 13);
-      ctx.strokeStyle = "#8d9aaa";
+      ctx.strokeStyle = palette.muted;
       ctx.beginPath();
       ctx.moveTo(xFor(p.x), padT + plotH);
       ctx.lineTo(xFor(p.x), padT + plotH + 4);
@@ -934,12 +1007,12 @@ function drawLineChart(canvasId, series, colors, options = {}) {
     ctx.beginPath();
     ctx.arc(lx, ly, 3, 0, Math.PI * 2);
     ctx.fill();
-    ctx.font = "11px Segoe UI";
+    ctx.font = "11px Inter, sans-serif";
     ctx.textAlign = "left";
     const label = idx === 0 && Number(last.navMil) > 0 ? `${s.name} ${moneyMilLabel(last.navMil)}` : s.name;
     ctx.fillText(label, Math.min(width - padR - 82, lx + 8), Math.max(padT + 12, Math.min(height - padB - 4, ly + 4)));
   });
-  installChartTooltip(canvas, series, { padL, padR, padT, plotW, plotH, xFor }, options);
+  installChartTooltip(canvas, series, { padL, padR, padT, plotW, plotH, xFor, width, height }, options);
 }
 
 function card(item) {
@@ -1338,6 +1411,7 @@ function renderWatchlistTab() {
   const liveScope = rows.filter((row) => row.isLiveShortlist);
   const buySoon = rows.filter((row) => row.bucket === "BUY_SOON");
   const watchMore = rows.filter((row) => row.bucket === "WATCH");
+  setText("sideWatchCount", String(rows.length));
 
   const summaryEl = document.getElementById("watchlistSummary");
   if (summaryEl) {
@@ -1406,18 +1480,7 @@ function activeHistory() {
 function arrangePortfolioLayout() {
   const panel = document.querySelector("#portfolio > article.panel");
   if (!panel || panel.dataset.layoutArranged === "1") return;
-  const planned = panel.querySelector(".planned-orders");
   const ordersSection = panel.querySelector(".execution-panel");
-  const holdingsTitle = panel.querySelector(".compact-title");
-  const holdingsSummary = document.getElementById("holdingsSummary");
-  const holdingsWrap = holdingsSummary?.nextElementSibling;
-  const performance = panel.querySelector(".performance-card");
-  if (planned) panel.insertBefore(planned, ordersSection);
-  if (holdingsTitle && ordersSection) panel.insertBefore(holdingsTitle, ordersSection);
-  if (holdingsSummary && ordersSection) panel.insertBefore(holdingsSummary, ordersSection);
-  if (holdingsWrap && ordersSection) panel.insertBefore(holdingsWrap, ordersSection);
-  if (performance && ordersSection.nextSibling) panel.insertBefore(performance, ordersSection.nextSibling);
-
   const orderTitle = ordersSection?.querySelector(".panel-title h2");
   if (orderTitle) orderTitle.textContent = "Danh sách lệnh gần nhất";
   const plannedTable = panel.querySelector(".planned-table");
@@ -1685,10 +1748,11 @@ function renderPerformanceChart() {
     `;
   }
   const chartInitialMil = model[0]?.navMil || Number(rows[0].navBil) * 1000 || modelInitialNavMil();
+  const palette = chartPalette();
   drawLineChart("performanceChart", [
     { name: "Model", points: model },
     { name: "VN-Index", points: vni },
-  ], ["#29d391", "#6aa7ff"], { range: performanceRange, rightAxis: { initialMil: chartInitialMil } });
+  ], [palette.model, palette.vni], { range: performanceRange, rightAxis: { initialMil: chartInitialMil } });
 }
 
 function modelTargetWeight(symbol) {
@@ -2154,14 +2218,86 @@ function maybeNotifyNewTrades(signals) {
   });
 }
 
+function renderPaperTradeProgress() {
+  const el = document.getElementById("paperTradeProgress");
+  if (!el) return;
+  const policy = activePolicy();
+  const signalDate = "2026-06-01";
+  const plannedRows = activePlannedOrders()?.rows || [];
+  const holdingRows = policy?.holdings || [];
+  const holdingBySymbol = new Map(holdingRows.map((row) => [String(row.symbol || "").toUpperCase(), row]));
+  const sourceRows = (plannedRows.length ? plannedRows : holdingRows)
+    .map((row) => {
+      const symbol = String(row.symbol || "").toUpperCase();
+      const holding = holdingBySymbol.get(symbol) || {};
+      const paperDefaultShares = symbol === "MSB" && signalDate === "2026-06-01" ? 3600 : 0;
+      const shares = roundLot(firstPositive(
+        row.paperShares,
+        paperDefaultShares,
+        row.currentCopyShares,
+        row.targetCopyShares,
+        row.orderShares,
+        holding.copyShares,
+        holding.modelShares
+      ));
+      if (!symbol || !shares) return null;
+      const signalPrice = Number(row.signalPrice || row.signalPriceK || row.paperSignalPrice || (symbol === "MSB" ? 15.0 : 0) || row.referenceClose || row.entryPrice || holding.entryPrice || row.currentPrice || holding.currentPrice || 0);
+      const freshPrice = Number(row.currentPrice || holding.currentPrice || signalPrice || 0);
+      const priceDate = row.priceAsOf || holding.priceAsOf || data.summary?.as_of || "-";
+      const costMil = shares * signalPrice / 1000;
+      const mtmMil = shares * freshPrice / 1000;
+      const pnlMil = mtmMil - costMil;
+      const pnlPct = costMil > 0 ? pnlMil / costMil * 100 : 0;
+      return { symbol, shares, signalPrice, freshPrice, priceDate, costMil, mtmMil, pnlMil, pnlPct };
+    })
+    .filter(Boolean);
+  if (!sourceRows.length) {
+    el.innerHTML = `<div class="paper-progress-head"><span>Paper trade từ ${signalDate}</span><b>-</b></div>`;
+    return;
+  }
+  const costMil = sourceRows.reduce((sum, row) => sum + row.costMil, 0);
+  const mtmMil = sourceRows.reduce((sum, row) => sum + row.mtmMil, 0);
+  const pnlMil = mtmMil - costMil;
+  const pnlPct = costMil > 0 ? pnlMil / costMil * 100 : 0;
+  const navMil = inputNavBil() * 1000;
+  const exposurePct = navMil > 0 ? mtmMil / navMil * 100 : 0;
+  el.innerHTML = `
+    <div class="paper-progress-head">
+      <span>Paper trade từ ${signalDate} · ${sourceRows.length} mã</span>
+      <b class="${pnlMil >= 0 ? "target" : "stop"}">${pnlMil >= 0 ? "+" : ""}${f(pnlMil, 2)} tr (${pnlPct >= 0 ? "+" : ""}${f(pnlPct)}%)</b>
+    </div>
+    <div class="paper-progress-grid">
+      <span>Giá trị MTM <b>${f(mtmMil, 2)} tr</b></span>
+      <span>Exposure <b>${f(exposurePct)}%</b></span>
+      <span>Giá vốn paper <b>${f(costMil, 2)} tr</b></span>
+    </div>
+    <table class="paper-progress-table">
+      <thead><tr><th>Mã</th><th class="num">KL</th><th class="num">Signal</th><th class="num">Fresh</th><th class="num">P/L</th></tr></thead>
+      <tbody>
+        ${sourceRows.map((row) => `
+          <tr>
+            <td><strong>${esc(row.symbol)}</strong></td>
+            <td class="num">${f(row.shares, 0)}</td>
+            <td class="num">${row.signalPrice ? `${f(row.signalPrice)}k` : "-"}</td>
+            <td class="num">${row.freshPrice ? `${f(row.freshPrice)}k` : "-"}</td>
+            <td class="num ${row.pnlMil >= 0 ? "target" : "stop"}">${row.pnlMil >= 0 ? "+" : ""}${f(row.pnlMil, 2)} tr</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
 function renderTradeAlerts() {
   renderPlannedTrades();
   const evaluatedPlan = evaluatedPlannedTradeSignals();
   const latest = evaluatedPlan.length ? evaluatedPlan : latestTradeSignals();
   const signals = evaluatedPlan.length ? evaluatedPlan : (latest.length ? rebalanceTradeSignals() : currentPositionSignals());
   const unseen = unseenTradeSignals(latest);
+  setText("sideOrdersCount", String(signals.length));
   const summaryEl = document.getElementById("tradeAlertSummary");
   const body = document.getElementById("copyTradeRows");
+  renderPaperTradeProgress();
   if (summaryEl) {
     const hist = activeHistory();
     const navBil = inputNavBil();
@@ -2201,25 +2337,20 @@ function renderTradeAlerts() {
       const orderValueMil = displayTradeValueMil(row, orderShares, executionPrice || row.priceK);
       const note = row.note || `Theo tỷ trọng ${f(weight)}%`;
       const orderSharesCell = orderShares ? f(orderShares, 0) : "-";
-      const orderValueCell = orderValueMil ? f(orderValueMil, 1) : "-";
+      const compactNote = isSell
+        ? (target ? `Target ${f(target)}k` : note)
+        : (stop ? `Stop ${f(stop)}k` : note);
       return `
         <tr>
-          <td>${esc(row.signalDate || row.date || "-")}</td>
           <td><strong>${esc(sym)}</strong></td>
           <td><span class="action-pill ${cls}">${esc(side)}</span></td>
-          <td class="num">${executionPrice ? `${f(executionPrice)}k` : "-"}</td>
-          <td class="num">${entryPrice ? `${f(entryPrice)}k` : "-"}</td>
           <td class="num">${orderSharesCell}</td>
-          <td class="num">${orderValueCell}</td>
-          <td class="num">${weight ? `${f(weight)}%` : "-"}</td>
-          <td class="num ${pnlMil === null || pnlMil >= 0 ? "target" : "stop"}">${pnlMil === null ? "-" : f(pnlMil, 1)}</td>
+          <td class="num">${executionPrice ? `${f(executionPrice)}k` : "-"}</td>
           <td class="num ${pnlPct === null || pnlPct >= 0 ? "target" : "stop"}">${pnlPct === null ? "-" : `${f(pnlPct)}%`}</td>
-          <td class="num target">${target ? `${f(target)}k` : "-"}</td>
-          <td class="num stop">${stop ? `${f(stop)}k` : "-"}</td>
-          <td>${esc(note)}</td>
+          <td>${esc(compactNote)}</td>
         </tr>
       `;
-    }).join("") : `<tr><td colspan="13" class="empty-state">Chưa có lệnh cho policy này.</td></tr>`;
+    }).join("") : `<tr><td colspan="6" class="empty-state">Chưa có lệnh cho policy này.</td></tr>`;
   }
   maybeNotifyNewTrades(latest);
 }
@@ -2377,6 +2508,18 @@ function renderPortfolio() {
   const assetSource = asset.source === "live_mtm"
     ? `Mark-to-market theo giá đến ${asset.lastDate}; đường NAV backtest gần nhất ${asset.ledgerDate}`
     : `NAV backtest tới ${asset.lastDate}`;
+  const primaryHolding = holdingsStats.rows[0] || holdings[0] || {};
+  const primarySymbol = String(primaryHolding.symbol || holdings[0]?.symbol || "-").toUpperCase();
+  const primaryPrice = Number(primaryHolding.currentPrice || primaryHolding.price || holdings[0]?.currentPrice || 0);
+  const primaryPriceDate = primaryHolding.priceAsOf || holdings[0]?.priceAsOf || data.summary?.as_of || "-";
+  setText("v5CopyNav", moneyMilLabel(asset.currentAssetMil));
+  setText("v5CopyNavSub", asset.gainPct === null || asset.gainPct === undefined ? assetSource : `${asset.gainPct >= 0 ? "+" : ""}${f(asset.gainPct)}% từ NAV ban đầu`);
+  setText("v5CopyPrice", primaryPrice ? `${f(primaryPrice)}k` : "-");
+  setText("v5CopyPriceSub", primarySymbol === "-" ? "Chưa có vị thế" : `${primarySymbol} - ${primaryPriceDate}`);
+  setText("v5CopyCash", `${f(cashPct)}%`);
+  setText("v5CopyCashSub", `${holdings.length} mã đang nắm`);
+  setText("v5CopyStatus", policyName(policy));
+  setText("v5CopyStatusSub", `CAGR ${perf ? f(perf.cagr) : f(policy?.historicalCagr)}%, MaxDD ${perf ? f(perf.maxDrawdown) : f(policy?.historicalMaxDrawdown)}%`);
 
   const summary = `
     <div class="portfolio-summary">
@@ -2412,11 +2555,13 @@ function renderModelLedger() {
   const summary = hist
     ? `${hist.label}${period} | ${hist.tradeCount} dòng lệnh đã gom theo mã/ngày | Khối lượng hiển thị làm tròn lô 100.`
     : "Chưa có lịch sử model";
-  const summaryEl = document.getElementById("ledgerSummary");
-  if (summaryEl) summaryEl.textContent = summary;
-  const body = document.getElementById("modelLedgerRows");
-  if (!body) return;
-  body.innerHTML = visible.length ? visible.map((row) => {
+  const summaryOnlyEl = document.getElementById("ledgerOnlySummary");
+  if (summaryOnlyEl) summaryOnlyEl.textContent = summary;
+  const renderRows = (targetId, rowLimit = null) => {
+    const body = document.getElementById(targetId);
+    if (!body) return;
+    const outputRows = rowLimit ? visible.slice(0, rowLimit) : visible;
+    body.innerHTML = outputRows.length ? outputRows.map((row) => {
     const shares = roundLot(displayTradeShares(row));
     const priceK = Number(row.executionPriceK || row.priceK || 0);
     const grossMil = displayTradeValueMil(row, shares, priceK) || null;
@@ -2442,15 +2587,22 @@ function renderModelLedger() {
       <td class="num">${row.holdDays === null || row.holdDays === undefined ? "-" : `${f(row.holdDays, 0)} ngày`}</td>
     </tr>
   `;
-  }).join("") : `<tr><td colspan="10" class="empty-state">Chưa có dữ liệu mua bán cho policy này.</td></tr>`;
+    }).join("") : `<tr><td colspan="10" class="empty-state">Chưa có dữ liệu mua bán cho policy này.</td></tr>`;
+  };
+  renderRows("ledgerOnlyRows");
 }
 
 function activate(view) {
   document.querySelectorAll(".nav").forEach((btn) => btn.classList.toggle("active", btn.dataset.view === view));
   document.querySelectorAll(".view").forEach((el) => el.classList.toggle("is-active", el.id === view));
+  const params = new URLSearchParams(window.location.search);
+  params.set("view", view);
+  history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
   if (view === "portfolio") setTimeout(renderPortfolio, 0);
   if (view === "watchlist") setTimeout(renderWatchlistTab, 0);
   if (view === "modelLogic") setTimeout(renderModelLogicTab, 0);
+  if (view === "ledger") setTimeout(renderModelLedger, 0);
+  setTimeout(() => window.scrollTo({ top: 0, left: 0 }), 0);
 }
 
 function on(id, event, handler) {
@@ -2459,8 +2611,14 @@ function on(id, event, handler) {
 }
 
 document.querySelectorAll(".nav").forEach((btn) => btn.addEventListener("click", () => activate(btn.dataset.view)));
+const initialParams = new URLSearchParams(window.location.search);
+const initialView = initialParams.get("view") || (window.location.hash ? window.location.hash.slice(1) : "portfolio");
+if (document.getElementById(initialView)) activate(initialView);
 on("printBtn", "click", () => window.print());
 on("updateBtn", "click", () => triggerUpdate("fast"));
+document.querySelectorAll(".theme-option").forEach((btn) => {
+  btn.addEventListener("click", () => setDashboardTheme(btn.dataset.themeValue));
+});
 on("strategyMode", "change", (e) => {
   strategyMode = e.target.value;
   localStorage.setItem("hose_hnx_strategy_mode", strategyMode);
