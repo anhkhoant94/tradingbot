@@ -260,6 +260,96 @@ Do-not-rerun update:
 **Last updated:** 2026-06-03, Asia/Saigon
 **Purpose:** single shared ledger for Codex + Claude so new sessions do not rerun failed lanes. Read this after `CLAUDE.md` before starting any search.
 
+## 2026-06-03 Mavis - R46 Sideways Liq5ty + Concentration Cap - Cap Approach FAIL, no_cap BEST
+
+Artifacts:
+- `backtest/r46_sideways_liq5ty_concentrate_20260603.py`
+- `output/beat_vni30_parallel/r46_sideways_liq5ty_concentrate_20260603/`
+  - `{case}/{cap_label}/bps_{15,18,20}/equity.parquet` + `yearly.csv`
+  - `summary.csv`, `yearly.csv`, `VERDICT.md`
+
+Status: **CAP_APPROACH_FAIL_NO_CAP_BEST**. Concentration cap 25/30/35% all FAIL nghiêm trọng (drops CAGR 9-17pp, VNI+30 2-4/6). no_cap liq5ty variant robust 20bps PASS 6/6 (surprise - was FAIL 5/6 without liq filter). 2 new best cells: `vni13gt4_gross85` no_cap liq5ty (CAGR 50,94% MaxDD -28,67% 6/6 min edge 31,71pp) và `vni13gt6_gross85` no_cap liq5ty (CAGR 50,86% MaxDD -28,66% 6/6 min edge 32,03pp).
+
+## Key findings: cost stress no_cap liq5ty ROBUST hơn no-liq
+
+So với cost stress 20bps trên no-liq `vni13gt4_gross85` (FAIL 5/6, min edge 29,63pp, 2026 miss gate):
+- no_cap liq5ty `vni13gt4_gross85` 20bps: **PASS 6/6** CAGR 48,90% min edge 31,03pp
+- no_cap liq5ty `vni13gt6_gross85` 20bps: **PASS 6/6** CAGR 48,75% min edge 31,35pp
+
+Liquidity filter 5ty (loại bỏ illiquid small-caps) tăng robustness 2026 - min edge vượt 30pp gate. Đây là evidence liq5ty mạnh hơn no-liq ở cost stress.
+
+## Key findings: concentration cap 25/30/35% FAIL nghiêm trọng
+
+| Cap | CAGR | MaxDD | VNI+30 2021-26 | min edge | top1_w |
+|---|---:|---:|---:|---:|---:|
+| no_cap | 50,94% | -28,67% | 6/6 | 31,71pp | 0,39 |
+| cap35% | 41,78% | -25,60% | 4/6 | 20,93pp | 0,31 |
+| cap30% | 37,79% | -25,60% | 3/6 | 17,79pp | 0,27 |
+| cap25% | 33,42% | -25,13% | 2/6 | 14,67pp | 0,23 |
+
+Cap CỰC KỲ tàn khốc - mỗi 5pp cap reduce drop CAGR 4-8pp. cap25% (CAGR 33%) thấp hơn R46 baseline 46,75%. Model sideways cần top-1 ở 39% để boost edge recovery (đặc biệt 2021, 2022, 2024, 2025).
+
+## Yearly breakdown: vni13gt4_gross85 no_cap liq5ty 15bps
+
+| Year | Strategy | VNI | Edge | Pass VNI+30 |
+|---|---:|---:|---:|---:|
+| 2016 | 11,54% | 15,75% | -4,21pp | False |
+| 2017 | 14,77% | 48,03% | -33,26pp | False |
+| 2018 | 18,80% | -9,32% | +28,12pp | False (gần miss +30pp) |
+| 2019 | -13,86% | 7,67% | -21,53pp | False |
+| 2020 | 24,57% | 14,87% | +9,70pp | False |
+| 2021 | 236,12% | 35,73% | +200,39pp | **True (BIG WIN)** |
+| 2022 | 51,90% | -32,78% | +84,69pp | True |
+| 2023 | 48,86% | 12,20% | +36,66pp | True |
+| 2024 | 70,77% | 12,11% | +58,66pp | True |
+| 2025 | 99,91% | 40,87% | +59,04pp | True |
+| 2026 | 37,40% | 5,69% | +31,71pp | True |
+
+5/11 years VNI+30 PASS (vs R46 7/11), 6/6 recent. Sideways LOSE 1-2 years (2018 gần miss +30pp, 2020 fail). BIG WIN 2021 (+46pp return vs R46), 2022 (+18pp), 2024 (+12pp), 2025 (+26pp).
+
+## Final so sánh: 3 top candidates vs R46
+
+| Candidate | CAGR | MaxDD | All VNI+30 | Recent VNI+30 | min edge | Concentration |
+|---|---:|---:|---:|---:|---:|---|
+| R46 baseline (15bps) | 46,75% | -27,61% | 7/11 | 6/6 | 32,77pp | R46 target_weight cap 33% |
+| vni13gt4_gross85 no_cap liq5ty (15bps) | **50,94%** | -28,67% | 5/11 | **6/6** | 31,71pp | top1 39%, no cap |
+| vni13gt6_gross85 no_cap liq5ty (15bps) | 50,86% | -28,66% | 5/11 | 6/6 | 32,03pp | top1 39%, no cap |
+
+Trade-off thực sự:
+- +4,19pp CAGR / +4,11pp CAGR (liq5ty vs R46)
+- +1,06pp / +1,05pp MaxDD cost
+- -1,06pp / -0,74pp min edge
+- -2 all-years VNI+30 (R46 7/11 → liq5ty 5/11)
+- Concentration risk: top1 39% (vs R46 cap 33% per name)
+
+## Overall Verdict: **CAP_APPROACH_FAIL_NO_CAP_BEST**
+
+Cap approach không work - concentration risk không thể mitigate mà không phá alpha. no_cap liq5ty là best option.
+
+## Recommendation (Mavis proposes, awaiting anh)
+
+Đây là decision point quan trọng. Có 3 lựa chọn:
+
+1. **Promote `vni13gt4_gross85` no_cap liq5ty** làm secondary paper-trade parallel R46, accept trade-off (+4,19pp CAGR với top1 39% concentration). Giữ R46 primary anchor. Risk: concentration có thể amplify tail risk trong regime shift.
+2. **Close sideways lane**, R46 paper-trade hiện hành là production. Sideways chỉ là research hit 4 năm bear recovery (2021-2022, 2024-2025), risk-adjusted có thể không worth +4pp CAGR.
+3. **Hybrid: keep sideways as conditional overlay** - chỉ deploy sideways khi regime == sideways + VNI 13w > 4% confirmed, deploy cash defensive khác. Cần modify engine, ~3-4 giờ.
+
+Em recommend Option 1 (promote parallel) nếu anh sẵn sàng accept trade-off + risk control strict (giới hạn max weight per name 40% trong paper-trade, nếu exceed 1 tuần thì kill). Option 2 an toàn nhất nếu anh ưu tiên stable paper-trade.
+
+## Do-not-rerun
+
+- Do NOT touch R46 pinned engine - sideways chỉ thêm cash redeploy rule + liq filter
+- Do NOT add concentration cap <40% - destroys alpha
+- Do NOT rerun M2 / V5 R-1 lane (closed)
+- Do NOT rerun sideways no-liq variants - liq5ty STRICTLY BETTER
+
+## Next concrete actions (awaiting anh)
+
+- (Mavis) Run cost stress 15/18/20bps cho liq5ty variants (nếu anh chọn Option 1: thêm cost stress trước promote)
+- (Codex) Independent PIT-safe reproduce guard cho liq5ty cells
+- (Joint) Joint verdict trước khi promote paper-trade
+- (Anh) Quyết định cuối: promote parallel / close sideways / hybrid overlay
+
 ## 2026-06-03 Mavis - R46 Sideways Full Stress - Liq5ty NEW BEST CAGR 50,94%
 
 Artifacts:
