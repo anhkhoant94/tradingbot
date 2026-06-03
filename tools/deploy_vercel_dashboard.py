@@ -56,6 +56,8 @@ def collect_files(root: Path) -> list[dict]:
         if not path.is_file():
             continue
         rel = path.relative_to(root).as_posix()
+        if any(part.startswith("_") for part in path.relative_to(root).parts):
+            continue
         if path.suffix.lower() not in TEXT_EXTS:
             raise RuntimeError(f"Unexpected non-text dashboard file: {rel}")
         data = path.read_bytes()
