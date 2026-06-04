@@ -4584,3 +4584,25 @@ Correction 2026-06-03:
 - Removed watchlist BUY_SOON rows from the Copy Trade `Dự kiến giao dịch thứ 2 tới` table.
 - The forecast table now only renders policy `plannedOrders` from R46. Current public state is MSB `GIỮ` only; VIX remains in `Theo dõi mua` as a screening/watchlist candidate, not a copy-trade order.
 - Public verification after correction: `orderShares: 3000` count is 0 in `plannedOrders`; `Be Vietnam Pro` remains active; screenshot `dashboard/_preview/online-planned-policy-only.png`.
+
+2026-06-04 Codex - R46 forecast precompute hook for Ez dashboard.
+
+Context:
+- User clarified the Monday forecast table must assume current market price is the Friday close, compute what R46 would target for next Monday, and lock after Friday close.
+- Audit found the current dashboard was only realtime on price/as-of. `generate_deep_analysis.py` still sets `use_live_preview = False`, and under `current_policy` forces `target_shares = current_shares`, so it cannot produce new R46 buy/sell candidates.
+
+Changes:
+- Added `tools/precompute_r46_forecast.py`.
+- Added GitHub Actions step `Precompute R46 forecast` in `.github/workflows/dashboard-auto-refresh.yml` before building `dashboard/index.html`.
+- Added the same precompute step to `tools/deploy_online_dashboard_from_tokens.py`.
+- Added `dashboard/r46_forecast.json` and `output/r46_forecast_status.json` to deploy payload.
+- Updated `dashboard/_preview/build_v7_real.py` to use forecast rows only when `r46_forecast.json.status == "COMPUTED"`; otherwise it keeps current-policy rows and embeds `forecastStatus` / `forecastReason` for audit.
+
+Verification:
+- Local smoke wrote `status: NOT_COMPUTED`, `reason: missing_fresh_r46_target_rows`, `asOf: 2026-06-03`, `planDate: 2026-06-08`, rows empty.
+- Rebuilt `dashboard/index.html`; embedded plannedOrders now carries `source: current_policy`, `forecastStatus: NOT_COMPUTED`, `forecastReason: missing_fresh_r46_target_rows`.
+
+Important:
+- This is an automation hook, not a completed live R46 selector.
+- Do not claim true realtime R46 forecast until a fresh target artifact exists at `output/dashboard_policies/r46_bear_stop_mcore/forecast_targets.parquet` or `output/beat_vni30_parallel/r46_live_forecast/latest_targets.parquet` with date >= next Monday plan date.
+- The exact R46 chain still needs a live target generator for `pair657_m_turnover_controls -> M-core convex sleeve -> R15 retention -> NAV participation cap`. If unavailable on GitHub, the cloud alternative is to run that generator on GitHub Actions with seeded caches/artifacts, not in browser/Vercel.
