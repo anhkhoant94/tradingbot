@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import pickle
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
@@ -21,6 +22,7 @@ UNIVERSE_PATH = ROOT / ".cache" / "universe.parquet"
 OUT = ROOT / "output"
 STATUS_PATH = OUT / "full_universe_live_update_status.json"
 DASH_STATUS_PATH = ROOT / "dashboard" / "full_universe_live_update_status.json"
+HISTORY_CACHE_PATH = ROOT / ".cache" / "backtest" / "history_cache.pkl"
 
 
 def read_universe_symbols(limit: int | None = None) -> list[str]:
@@ -116,6 +118,33 @@ def update_vnindex_2012() -> dict:
     return result
 
 
+def rebuild_history_cache(symbols: list[str]) -> dict:
+    cache: dict[str, pd.DataFrame] = {}
+    latest_dates: list[str] = []
+    price_dir = live.BACKTEST_CACHE / "history_clean"
+    for sym in symbols:
+        path = price_dir / f"{sym}.parquet"
+        if not path.exists():
+            continue
+        try:
+            df = pd.read_parquet(path)
+            norm = live.normalize_price_frame(df)
+        except Exception:
+            continue
+        if norm.empty:
+            continue
+        cache[sym] = norm
+        latest_dates.append(norm["time"].max().date().isoformat())
+    HISTORY_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with HISTORY_CACHE_PATH.open("wb") as f:
+        pickle.dump(cache, f, protocol=pickle.HIGHEST_PROTOCOL)
+    return {
+        "path": str(HISTORY_CACHE_PATH.relative_to(ROOT)),
+        "symbols": len(cache),
+        "latestPriceDate": max(latest_dates) if latest_dates else None,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--workers", type=int, default=16)
@@ -142,6 +171,7 @@ def main() -> None:
                     results.append({"symbol": futures[fut], "ok": False, "reason": str(exc)[:160]})
 
     vni_result = update_vnindex_2012()
+    history_cache_result = rebuild_history_cache(symbols)
     latest_dates = []
     for sym in symbols:
         last = live.last_cache_date(sym)
@@ -160,6 +190,7 @@ def main() -> None:
         "latestPriceDate": max(latest_dates) if latest_dates else None,
         "symbolsAtTargetOrNewer": sum(1 for d in latest_dates if d >= target.isoformat()),
         "vnindex": vni_result,
+        "historyCache": history_cache_result,
         "failedSample": failed[:20],
         "seconds": round(time.time() - started, 2),
     }
