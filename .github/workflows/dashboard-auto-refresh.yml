@@ -1,8 +1,8 @@
-name: Dashboard Auto Refresh
+name: Dashboard Forecast Refresh
 
 on:
   schedule:
-    - cron: "2-59/5 * * * 1-5"
+    - cron: "*/15 * * * 1-5"
   push:
     branches:
       - main
@@ -19,8 +19,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: dashboard-auto-refresh
-  cancel-in-progress: true
+  group: ez-dashboard-deploy
+  cancel-in-progress: false
 
 permissions:
   contents: read
