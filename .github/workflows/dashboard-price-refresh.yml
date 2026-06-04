@@ -158,4 +158,4 @@ jobs:
 
       - name: Verify public dashboard assets
         working-directory: ${{ github.workspace }}
-        run: python tools/check_dashboard_public_health.py --require-fresh-live --require-vni-history --require-current-vni
+        run: python tools/check_dashboard_public_health.py --require-fresh-live --require-vni-history --require-current-vni --require-execution-desk

@@ -121,12 +121,75 @@ def next_monday(date_text):
     return (d + timedelta(days=days)).strftime("%Y-%m-%d")
 
 
+def latest_ohlc(symbol):
+    path = ROOT / ".cache" / "backtest" / "history_clean" / f"{str(symbol).upper()}.parquet"
+    if not path.exists():
+        return {}
+    try:
+        df = pd.read_parquet(path)
+    except Exception:
+        return {}
+    if df.empty:
+        return {}
+    tcol = "time" if "time" in df.columns else "date"
+    df = df.copy()
+    df[tcol] = pd.to_datetime(df[tcol], errors="coerce")
+    df = df.dropna(subset=[tcol]).sort_values(tcol)
+    if df.empty:
+        return {}
+    row = df.iloc[-1]
+    close = as_float(row.get("close"))
+    return {
+        "date": pd.Timestamp(row[tcol]).date().isoformat(),
+        "open": as_float(row.get("open"), close),
+        "high": as_float(row.get("high"), close),
+        "low": as_float(row.get("low"), close),
+        "close": close,
+    }
+
+
+def latest_regime(as_of):
+    paths = [
+        ROOT / "output" / "beat_vni30_parallel" / "r46_live_forecast" / "regime_features_weekly.parquet",
+        ROOT / ".cache" / "backtest" / "regime_features_weekly.parquet",
+    ]
+    for path in paths:
+        if not path.exists():
+            continue
+        try:
+            df = pd.read_parquet(path)
+        except Exception:
+            continue
+        if df.empty or "date" not in df.columns:
+            continue
+        df = df.copy()
+        df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
+        df = df.dropna(subset=["date"]).sort_values("date")
+        if as_of:
+            df = df[df["date"].le(pd.Timestamp(as_of).normalize())]
+        if df.empty:
+            continue
+        row = df.iloc[-1]
+        regime = str(row.get("regime") or row.get("market_regime") or "").upper()
+        return {"date": row["date"].date().isoformat(), "regime": regime or "UNKNOWN"}
+    return {"date": None, "regime": "UNKNOWN"}
+
+
+def effective_gap_threshold(exchange, base_gap):
+    limits = {"HOSE": 0.07, "HSX": 0.07, "HNX": 0.10, "UPCOM": 0.15}
+    ex = str(exchange or "").upper()
+    if ex in limits:
+        return max(0.0, min(float(base_gap), limits[ex] - 0.005))
+    return float(base_gap)
+
+
 dashboard_data = load_js_object(DASH / "data.js", "window.SCREENING_DASHBOARD_DATA")
 analysis = load_js_object(DASH / "analysis.js", "window.SCREENING_DEEP_ANALYSIS")
 history = load_js_object(DASH / "history.js", "window.MODEL_TRADE_HISTORY")
 live_status = load_json_or(DASH / "dashboard_live_update_status.json", {})
 forecast_status_path = DASH / "r46_forecast.json"
 forecast_status = load_json_or(forecast_status_path, {})
+policy_config = load_json_or(ROOT / "output" / "dashboard_policies" / "r46_bear_stop_mcore" / "config.json", {})
 pt_state = load_json_or(PT_DIR / "paper_trade_state.json", {
     "start_date": "2026-06-01",
     "end_date": "2026-06-29",
@@ -502,6 +565,13 @@ else:
             + ". Dashboard giữ nguyên danh mục hiện tại, không tự suy diễn lệnh."
         )
 
+for row in forecast_rows:
+    sym = str(row.get("symbol", "")).upper()
+    quote = quotes.get(sym) or {}
+    if quote.get("close"):
+        row["currentPrice"] = quote.get("close")
+        row["priceAsOf"] = quote.get("date") or row.get("priceAsOf")
+
 planned_public = {
     "asOf": policy.get("plannedOrders", {}).get("asOf"),
     "planDate": forecast_date,
@@ -515,6 +585,111 @@ planned_public = {
     "rows": forecast_rows,
 }
 
+exec_cfg = policy_config.get("execution") or {}
+base_gap = as_float(policy_config.get("entry_gap_threshold"), as_float(exec_cfg.get("gap"), 0.09)) or 0.09
+limit_buffer = as_float(policy_config.get("entry_limit_buffer"), as_float(exec_cfg.get("buffer"), 0.015)) or 0.015
+pullback_days = int(as_float(policy_config.get("entry_pullback_days"), as_float(exec_cfg.get("pullback"), 2)) or 2)
+min_sell_sessions = int(as_float(policy_config.get("entry_min_sell_sessions"), as_float(exec_cfg.get("min_sell"), 4)) or 4)
+bear_stop_loss = as_float(policy_config.get("daily_stop_loss"), as_float(exec_cfg.get("bear_regime_stop"), 0.05)) or 0.05
+regime_now = latest_regime(live_status.get("latestPriceDate"))
+regime_text = regime_now.get("regime") or "UNKNOWN"
+bear_stop_active = "BEAR" in regime_text
+
+execution_rows = []
+for h in holdings:
+    sym = str(h.get("symbol", "")).upper()
+    ohlc = latest_ohlc(sym)
+    entry_px = as_float(h.get("entryPrice"))
+    current_px = as_float(h.get("currentPrice"), as_float(ohlc.get("close")))
+    low_px = as_float(ohlc.get("low"), current_px)
+    open_px = as_float(ohlc.get("open"), current_px)
+    stop_px = entry_px * (1.0 - bear_stop_loss) if entry_px else None
+    sellable = bool(h.get("isSellableNow", True))
+    stop_hit = bool(bear_stop_active and sellable and stop_px and low_px and low_px <= stop_px)
+    stop_fill_px = min(open_px, stop_px) if stop_hit and open_px and stop_px else stop_px
+    if stop_hit:
+        action = "BÁN STOP"
+        status = "CẦN BÁN"
+        note = f"Bear regime đang bật; low {fmt_num(low_px, 2)}k đã chạm stop {fmt_num(stop_px, 2)}k. Model fill khoảng {fmt_num(stop_fill_px, 2)}k."
+    elif bear_stop_active and sellable:
+        action = "CANH STOP"
+        status = "ĐANG BẬT"
+        note = f"Bear stop bật. Bán nếu giá chạm {fmt_num(stop_px, 2)}k; chưa chạm theo low mới nhất {fmt_num(low_px, 2)}k."
+    elif bear_stop_active and not sellable:
+        action = "GIỮ"
+        status = "CHỜ T+"
+        note = f"Bear stop có điều kiện nhưng lot chưa đủ {min_sell_sessions} phiên; sellable từ {h.get('sellableFrom') or '-'}."
+    else:
+        action = "GIỮ"
+        status = "STOP TẮT"
+        note = f"Regime hiện tại {regime_text}; bear stop 5% chưa bật. Nếu chuyển BEAR, stop tham chiếu là {fmt_num(stop_px, 2)}k."
+    execution_rows.append({
+        "group": "Hôm nay",
+        "date": live_status.get("latestPriceDate") or h.get("priceAsOf"),
+        "symbol": sym,
+        "action": action,
+        "status": status,
+        "shares": h.get("copyShares") or h.get("modelShares") or 0,
+        "currentPrice": current_px,
+        "referenceClose": entry_px,
+        "maxOpen": None,
+        "limitPrice": None,
+        "bearStop": stop_px,
+        "lowPrice": low_px,
+        "stopActive": bear_stop_active,
+        "note": note,
+    })
+
+holding_by_symbol = {str(h.get("symbol", "")).upper(): h for h in holdings}
+for row in forecast_rows:
+    sym = str(row.get("symbol", "")).upper()
+    h = holding_by_symbol.get(sym, {})
+    exchange = h.get("exchange") or row.get("exchange")
+    current_px = as_float(row.get("currentPrice"), as_float(h.get("currentPrice")))
+    eff_gap = effective_gap_threshold(exchange, base_gap)
+    raw_action = str(row.get("action") or row.get("status") or "").upper()
+    if "MUA" in raw_action:
+        max_open = current_px * (1.0 + eff_gap) if current_px else None
+        limit_px = current_px * (1.0 + limit_buffer) if current_px else None
+        status = "CHỜ CHỐT"
+        note = (
+            f"Sau close thứ 6 nếu còn tín hiệu: mua open nếu không vượt {fmt_num(max_open, 2)}k; "
+            f"nếu gap cao thì chờ pullback quanh {fmt_num(limit_px, 2)}k tối đa {pullback_days} phiên, không khớp thì bỏ qua."
+        )
+    elif "BÁN" in raw_action or "BAN" in raw_action:
+        max_open = None
+        limit_px = None
+        status = "BÁN MỞ CỬA"
+        note = "Nếu forecast vẫn chốt sau close thứ 6: bán mở cửa thứ 2, không chờ target/stop."
+    else:
+        max_open = None
+        limit_px = None
+        status = "THEO DÕI"
+        note = "Không có thay đổi vị thế; tiếp tục theo dõi stop và target tuần kế tiếp."
+    execution_rows.append({
+        "group": "Thứ 2 tới",
+        "date": row.get("displayPlanDate") or row.get("planDate") or forecast_date,
+        "symbol": sym,
+        "action": row.get("action") or row.get("status"),
+        "status": status,
+        "shares": row.get("orderShares") or 0,
+        "currentPrice": current_px,
+        "referenceClose": current_px,
+        "maxOpen": max_open,
+        "limitPrice": limit_px,
+        "bearStop": None,
+        "lowPrice": None,
+        "stopActive": False,
+        "note": note,
+    })
+
+urgent_count = sum(1 for r in execution_rows if r.get("status") in {"CẦN BÁN", "BÁN NGAY"})
+planned_count = sum(1 for r in execution_rows if r.get("group") == "Thứ 2 tới" and as_float(r.get("shares"), 0) > 0)
+execution_summary = (
+    f"{urgent_count} lệnh cần xử lý ngay; {planned_count} lệnh forecast cho {forecast_date}; "
+    f"regime hiện tại {regime_text} ({regime_now.get('date') or '-'}), bear stop {'bật' if bear_stop_active else 'tắt'}."
+)
+
 data = {
     "asOf": live_status.get("latestPriceDate") or max([h.get("priceAsOf") or "" for h in holdings] + [""]),
     "liveUpdatedAt": live_status.get("updatedAt"),
@@ -527,6 +702,18 @@ data = {
         "totalSuggestedWeight": policy.get("totalSuggestedWeight"),
         "lastUpdate": policy.get("lastUpdate"),
         "plannedOrders": planned_public,
+    },
+    "executionDesk": {
+        "summary": execution_summary,
+        "regime": regime_text,
+        "regimeDate": regime_now.get("date"),
+        "bearStopActive": bear_stop_active,
+        "baseGapPct": base_gap * 100,
+        "limitBufferPct": limit_buffer * 100,
+        "pullbackDays": pullback_days,
+        "minSellSessions": min_sell_sessions,
+        "bearStopLossPct": bear_stop_loss * 100,
+        "rows": execution_rows,
     },
     "perf": perf,
     "holdings": holdings,
@@ -657,6 +844,10 @@ h1 {{ font-size:var(--t7); letter-spacing:0; }} .sub {{ color:var(--muted); marg
 .split {{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; align-items:start; }}
 table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding:9px 12px; color:var(--muted); font-size:var(--t1); letter-spacing:.06em; text-transform:uppercase; border-bottom:1px solid var(--border); background:var(--surface2); }} td {{ padding:9px 12px; border-bottom:1px solid var(--soft); vertical-align:middle; }} tr:last-child td {{ border-bottom:0; }} .num {{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }}
 .forecast-table th:first-child,.forecast-table td:first-child {{ width:112px; white-space:nowrap; }}
+.execution-table th:nth-child(1),.execution-table td:nth-child(1) {{ width:94px; white-space:nowrap; }}
+.execution-table th:nth-child(3),.execution-table td:nth-child(3) {{ width:118px; }}
+.thresholds {{ display:grid; gap:2px; font-size:var(--t2); color:var(--muted); }}
+.thresholds b {{ color:var(--text); }}
 .pill {{ display:inline-flex; align-items:center; min-height:20px; border-radius:999px; padding:2px 8px; font-size:11.5px; line-height:1.2; font-weight:600; letter-spacing:0; text-transform:none; white-space:nowrap; }} .buy {{ background:var(--greenSoft); color:var(--green); }} .sell {{ background:var(--redSoft); color:var(--red); }} .hold {{ background:var(--blueSoft); color:var(--accent); }} .skip {{ background:var(--surface2); color:var(--muted); }}
 .ptgrid {{ display:grid; grid-template-columns:repeat(4,1fr); border-bottom:1px solid var(--soft); }} .ptbox {{ padding:10px 12px; border-right:1px solid var(--soft); }} .ptbox:nth-child(4n) {{ border-right:0; }} .ptbox span {{ color:var(--muted); font-size:var(--t1); font-weight:800; letter-spacing:.06em; text-transform:uppercase; }} .ptbox b {{ display:block; margin-top:3px; font-size:var(--t5); }}
 .watchSummary {{ display:grid; grid-template-columns:repeat(5,1fr); border-bottom:1px solid var(--border); }}
@@ -701,6 +892,10 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
       <div class="kpi"><div class="l">Audit model</div><div class="v">VNI+30 {perf['passVni30']}/6</div><div class="s">Min edge +{fmt_num(perf['minEdge'],1)}pp · {perf['slippageBps']}bps</div></div>
     </div>
     <section class="sec">
+      <div class="sech"><h2>Lệnh cần làm · Execution Desk</h2><span class="meta">{execution_summary}</span></div>
+      <table class="execution-table"><thead><tr><th>Khi</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá TT</th><th>Ngưỡng hành động</th><th>Trạng thái</th><th>Ghi chú</th></tr></thead><tbody id="execRows"></tbody></table>
+    </section>
+    <section class="sec">
       <div class="sech"><h2>Performance · Model R46 vs VN-Index</h2><div class="ranges" id="ranges"><button data-r="ytd">YTD</button><button data-r="3m">3M</button><button data-r="6m">6M</button><button data-r="1y">1Y</button><button class="on" data-r="all">ALL</button></div></div>
       <div class="chartTop"><div><div class="chartVal" id="chartVal">-</div><div class="chartSub" id="chartSub">Model vs VN-Index · % từ đầu kỳ</div></div><div class="meta" id="chartDates">-</div></div>
       <div class="legend"><span><i style="background:var(--green)"></i>Model R46</span><span><i style="background:var(--muted2)"></i>VN-Index</span></div>
@@ -732,7 +927,7 @@ function pill(side){{ const raw=String(side||'-'); const plain=vnPlain(raw); con
 function toggleTheme(){{ const h=document.documentElement; h.dataset.theme=h.dataset.theme==='light'?'dark':'light'; renderChart(currentRange); }}
 document.querySelectorAll('.nav').forEach(b=>b.addEventListener('click',()=>{{ document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('on',x===b)); document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.dataset.view===b.dataset.view)); document.getElementById('crumb').textContent=b.childNodes[1]?.textContent?.trim()||b.textContent.trim(); window.scrollTo(0,0); }}));
 function roundLot(x){{ return Math.max(0, Math.floor(Number(x || 0) / 100) * 100); }}
-function renderCopyForNav(navBilRaw){{ const navBil=Math.max(0.1, Number(navBilRaw)||1); document.getElementById('navInput').value=String(navBil).replace(/\\.0$/,''); document.querySelectorAll('.navPreset').forEach(b=>b.classList.toggle('primary', Number(b.dataset.nav)===navBil)); let market=0,cost=0; const holdHtml=D.holdings.length ? D.holdings.map(h=>{{ const baseShares=Number(h.copyShares||h.modelShares||0); const shares=roundLot(baseShares*navBil); const entry=Number(h.entryPrice||0); const px=Number(h.currentPrice||0); const value=shares*px/1000; const rowCost=shares*entry/1000; const weight=value/(navBil*1000)*100; const pnl=value-rowCost; const pnlPct=rowCost>0?pnl/rowCost*100:null; market+=value; cost+=rowCost; return `<tr><td><strong>${{esc(h.symbol)}}</strong></td><td>${{esc(h.industry||h.sleeve||'-')}}</td><td class="num">${{f(shares,0)}}</td><td class="num">${{f(entry,3)}}k</td><td class="num">${{f(px,2)}}k</td><td class="num">${{f(value,1)}} tr</td><td class="num">${{wp(weight)}}</td><td class="num ${{cls(pnl)}}">${{money(pnl)}}</td><td class="num ${{cls(pnlPct)}}">${{pc(pnlPct)}}</td></tr>`; }}).join('') : '<tr><td colspan="9">Chưa có vị thế.</td></tr>'; document.getElementById('holdRows').innerHTML=holdHtml; const cash=Math.max(0, navBil*1000-cost); const total=cash+market; const pnl=total-navBil*1000; const pnlPct=pnl/(navBil*1000)*100; document.getElementById('copyNavValue').textContent=f(total/1000,3)+' tỷ'; const sub=document.getElementById('copyNavSub'); sub.textContent=money(pnl)+' · '+pc(pnlPct); sub.className='s '+cls(pnl); renderPlannedRows(navBil); }}
+function renderCopyForNav(navBilRaw){{ const navBil=Math.max(0.1, Number(navBilRaw)||1); document.getElementById('navInput').value=String(navBil).replace(/\\.0$/,''); document.querySelectorAll('.navPreset').forEach(b=>b.classList.toggle('primary', Number(b.dataset.nav)===navBil)); let market=0,cost=0; const holdHtml=D.holdings.length ? D.holdings.map(h=>{{ const baseShares=Number(h.copyShares||h.modelShares||0); const shares=roundLot(baseShares*navBil); const entry=Number(h.entryPrice||0); const px=Number(h.currentPrice||0); const value=shares*px/1000; const rowCost=shares*entry/1000; const weight=value/(navBil*1000)*100; const pnl=value-rowCost; const pnlPct=rowCost>0?pnl/rowCost*100:null; market+=value; cost+=rowCost; return `<tr><td><strong>${{esc(h.symbol)}}</strong></td><td>${{esc(h.industry||h.sleeve||'-')}}</td><td class="num">${{f(shares,0)}}</td><td class="num">${{f(entry,3)}}k</td><td class="num">${{f(px,2)}}k</td><td class="num">${{f(value,1)}} tr</td><td class="num">${{wp(weight)}}</td><td class="num ${{cls(pnl)}}">${{money(pnl)}}</td><td class="num ${{cls(pnlPct)}}">${{pc(pnlPct)}}</td></tr>`; }}).join('') : '<tr><td colspan="9">Chưa có vị thế.</td></tr>'; document.getElementById('holdRows').innerHTML=holdHtml; const cash=Math.max(0, navBil*1000-cost); const total=cash+market; const pnl=total-navBil*1000; const pnlPct=pnl/(navBil*1000)*100; document.getElementById('copyNavValue').textContent=f(total/1000,3)+' tỷ'; const sub=document.getElementById('copyNavSub'); sub.textContent=money(pnl)+' · '+pc(pnlPct); sub.className='s '+cls(pnl); renderExecutionDesk(navBil); renderPlannedRows(navBil); }}
 const pt = D.paperTrade;
 document.getElementById('ptGrid').innerHTML = [
   ['NAV', pt.navMil===null?'-':f(pt.navMil,1)+' tr'],
@@ -742,6 +937,9 @@ document.getElementById('ptGrid').innerHTML = [
 ].map(x=>`<div class="ptbox"><span>${{x[0]}}</span><b>${{x[1]}}</b></div>`).join('');
 document.getElementById('paperRows').innerHTML = `<tr><td><strong>${{esc(pt.symbol)}}</strong><div class="meta">${{esc(pt.entryDate||pt.signalDate)}} → ${{esc(pt.freshDate)}}</div></td><td class="num">${{f(pt.shares,0)}}</td><td class="num">${{f(pt.entryPrice,2)}}k</td><td class="num">${{f(pt.freshPrice,2)}}k</td><td class="num ${{cls(pt.positionPnlMil)}}">${{money(pt.positionPnlMil)}} · ${{pc(pt.positionPnlPct)}}</td></tr>`;
 const planned = D.policy.plannedOrders?.rows || [];
+const execDesk = D.executionDesk?.rows || [];
+function thresholdHtml(r){{ const lines=[]; if(r.maxOpen) lines.push(`Open <= <b>${{f(r.maxOpen,2)}}k</b>`); if(r.limitPrice) lines.push(`Pullback <= <b>${{f(r.limitPrice,2)}}k</b>`); if(r.bearStop) lines.push(`Bear stop <b>${{f(r.bearStop,2)}}k</b>`); if(r.lowPrice) lines.push(`Low mới nhất ${{f(r.lowPrice,2)}}k`); if(!lines.length && r.referenceClose) lines.push(`Tham chiếu <b>${{f(r.referenceClose,2)}}k</b>`); return `<div class="thresholds">${{lines.map(x=>`<span>${{x}}</span>`).join('')}}</div>`; }}
+function renderExecutionDesk(navBil=Number(document.getElementById('navInput')?.value)||1){{ const body=document.getElementById('execRows'); if(!body) return; body.innerHTML = execDesk.length ? execDesk.map(r=>{{ const shares=roundLot(Number(r.shares||0)*navBil); return `<tr><td>${{esc(r.group)}}<div class="meta">${{esc(r.date||'-')}}</div></td><td><strong>${{esc(r.symbol)}}</strong></td><td>${{pill(r.action||'-')}}</td><td class="num">${{shares?f(shares,0):'-'}}</td><td class="num">${{r.currentPrice?f(r.currentPrice,2)+'k':'-'}}</td><td>${{thresholdHtml(r)}}</td><td>${{pill(r.status||'-')}}</td><td>${{esc(r.note||'')}}</td></tr>`; }}).join('') : '<tr><td colspan="8">Chưa có lệnh cần xử lý.</td></tr>'; }}
 function renderPlannedRows(navBil=Number(document.getElementById('navInput')?.value)||1){{ document.getElementById('plannedRows').innerHTML = planned.length ? planned.map(r=>{{ const baseShares=Number(r.orderShares||0); const shares=baseShares>0?roundLot(baseShares*navBil):null; return `<tr><td>${{esc(r.displayPlanDate||r.planDate)}}</td><td><strong>${{esc(r.symbol)}}</strong></td><td>${{pill(r.action||r.status)}}</td><td class="num">${{shares===null?'-':f(shares,0)}}</td><td class="num">${{f(r.currentPrice,2)}}k</td><td class="num pos">${{f(r.targetPrice,2)}}k</td><td class="num neg">${{f(r.stopPrice,2)}}k</td><td>${{esc(r.note)}}</td></tr>`; }}).join('') : '<tr><td colspan="8">Kh\\u00f4ng c\\u00f3 l\\u1ec7nh d\\u1ef1 ki\\u1ebfn \\u2014 xem ghi ch\\u00fa ph\\u00eda tr\\u00ean.</td></tr>'; }}
 document.querySelectorAll('.navPreset').forEach(btn=>btn.addEventListener('click',()=>renderCopyForNav(btn.dataset.nav)));
 document.getElementById('navInput').addEventListener('input',e=>renderCopyForNav(e.target.value));

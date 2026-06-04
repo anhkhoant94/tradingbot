@@ -69,6 +69,11 @@ def main() -> None:
         action="store_true",
         help="exit non-zero when public VN-Index close is stale vs VPS daily source",
     )
+    parser.add_argument(
+        "--require-execution-desk",
+        action="store_true",
+        help="exit non-zero when the deployed page does not embed the R46 execution desk",
+    )
     args = parser.parse_args()
 
     idx_status, idx_raw = fetch_bytes(args.url, "/")
@@ -137,6 +142,7 @@ def main() -> None:
         "forecast_has_fallback_meta": forecast_has_fallback_meta,
         "embedded_forecast_display_state": embedded_forecast_display_state,
         "embedded_forecast_is_computed": embedded_forecast_display_state == "COMPUTED",
+        "has_execution_desk": '"executionDesk"' in index and '"bearStop"' in index and 'id="execRows"' in index,
         "vni_history_points": len(re.findall(r'"vniClose"\s*:\s*[0-9]', history)),
         "has_r46_key": "r46_bear_stop_mcore" in analysis,
         "has_r23_key": "r23_nav3b_mcore" in analysis,
@@ -156,6 +162,8 @@ def main() -> None:
     if args.require_vni_history and payload["vni_history_points"] <= 0:
         raise SystemExit(1)
     if args.require_current_vni and not payload["live_vni_matches_source"]:
+        raise SystemExit(1)
+    if args.require_execution_desk and not payload["has_execution_desk"]:
         raise SystemExit(1)
     if args.require_current_forecast and (
         payload["forecast_status"] != "COMPUTED"
