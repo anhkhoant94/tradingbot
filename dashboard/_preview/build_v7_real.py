@@ -105,6 +105,8 @@ dashboard_data = load_js_object(DASH / "data.js", "window.SCREENING_DASHBOARD_DA
 analysis = load_js_object(DASH / "analysis.js", "window.SCREENING_DEEP_ANALYSIS")
 history = load_js_object(DASH / "history.js", "window.MODEL_TRADE_HISTORY")
 live_status = json.loads((DASH / "dashboard_live_update_status.json").read_text(encoding="utf-8"))
+forecast_status_path = DASH / "r46_forecast.json"
+forecast_status = json.loads(forecast_status_path.read_text(encoding="utf-8")) if forecast_status_path.exists() else {}
 pt_state = json.loads((PT_DIR / "paper_trade_state.json").read_text(encoding="utf-8"))
 signal_w1 = json.loads((PT_DIR / "signal_week_1_20260601.json").read_text(encoding="utf-8"))
 paper_log_lines = (PT_DIR / "paper_trade_log.jsonl").read_text(encoding="utf-8").splitlines()
@@ -375,26 +377,36 @@ model_summary_cards = [
 ]
 forecast_date = next_monday(live_status.get("latestPriceDate") or signal_w1.get("execution_date"))
 planned_symbols = {str(row.get("symbol", "")).upper() for row in planned_rows}
-forecast_rows = [{
-    "displayPlanDate": forecast_date,
-    "planDate": row.get("planDate"),
-    "symbol": row.get("symbol"),
-    "action": row.get("action"),
-    "status": row.get("status"),
-    "currentPrice": row.get("currentPrice"),
-    "targetPrice": row.get("targetPrice"),
-    "stopPrice": row.get("stopPrice"),
-    "currentCopyShares": row.get("currentCopyShares"),
-    "targetCopyShares": row.get("targetCopyShares"),
-    "orderShares": row.get("orderShares"),
-    "note": row.get("note"),
-} for row in planned_rows]
+if forecast_status.get("status") == "COMPUTED" and forecast_status.get("rows"):
+    forecast_rows = forecast_status.get("rows", [])
+    forecast_source_label = forecast_status.get("source") or "r46_forecast.json"
+    forecast_summary = forecast_status.get("message") or "Forecast R46 precompute tu dong."
+else:
+    forecast_rows = [{
+        "displayPlanDate": forecast_date,
+        "planDate": row.get("planDate"),
+        "symbol": row.get("symbol"),
+        "action": row.get("action"),
+        "status": row.get("status"),
+        "currentPrice": row.get("currentPrice"),
+        "targetPrice": row.get("targetPrice"),
+        "stopPrice": row.get("stopPrice"),
+        "currentCopyShares": row.get("currentCopyShares"),
+        "targetCopyShares": row.get("targetCopyShares"),
+        "orderShares": row.get("orderShares"),
+        "note": row.get("note"),
+    } for row in planned_rows]
+    forecast_source_label = "current_policy"
+    forecast_summary = policy.get("plannedOrders", {}).get("summary")
 
 planned_public = {
     "asOf": policy.get("plannedOrders", {}).get("asOf"),
     "planDate": forecast_date,
     "stage": policy.get("plannedOrders", {}).get("stage"),
-    "summary": policy.get("plannedOrders", {}).get("summary"),
+    "source": forecast_source_label,
+    "forecastStatus": forecast_status.get("status") or "NOT_CONFIGURED",
+    "forecastReason": forecast_status.get("reason"),
+    "summary": forecast_summary,
     "rows": forecast_rows,
 }
 
