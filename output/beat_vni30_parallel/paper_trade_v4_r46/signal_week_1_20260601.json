@@ -1,0 +1,30 @@
+{
+  "signal_week": 1,
+  "signal_date": "2026-05-29",
+  "signal_date_note": "Last available trading day before 2026-06-01 Monday execution. R46 weekly target reconstructed from holdings.parquet latest entry 2026-05-25 (signal MSB 5.525%), rolled forward 1 weekly bar to align with Friday-close-signal / Monday-open-execution convention.",
+  "execution_date": "2026-06-01",
+  "execution_rule": "R46 flexible Monday: buy at Monday open if gap_up vs Friday close <= 9%; otherwise wait pullback to limit prev_close*(1+1.5%) within 2 sessions; skip if no fill.",
+  "nav_virtual_vnd": 1000000000,
+  "min_liquidity_floor_vnd": 2000000000,
+  "regime_at_signal": "to_be_classified_on_2026-06-01",
+  "regime_classifier_ref": "Phase1 v4 (VNI 13w return lag-1w bucket: bull/recovery/sideways/bear)",
+  "targets": [
+    {
+      "symbol": "MSB",
+      "target_weight": 0.05525,
+      "prev_close_vnd_per_share": 15000,
+      "limit_price_vnd_per_share": 15225,
+      "max_buy_gap_pct": 9.0,
+      "target_value_vnd": 55250000,
+      "target_shares_round_lot_100": 3600,
+      "adv20_bil_vnd_as_of_2026-05-29": 246.65,
+      "liquidity_floor_pass": true,
+      "buy_order": "BUY 3600 MSB at Monday 2026-06-01 open if open <= 16350 (15000 * 1.09); else place limit 15225 valid 2 sessions; else skip",
+      "min_hold_until_session": 4
+    }
+  ],
+  "cash_after_planned_buy_vnd": 945086500,
+  "cash_pct": 94.49,
+  "exposure_pct": 5.51,
+  "note": "R46 holdings cuối tháng 5 đang ở mức exposure thấp vì M-core targets thưa sau bear_regime_stop quét sạch GEE/VIC/PVP/DXP/VHM trong tuần 2026-05-25. Paper-trade week 1 chỉ nắm MSB + cash. Week 2+ sẽ rebalance theo R46 signal mới nếu data refresh có thêm signal sau 2026-05-25."
+}
