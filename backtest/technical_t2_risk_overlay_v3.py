@@ -189,7 +189,13 @@ def build_risk_context(states: pd.DataFrame, risk_control: str) -> pd.DataFrame:
             "breadth50_delta_1w": float(getattr(st, "breadth50_delta_1w", np.nan)),
             "breadth50_delta_2w": float(getattr(st, "breadth50_delta_2w", np.nan)),
         })
-    return pd.DataFrame(rows, columns=RISK_CONTEXT_COLUMNS)
+    out = pd.DataFrame(rows, columns=RISK_CONTEXT_COLUMNS)
+    out["date"] = pd.to_datetime(out["date"], errors="coerce")
+    out["year"] = pd.to_numeric(out["year"], errors="coerce").astype("Int64")
+    out["fire"] = out["fire"].fillna(False).astype(bool)
+    out["active"] = out["active"].fillna(False).astype(bool)
+    out["multiplier"] = pd.to_numeric(out["multiplier"], errors="coerce").fillna(1.0).astype(float)
+    return out
 
 
 def build_targets(risk_control: str, holdings: int, entry_band: float):
