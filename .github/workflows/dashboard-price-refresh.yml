@@ -1,0 +1,161 @@
+name: Dashboard Price Refresh
+
+on:
+  schedule:
+    - cron: "2-59/5 * * * 1-5"
+  workflow_dispatch:
+
+concurrency:
+  group: ez-dashboard-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  refresh-prices-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_PROJECT: ${{ vars.VERCEL_PROJECT || 'ez-trading' }}
+      VERCEL_PUBLIC_URL: ${{ vars.VERCEL_PUBLIC_URL || 'https://ez-trading.vercel.app' }}
+      VERCEL_TEAM_SLUG: ${{ vars.VERCEL_TEAM_SLUG }}
+      VERCEL_TEAM_ID: ${{ vars.VERCEL_TEAM_ID }}
+      PYTHONIOENCODING: utf-8
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install minimal dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas pyarrow fastparquet requests beautifulsoup4 lxml html5lib
+
+      - name: Preserve current public forecast artifacts
+        working-directory: ${{ github.workspace }}
+        run: |
+          python - <<'PY'
+          import os
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
+
+          base = os.environ["VERCEL_PUBLIC_URL"].rstrip("/")
+          for name in ["r46_forecast.json", "full_universe_live_update_status.json"]:
+              url = f"{base}/{name}"
+              try:
+                  with urllib.request.urlopen(url, timeout=30) as resp:
+                      raw = resp.read()
+                  if raw:
+                      (Path("dashboard") / name).write_bytes(raw)
+                      if name == "r46_forecast.json":
+                          Path("output").mkdir(exist_ok=True)
+                          Path("output/r46_forecast_status.json").write_bytes(raw)
+                      elif name == "full_universe_live_update_status.json":
+                          Path("output").mkdir(exist_ok=True)
+                          Path("output/full_universe_live_update_status.json").write_bytes(raw)
+                      print(f"Preserved public {name}")
+              except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
+                  print(f"Could not preserve {name}: {exc}")
+          PY
+
+      - name: Update live prices
+        working-directory: ${{ github.workspace }}
+        run: python update_dashboard_live_data.py
+
+      - name: Regenerate dashboard analysis
+        working-directory: ${{ github.workspace }}
+        run: python generate_deep_analysis.py
+
+      - name: Regenerate model history
+        working-directory: ${{ github.workspace }}
+        run: python generate_model_history.py
+
+      - name: Regenerate dashboard data
+        working-directory: ${{ github.workspace }}
+        run: |
+          if [ -f generate_dashboard_data.py ]; then
+            python generate_dashboard_data.py
+          else
+            echo "generate_dashboard_data.py not present in this repo checkout; keeping existing dashboard/data.js"
+          fi
+
+      - name: Verify preserved R46 forecast
+        working-directory: ${{ github.workspace }}
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path("dashboard/r46_forecast.json").read_text(encoding="utf-8-sig"))
+          if payload.get("status") == "COMPUTED":
+              meta = payload.get("meta") or {}
+              bad = [k for k in meta if k.startswith("cloudR46Refresh") or k.startswith("cloudFullUniverseRefresh")]
+              if bad:
+                  raise SystemExit(f"price-only refresh refuses fallback forecast: {bad}")
+              print(f"Preserved R46 forecast: asOf={payload.get('asOf')} planDate={payload.get('planDate')} rows={len(payload.get('rows') or [])}")
+          else:
+              print(f"Preserved R46 forecast is fail-closed: status={payload.get('status')} reason={payload.get('reason')}")
+          PY
+
+      - name: Preflight dashboard history
+        working-directory: ${{ github.workspace }}
+        run: |
+          python - <<'PY'
+          import re
+          from pathlib import Path
+
+          history = Path("dashboard/history.js").read_text(encoding="utf-8", errors="replace")
+          count = len(re.findall(r'"vniClose"\s*:\s*[0-9]', history))
+          if count <= 0:
+              raise SystemExit("dashboard/history.js has no numeric VN-Index points; refusing to deploy broken chart")
+          print(f"dashboard/history.js VN-Index points: {count}")
+          PY
+
+      - name: Build v7 static dashboard
+        working-directory: ${{ github.workspace }}
+        run: python dashboard/_preview/build_v7_real.py --out dashboard/index.html
+
+      - name: Deploy dashboard to Vercel
+        run: python tools/deploy_vercel_dashboard.py --dashboard-dir dashboard --target production --wait
+
+      - name: Verify public dashboard freshness
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          import time
+          import urllib.error
+          import urllib.request
+
+          base = os.environ["VERCEL_PUBLIC_URL"].rstrip("/")
+          last_error = None
+          for attempt in range(1, 13):
+              url = f"{base}/dashboard_live_update_status.json?v={int(time.time())}"
+              try:
+                  with urllib.request.urlopen(url, timeout=30) as resp:
+                      payload = json.loads(resp.read().decode("utf-8"))
+                  updated_at = str(payload.get("updatedAt") or "")
+                  if updated_at.startswith(time.strftime("%Y-%m-%d")):
+                      print(f"Public dashboard fresh: {updated_at}")
+                      sys.exit(0)
+                  last_error = f"stale updatedAt={updated_at}"
+              except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+                  last_error = repr(exc)
+              print(f"Waiting for Vercel alias propagation attempt {attempt}/12: {last_error}")
+              time.sleep(10)
+          print(f"Public dashboard freshness check failed after retries: {last_error}", file=sys.stderr)
+          sys.exit(1)
+          PY
+
+      - name: Verify public dashboard assets
+        working-directory: ${{ github.workspace }}
+        run: python tools/check_dashboard_public_health.py --require-vni-history
