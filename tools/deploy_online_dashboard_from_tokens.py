@@ -79,6 +79,7 @@ FILES_TO_PUSH = [
     "dashboard/data.js",
     "dashboard/r46_forecast.json",
     "dashboard/dashboard_live_update_status.json",
+    ".cache/universe.parquet",
 ]
 
 
