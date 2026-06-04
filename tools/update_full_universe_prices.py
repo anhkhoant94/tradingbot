@@ -64,6 +64,29 @@ def update_symbol_price_safe(symbol: str) -> dict:
         return {"symbol": symbol, "ok": False, "reason": str(exc)[:160]}
 
 
+def run_price_updates(symbols: list[str], workers: int) -> list[dict]:
+    results: list[dict] = []
+    if not symbols:
+        return results
+    with ThreadPoolExecutor(max_workers=max(1, int(workers))) as pool:
+        futures = {pool.submit(update_symbol_price_safe, sym): sym for sym in symbols}
+        for fut in as_completed(futures):
+            try:
+                results.append(fut.result())
+            except Exception as exc:
+                results.append({"symbol": futures[fut], "ok": False, "reason": str(exc)[:160]})
+    return results
+
+
+def latest_date_map(symbols: list[str]) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for sym in symbols:
+        last = live.last_cache_date(sym)
+        if last is not None:
+            out[sym] = last.isoformat()
+    return out
+
+
 def update_vnindex_2012() -> dict:
     today = date.today()
     floor_start = date(2016, 1, 1)
@@ -151,6 +174,8 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--lookback-days", type=int, default=0)
     parser.add_argument("--min-fresh-pct", type=float, default=0.65)
+    parser.add_argument("--retry-stale-passes", type=int, default=1)
+    parser.add_argument("--retry-workers", type=int, default=4)
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--target-date", default=None)
     args = parser.parse_args()
@@ -160,23 +185,26 @@ def main() -> None:
     symbols = read_universe_symbols(args.limit or None)
     todo = symbols if args.force else [sym for sym in symbols if needs_update(sym, target, args.lookback_days)]
 
-    results: list[dict] = []
-    if todo:
-        with ThreadPoolExecutor(max_workers=max(1, int(args.workers))) as pool:
-            futures = {pool.submit(update_symbol_price_safe, sym): sym for sym in todo}
-            for fut in as_completed(futures):
-                try:
-                    results.append(fut.result())
-                except Exception as exc:
-                    results.append({"symbol": futures[fut], "ok": False, "reason": str(exc)[:160]})
+    results: list[dict] = run_price_updates(todo, args.workers)
+
+    min_required = max(0, int(len(symbols) * float(args.min_fresh_pct)))
+    retry_rounds: list[dict] = []
+    for round_no in range(max(0, int(args.retry_stale_passes))):
+        latest_now = latest_date_map(symbols)
+        stale = [sym for sym in symbols if latest_now.get(sym, "") < target.isoformat()]
+        fresh_count = len(symbols) - len(stale)
+        retry_rounds.append({"round": round_no + 1, "freshBefore": fresh_count, "staleBefore": len(stale)})
+        if min_required <= 0 or fresh_count >= min_required or not stale:
+            break
+        retry_results = run_price_updates(stale, args.retry_workers)
+        results.extend(retry_results)
+        retry_rounds[-1]["attempted"] = len(stale)
+        retry_rounds[-1]["ok"] = sum(1 for r in retry_results if r.get("ok"))
 
     vni_result = update_vnindex_2012()
     history_cache_result = rebuild_history_cache(symbols)
-    latest_dates = []
-    for sym in symbols:
-        last = live.last_cache_date(sym)
-        if last is not None:
-            latest_dates.append(last.isoformat())
+    latest_by_symbol = latest_date_map(symbols)
+    latest_dates = list(latest_by_symbol.values())
 
     ok = [r for r in results if r.get("ok")]
     failed = [r for r in results if not r.get("ok")]
@@ -191,6 +219,7 @@ def main() -> None:
         "symbolsAtTargetOrNewer": sum(1 for d in latest_dates if d >= target.isoformat()),
         "vnindex": vni_result,
         "historyCache": history_cache_result,
+        "retryRounds": retry_rounds,
         "failedSample": failed[:20],
         "seconds": round(time.time() - started, 2),
     }
@@ -200,7 +229,6 @@ def main() -> None:
     STATUS_PATH.write_text(text + "\n", encoding="utf-8")
     DASH_STATUS_PATH.write_text(text + "\n", encoding="utf-8")
     print(text)
-    min_required = max(0, int(len(symbols) * float(args.min_fresh_pct)))
     if min_required > 0 and payload["symbolsAtTargetOrNewer"] < min_required:
         raise SystemExit("full universe price refresh did not reach enough symbols")
 
