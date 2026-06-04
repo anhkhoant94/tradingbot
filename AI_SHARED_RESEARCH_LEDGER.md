@@ -4668,3 +4668,10 @@ Verification:
 
 Operational rule:
 - GitHub Actions schedule remains every 5 minutes on weekdays (`2-59/5 * * * 1-5`). The browser/Vercel app remains static; all compute happens in GitHub Actions before deploy.
+
+Correction / final cloud verification:
+- Added full-universe freshness gate and stale-symbol retry in `tools/update_full_universe_prices.py`; workflow now requires at least 65% of universe at target date before forecast/deploy.
+- Final GitHub Actions run `26936621141` completed `success`.
+- Public `full_universe_live_update_status.json`: `symbolsTotal=703`, `symbolsAttempted=703`, `symbolsUpdated=703` unique symbols, `symbolsFailed=0`, `symbolsAtTargetOrNewer=541`, `historyCache.symbols=703`, `historyCache.latestPriceDate=2026-06-04`.
+- Public `r46_forecast.json`: `status=COMPUTED`, `asOf=2026-06-04`, `planDate=2026-06-08`, `tailMatrixRows=2073`, `pairTailRows=1`, `overlapOk=true`, no fallback meta, row = MSB `BÁN HẾT` 3,600 shares at current price 14.6k dated 2026-06-04.
+- Public health check still passes with `live_updated_at=2026-06-04 07:09:42`, VNI history points 4,861.
