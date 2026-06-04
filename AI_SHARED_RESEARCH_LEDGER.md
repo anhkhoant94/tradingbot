@@ -60,6 +60,10 @@ Public verification PASS after full forecast run `26945413263`: `https://ez-trad
 
 Operational rule: never publish copy-trade dashboard without execution desk. A valid desk must show today action, stop active/off, bear stop threshold for current lots, forecast action for next Monday, and non-UNKNOWN current regime. Price-only 5-min lane may preserve forecast, but forecast meta must carry regime so stop state remains faithful between full forecast runs.
 
+## 2026-06-04 Codex — Sell-all quantity aligned to displayed copy holdings
+
+User caught a copy-trade mismatch: public holdings showed MSB `3,800` shares, while planned `BÁN HẾT` showed `3,600` because `precompute_r46_forecast.py.current_copy_shares()` incorrectly preferred paper-trade state over displayed copy holdings. Fix commit `31b141a4c9b26a6d114375056a6d0c785517732f`: forecast now reads R46 holdings from `dashboard/analysis.js` first; build renderer also force-aligns any `BÁN HẾT` row to current displayed holding shares as a safety fallback. Price deploy run `26948962731` PASS. Public verification: liveUpdatedAt `2026-06-04 11:30:16`, holdings MSB `3,800`, planned MSB `BÁN HẾT` currentCopyShares/orderShares `3,800`, execution desk next Monday `BÁN HẾT 3,800`.
+
 ## 2026-06-02 Codex — R1 Drift Bisect Verdict
 
 Artifacts:
