@@ -48,6 +48,18 @@ Fix commit: `4b404b0f6c8ec90deadf0c5b1557de8146b17f46`.
 
 Emergency run: canceled long forecast run `26941704183` so price lane could deploy quickly. Price run `26941728690` completed success. Public verification PASS: `dashboard_live_update_status.json` updatedAt `2026-06-04 09:11:23`, VNINDEX latest `2026-06-04`, latestClose `1831.55`, checker source close `1831.55`, forecast still COMPUTED rows=1. Do-not: never treat `latestPriceDate == today` alone as proof the VNI number is current; require close-level comparison.
 
+## 2026-06-04 Codex — R46 Execution Desk added for copy-trade feasibility
+
+User flagged that R46 cannot be copied faithfully if the dashboard only shows Monday forecast and hides intra-week entry/stop mechanics. Confirmed from R46 config/source/trades: entry has gap/pullback window (`entry_gap_threshold=9%`, `entry_limit_buffer=1.5%`, `entry_pullback_days=2` with price-limit guard), sells respect `entry_min_sell_sessions=4`, and bear-regime stop is real (`daily_stop_loss=5%` only when regime=BEAR). Ledger has 18 `regime_stop_bear`, 7 `expired_no_pullback`, 7 `pullback_limit`; therefore dashboard needed an execution desk, not only planned orders.
+
+Fix commits:
+- `27b1d6d52474318cb5f4e1cc5c0d2a2f5d4ac276`: added `executionDesk` to `build_v7_real.py`, rendered "Lệnh cần làm · Execution Desk" above the chart, and added `--require-execution-desk` health gate.
+- `b9a167623f18acdfcee48ff73d4ba3d9dae43d11`: persisted `currentRegime`/`currentRegimeDate` in `r46_forecast.json.meta`, added build fallback from forecast meta, and made health gate fail if execution desk regime is UNKNOWN.
+
+Public verification PASS after full forecast run `26945413263`: `https://ez-trading.vercel.app` has liveUpdatedAt `2026-06-04 10:12:59`, VNI close `1831.55`, forecast COMPUTED planDate `2026-06-08`, executionDesk present, regime `NARROW_BULL` date `2026-06-01`, bearStopActive=false. Current rows: Today MSB `GIỮ` / `STOP TẮT`, bear stop reference `13.3798k`; next Monday MSB `BÁN HẾT` / `BÁN MỞ CỬA`, 3,600 shares at currentPrice `14.55k`.
+
+Operational rule: never publish copy-trade dashboard without execution desk. A valid desk must show today action, stop active/off, bear stop threshold for current lots, forecast action for next Monday, and non-UNKNOWN current regime. Price-only 5-min lane may preserve forecast, but forecast meta must carry regime so stop state remains faithful between full forecast runs.
+
 ## 2026-06-02 Codex — R1 Drift Bisect Verdict
 
 Artifacts:
