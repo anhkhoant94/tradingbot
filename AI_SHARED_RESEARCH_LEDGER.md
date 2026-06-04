@@ -4606,3 +4606,14 @@ Important:
 - This is an automation hook, not a completed live R46 selector.
 - Do not claim true realtime R46 forecast until a fresh target artifact exists at `output/dashboard_policies/r46_bear_stop_mcore/forecast_targets.parquet` or `output/beat_vni30_parallel/r46_live_forecast/latest_targets.parquet` with date >= next Monday plan date.
 - The exact R46 chain still needs a live target generator for `pair657_m_turnover_controls -> M-core convex sleeve -> R15 retention -> NAV participation cap`. If unavailable on GitHub, the cloud alternative is to run that generator on GitHub Actions with seeded caches/artifacts, not in browser/Vercel.
+
+2026-06-04 Codex - Ez dashboard 5-minute cloud refresh verified, forecast kept fail-closed.
+
+- Public URL remains canonical: `https://ez-trading.vercel.app`.
+- Ran local live refresh and rebuild on 2026-06-04: `update_dashboard_live_data.py` updated 10/10 prices, latest price date `2026-06-04`; public health check passes with `live_updated_at=2026-06-04 10:24:49`, `live_latest_price_date=2026-06-04`, VNI history points 4,861.
+- GitHub Actions `dashboard-auto-refresh.yml` is now scheduled every 5 minutes on weekdays (`2-59/5 * * * 1-5`) and includes `Precompute R46 forecast` before static build. Cloud run `26929208199` completed `success` after the source push; earlier run `26928789339` also completed `success`.
+- Pushed and deployed v7 generator/dashboard fixes: `dashboard/_preview/build_v7_real.py`, `dashboard/index.html`, `tools/precompute_r46_forecast.py`, `dashboard/r46_forecast.json`, paper-trade artifacts, and live status.
+- Public `index.html` verification after deploy: `vnPlain=True`, `function pill(` count = 1, `function renderPlannedRows(` count = 1, no `YEG Capital`, and no old `r.orderShares||r.currentCopyShares` quantity fallback. Planned table now shows no quantity for HOLD / no-order rows.
+- R46 forecast remains **fail-closed**: `dashboard/r46_forecast.json` has `status=NOT_COMPUTED`, `reason=missing_fresh_r46_target_rows`, `asOf=2026-06-04`, `planDate=2026-06-08`.
+- Smoke attempted to rebuild fresh target chain from live candidate matrix through G2 run657 + pair sleeve + deadside/adaptive/v8/band. It produced `PVP/PHR/NAF/MSB` at 2026-05-25, while official `pair657_m_turnover_controls_20260527/best_15bps_holdings.parquet` / dashboard policy has only `MSB 5.525%`. Because overlap diff was material, do **not** publish this generated target as R46 forecast.
+- Operational rule: GitHub cloud can refresh live prices and redeploy every 5 minutes without local machine. True Monday buy/sell forecast must stay hidden/fail-closed until a fresh R46 target generator reproduces the official 2026-05-25 artifact before extending to 2026-06-01/2026-06-08.
