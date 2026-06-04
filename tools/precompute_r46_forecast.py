@@ -304,13 +304,16 @@ def blend_direct_tail(pair: pd.DataFrame) -> pd.DataFrame:
     return out[out["weight"] > 1e-8].copy()
 
 
-def build_m_from_base(base: pd.DataFrame) -> pd.DataFrame:
+def build_m_from_base(base: pd.DataFrame, regime_panel: pd.DataFrame) -> pd.DataFrame:
     import pair657_m_stress_20260527 as m
 
     base = base.copy()
     base["date"] = pd.to_datetime(base["date"]).dt.normalize()
     base["symbol"] = base["symbol"].astype(str).str.upper()
-    panel = m.load_panel()
+    panel = regime_panel.copy()
+    panel["date"] = pd.to_datetime(panel["date"]).dt.normalize()
+    keep = ["date", "regime", "vni_range_13", "median_ret13", "high_liq_ret13_median", "breadth_ma30"]
+    panel = panel[[c for c in keep if c in panel.columns]].drop_duplicates("date")
     h = base.merge(panel, on="date", how="left")
     is_side = h["regime"].eq("SIDEWAYS")
     is_bear = h["regime"].eq("BEAR")
@@ -391,7 +394,7 @@ def generate_targets(plan_date: str, skip_rebuild_inputs: bool) -> tuple[pd.Data
     direct_saved["symbol"] = direct_saved["symbol"].astype(str).str.upper()
     direct_tail = blend_direct_tail(pair_tail)
     direct_base = pd.concat([direct_saved, direct_tail[direct_tail["date"] > direct_saved["date"].max()]], ignore_index=True)
-    m_base_generated = build_m_from_base(direct_base)
+    m_base_generated = build_m_from_base(direct_base, regime)
 
     official_m = pd.read_parquet(OUT / "beat_vni30_parallel" / "pair657_m_turnover_controls_20260527" / "best_15bps_holdings.parquet")
     official_m["date"] = pd.to_datetime(official_m["date"]).dt.normalize()
