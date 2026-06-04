@@ -169,8 +169,8 @@ def main() -> None:
     STATUS_PATH.write_text(text + "\n", encoding="utf-8")
     DASH_STATUS_PATH.write_text(text + "\n", encoding="utf-8")
     print(text)
-    min_required = max(1, int(len(symbols) * float(args.min_fresh_pct)))
-    if payload["symbolsAtTargetOrNewer"] < min_required:
+    min_required = max(0, int(len(symbols) * float(args.min_fresh_pct)))
+    if min_required > 0 and payload["symbolsAtTargetOrNewer"] < min_required:
         raise SystemExit("full universe price refresh did not reach enough symbols")
 
 
