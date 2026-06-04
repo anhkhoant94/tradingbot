@@ -1,11 +1,39 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "policy": "r46_bear_stop_mcore",
   "asOf": "2026-06-04",
   "planDate": "2026-06-08",
   "generatedAtSource": "dashboard\\dashboard_live_update_status.json",
-  "rows": [],
-  "status": "NOT_COMPUTED",
-  "reason": "missing_fresh_r46_target_rows",
-  "message": "GitHub runner da cap nhat gia, nhung chua co target R46 moi hon policy artifact. Khong publish lenh mua/ban de tranh sizing sai."
+  "status": "COMPUTED",
+  "source": "output/beat_vni30_parallel/r46_live_forecast/latest_targets.parquet",
+  "message": "Forecast R46 đã precompute từ full-universe live chain.",
+  "rows": [
+    {
+      "displayPlanDate": "2026-06-08",
+      "planDate": "2026-06-08",
+      "symbol": "MSB",
+      "action": "BÁN HẾT",
+      "status": "DỰ KIẾN",
+      "currentPrice": 14.4,
+      "priceAsOf": "2026-06-04",
+      "targetWeight": 0.0,
+      "currentCopyShares": 3600,
+      "targetCopyShares": 0,
+      "orderShares": 3600,
+      "note": "Precompute R46 trên GitHub; chỉ chốt sau close thứ 6."
+    }
+  ],
+  "meta": {
+    "tailMatrixRows": 2082,
+    "tailMatrixDates": [
+      "2026-05-25",
+      "2026-06-01",
+      "2026-06-08"
+    ],
+    "pairTailRows": 1,
+    "latestComputedDate": "2026-06-08",
+    "overlapOk": true,
+    "overlapMaxDiff": 0.0,
+    "overlapDiffCount": 0
+  }
 }
