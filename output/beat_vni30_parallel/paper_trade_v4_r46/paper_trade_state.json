@@ -1,0 +1,75 @@
+{
+  "model": "MODEL_V4 = R46_bear_stop_mcore",
+  "lock_doc": "output/beat_vni30_parallel/claude_model_success_20260530/MODEL_V4_R46_LOCKED_20260530.md",
+  "reproduce_script": "output/beat_vni30_parallel/claude_model_success_20260530/reproduce_v4_r46.py",
+  "engine_pinned_md5": {
+    "backtest/r46_regime_conditional_stop_smoke_20260528.py": "da26e26883fcf123b39a8405e0f557d3",
+    "backtest/r23_flexible_exec_smoke_20260528.py": "7809d07a79325629384617a8e2a13393",
+    "backtest/beat_vni30_daily_execution_sim.py": "a970366a2b203ac3fcca8c73183c1f52",
+    "backtest/baseline_liquid_leadership_overlay_20260527.py": "3c0cad6d7c3f883c5c1c6dbf2531daab"
+  },
+  "nav_start_vnd": 1000000000,
+  "start_date": "2026-06-01",
+  "end_date": "2026-06-29",
+  "duration_weeks": 4,
+  "min_liquidity_floor_vnd": 2000000000,
+  "rebalance_schedule": "weekly Monday open (R46 flexible Monday execution: open if gap<=9%, pullback limit prev_close*1.015 up to 2 sessions, skip if no fill)",
+  "min_hold_sessions": 4,
+  "bear_regime_stop_pct": 0.05,
+  "cost_assumption_pct_per_side": {
+    "buy_cost": 0.30,
+    "sell_cost": 0.40,
+    "extra_slippage": 0.15
+  },
+  "signal_source": "R46 weekly backtest extended; targets reconstructed from output/dashboard_policies/r46_bear_stop_mcore/holdings.parquet (will roll forward as data updates)",
+  "exit_rules": [
+    "bear_regime_stop (5% daily, only when Phase1 v4 daily regime == bear, min hold 4 sessions)",
+    "weekly target rebalance to new R46 signal",
+    "T+2.5 protective: no SELL before 4 sessions from BUY"
+  ],
+  "production_gates": {
+    "a_paper_trade_4w": {
+      "status": "in_progress",
+      "started_at": "2026-05-30",
+      "end_at": "2026-06-29",
+      "criteria": [
+        "paper_NAV >= VNI cumulative return + 0pp at week 4",
+        "0 T+2.5 violations",
+        "no ticker fail min_liquidity_floor 2B VND/day",
+        "weekly signal reproducible from pinned engine md5"
+      ]
+    },
+    "b_codex_audit": {
+      "status": "queued",
+      "trigger": "Codex worker resume after 2026-06-29",
+      "criteria": [
+        "stress slippage 25bps/side keeps pass30 >= 5/6 on 2021-2026",
+        "min liquidity floor 5B VND/day keeps pass30 >= 5/6",
+        "remove-symbol stress (drop top-3 contributor) keeps CAGR segment >= 55%"
+      ]
+    },
+    "c_dashboard_promote": {
+      "status": "blocked",
+      "criteria": [
+        "gate_a == pass",
+        "gate_b == pass",
+        "anh approval in writing"
+      ]
+    }
+  },
+  "current_position": {
+    "cash_vnd": 1000000000,
+    "holdings": [],
+    "as_of": "2026-05-30",
+    "note": "Week 1 BUY orders pending Monday 2026-06-01 open execution per signal_week_1_20260601.json"
+  },
+  "weekly_checkpoint_due": {
+    "week_1": "2026-06-01",
+    "week_2": "2026-06-08",
+    "week_3": "2026-06-15",
+    "week_4": "2026-06-22",
+    "week_4_close": "2026-06-29"
+  },
+  "log_file": "output/beat_vni30_parallel/paper_trade_v4_r46/paper_trade_log.jsonl",
+  "dashboard_promote_status": "BLOCKED — candidate preview only, NOT live production"
+}
