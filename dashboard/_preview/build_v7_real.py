@@ -196,15 +196,70 @@ paper_quote = quotes.get(paper_symbol, {})
 paper_signal_px = (target.get("prev_close_vnd_per_share") or 0) / 1000
 paper_fresh_px = paper_quote.get("close")
 paper_shares = int(target.get("target_shares_round_lot_100") or 0)
+paper_nav_start_vnd = float(signal_w1.get("nav_virtual_vnd") or pt_state.get("nav_start_vnd") or 1_000_000_000)
+paper_buy_cost_pct = float(pt_state.get("cost_assumption_pct_per_side", {}).get("buy_cost", 0.30)) / 100.0
+paper_state_pos = pt_state.get("current_position", {}) or {}
+paper_state_holding = next(
+    (h for h in paper_state_pos.get("holdings", []) if str(h.get("symbol", "")).upper() == str(paper_symbol).upper()),
+    None,
+)
+
+
+def derive_paper_fill_from_history():
+    if not paper_symbol or not signal_w1.get("execution_date") or not paper_signal_px:
+        return None
+    cache_path = ROOT / ".cache" / "backtest" / "history_clean" / f"{paper_symbol}.parquet"
+    if not cache_path.exists():
+        return None
+    try:
+        df = pd.read_parquet(cache_path)
+        tcol = "time" if "time" in df.columns else "date"
+        df[tcol] = pd.to_datetime(df[tcol]).dt.normalize()
+        row = df[df[tcol].eq(pd.Timestamp(signal_w1["execution_date"]).normalize())]
+        if row.empty:
+            return None
+        r = row.iloc[0]
+        open_px = float(r["open"])
+        max_open = paper_signal_px * (1.0 + float(target.get("max_buy_gap_pct", 9.0)) / 100.0)
+        if open_px <= max_open:
+            return {"entry_price_k": open_px, "entry_date": signal_w1["execution_date"], "fill_reason": "open_gap_ok"}
+    except Exception:
+        return None
+    return None
+
+
+paper_fill = None
+if paper_state_holding:
+    paper_shares = int(paper_state_holding.get("shares") or paper_shares)
+    entry_px_vnd = paper_state_holding.get("entry_px_vnd")
+    if entry_px_vnd:
+        paper_fill = {
+            "entry_price_k": float(entry_px_vnd) / 1000.0,
+            "entry_date": paper_state_holding.get("entry_date") or signal_w1.get("execution_date"),
+            "fill_reason": "state_position",
+        }
+elif paper_shares:
+    paper_fill = derive_paper_fill_from_history()
+
+paper_executed = bool(paper_fill)
+paper_entry_px = float(paper_fill["entry_price_k"]) if paper_fill else paper_signal_px
+paper_entry_date = paper_fill.get("entry_date") if paper_fill else signal_w1.get("execution_date")
 paper_value_m = paper_shares * float(paper_fresh_px or 0) / 1000 if paper_shares and paper_fresh_px else None
-paper_ref_cost_m = paper_shares * paper_signal_px / 1000 if paper_shares and paper_signal_px else None
+paper_ref_cost_m = paper_shares * paper_entry_px * (1.0 + paper_buy_cost_pct) / 1000 if paper_shares and paper_entry_px else None
 paper_position_pnl_m = paper_value_m - paper_ref_cost_m if paper_value_m is not None and paper_ref_cost_m else None
 paper_position_pnl_pct = paper_position_pnl_m / paper_ref_cost_m * 100 if paper_position_pnl_m is not None and paper_ref_cost_m else None
-paper_cash_after_m = signal_w1.get("cash_after_planned_buy_vnd")
-paper_cash_after_m = paper_cash_after_m / 1e6 if paper_cash_after_m else None
+if paper_state_pos.get("cash_vnd") and paper_executed:
+    paper_cash_after_m = float(paper_state_pos["cash_vnd"]) / 1e6
+elif paper_ref_cost_m is not None and paper_executed:
+    paper_cash_after_m = (paper_nav_start_vnd / 1e6) - paper_ref_cost_m
+else:
+    raw_cash_after = signal_w1.get("cash_after_planned_buy_vnd")
+    paper_cash_after_m = raw_cash_after / 1e6 if raw_cash_after else None
 paper_nav_m = paper_cash_after_m + paper_value_m if paper_cash_after_m is not None and paper_value_m is not None else None
 paper_nav_pnl_m = paper_nav_m - 1000 if paper_nav_m is not None else None
 paper_nav_pnl_pct = paper_nav_pnl_m / 1000 * 100 if paper_nav_pnl_m is not None else None
+paper_cash_pct = paper_cash_after_m / (paper_nav_start_vnd / 1e6) * 100 if paper_cash_after_m is not None else signal_w1.get("cash_pct")
+paper_exposure_pct = paper_value_m / paper_nav_m * 100 if paper_value_m is not None and paper_nav_m else signal_w1.get("exposure_pct")
 
 trades_full = list(hist.get("trades", []))
 curve = [
@@ -399,8 +454,6 @@ if upd and lpd and upd[:10] < lpd:
         f"live status updatedAt {upd} đứng TRƯỚC latestPriceDate {lpd} — cần reconcile timestamp."
     )
 
-# --- Paper position đã khớp hay mới là kế hoạch? ---
-paper_executed = bool(paper_log_last.get("holdings"))
 paper_status = "ĐÃ KHỚP" if paper_executed else "KẾ HOẠCH · chưa khớp"
 
 chart_rows = [{
@@ -434,10 +487,13 @@ else:
         "currentCopyShares": row.get("currentCopyShares"),
         "targetCopyShares": row.get("targetCopyShares"),
         "orderShares": row.get("orderShares"),
-        "note": row.get("note"),
+        "note": "Giữ trạng thái hiện tại; chưa có forecast R46 fresh sau 2026-05-25.",
     } for row in planned_rows]
     forecast_source_label = "current_policy"
-    forecast_summary = policy.get("plannedOrders", {}).get("summary")
+    forecast_summary = (
+        "Chưa publish lệnh mới vì target R46 fresh chưa reproduce được artifact 2026-05-25. "
+        "Bảng này chỉ là trạng thái policy hiện tại."
+    )
 
 planned_public = {
     "asOf": policy.get("plannedOrders", {}).get("asOf"),
@@ -490,6 +546,9 @@ data = {
         "symbol": paper_symbol,
         "shares": paper_shares,
         "signalPrice": paper_signal_px,
+        "entryPrice": paper_entry_px,
+        "entryDate": paper_entry_date,
+        "fillReason": paper_fill.get("fill_reason") if paper_fill else None,
         "signalDate": signal_w1.get("execution_date"),
         "freshPrice": paper_fresh_px,
         "freshDate": paper_quote.get("date"),
@@ -499,8 +558,8 @@ data = {
         "navMil": paper_nav_m,
         "navPnlMil": paper_nav_pnl_m,
         "navPnlPct": paper_nav_pnl_pct,
-        "cashPct": signal_w1.get("cash_pct"),
-        "exposurePct": signal_w1.get("exposure_pct"),
+        "cashPct": paper_cash_pct,
+        "exposurePct": paper_exposure_pct,
         "tplusViolations": paper_log_last.get("tplus_violations_cum", 0),
         "checkpoints": pt_state.get("weekly_checkpoint_due", {}),
     },
@@ -589,7 +648,7 @@ h1 {{ font-size:var(--t7); letter-spacing:0; }} .sub {{ color:var(--muted); marg
 .split {{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; align-items:start; }}
 table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding:9px 12px; color:var(--muted); font-size:var(--t1); letter-spacing:.06em; text-transform:uppercase; border-bottom:1px solid var(--border); background:var(--surface2); }} td {{ padding:9px 12px; border-bottom:1px solid var(--soft); vertical-align:middle; }} tr:last-child td {{ border-bottom:0; }} .num {{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }}
 .forecast-table th:first-child,.forecast-table td:first-child {{ width:112px; white-space:nowrap; }}
-.pill {{ display:inline-flex; align-items:center; min-height:20px; border-radius:999px; padding:2px 8px; font-size:11.5px; line-height:1.2; font-weight:700; letter-spacing:0; text-transform:none; white-space:nowrap; }} .buy {{ background:var(--greenSoft); color:var(--green); }} .sell {{ background:var(--redSoft); color:var(--red); }} .hold {{ background:var(--blueSoft); color:var(--accent); }} .skip {{ background:var(--surface2); color:var(--muted); }}
+.pill {{ display:inline-flex; align-items:center; min-height:20px; border-radius:999px; padding:2px 8px; font-size:11.5px; line-height:1.2; font-weight:600; letter-spacing:0; text-transform:none; white-space:nowrap; }} .buy {{ background:var(--greenSoft); color:var(--green); }} .sell {{ background:var(--redSoft); color:var(--red); }} .hold {{ background:var(--blueSoft); color:var(--accent); }} .skip {{ background:var(--surface2); color:var(--muted); }}
 .ptgrid {{ display:grid; grid-template-columns:repeat(4,1fr); border-bottom:1px solid var(--soft); }} .ptbox {{ padding:10px 12px; border-right:1px solid var(--soft); }} .ptbox:nth-child(4n) {{ border-right:0; }} .ptbox span {{ color:var(--muted); font-size:var(--t1); font-weight:800; letter-spacing:.06em; text-transform:uppercase; }} .ptbox b {{ display:block; margin-top:3px; font-size:var(--t5); }}
 .watchSummary {{ display:grid; grid-template-columns:repeat(5,1fr); border-bottom:1px solid var(--border); }}
 .watchSummary span {{ padding:12px 14px; border-right:1px solid var(--border); color:var(--muted); font-size:var(--t1); }}
@@ -640,9 +699,9 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
     </section>
     <div class="split">
       <section class="sec"><div class="sech"><h2>Danh mục copy đang nắm giữ</h2><span class="meta">{len(holdings)} mã · quy đổi theo NAV copy</span></div><table><thead><tr><th>Mã</th><th>Ngành</th><th class="num">KL</th><th class="num">Giá vốn</th><th class="num">Giá TT</th><th class="num">Giá trị</th><th class="num">Tỷ trọng</th><th class="num">P/L</th><th class="num">P/L %</th></tr></thead><tbody id="holdRows"></tbody></table></section>
-      <section class="sec"><div class="sech"><h2>Paper Trade · Tuần 1 <span class="scaletag">{data['paperStatus']}</span></h2><span class="meta">NAV ảo 1 tỷ · bắt đầu {data['paperTrade']['startDate']}</span></div><div class="ptgrid" id="ptGrid"></div><table><thead><tr><th>Mã</th><th class="num">KL</th><th class="num">Signal</th><th class="num">Fresh</th><th class="num">P/L</th></tr></thead><tbody id="paperRows"></tbody></table></section>
+      <section class="sec"><div class="sech"><h2>Paper Trade · Tuần 1 <span class="scaletag">{data['paperStatus']}</span></h2><span class="meta">NAV ảo 1 tỷ · bắt đầu {data['paperTrade']['startDate']}</span></div><div class="ptgrid" id="ptGrid"></div><table><thead><tr><th>Mã</th><th class="num">KL</th><th class="num">Giá vốn</th><th class="num">Giá TT</th><th class="num">P/L</th></tr></thead><tbody id="paperRows"></tbody></table></section>
     </div>
-    <section class="sec"><div class="sech"><h2>Dự kiến giao dịch thứ 2 tới</h2><span class="meta">Lệnh copy-trade từ policy hiện tại; candidate riêng xem ở tab Theo dõi mua</span></div><table class="forecast-table"><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá TT</th><th class="num">Target</th><th class="num">Stop</th><th>Ghi chú</th></tr></thead><tbody id="plannedRows"></tbody></table></section>
+    <section class="sec"><div class="sech"><h2>Dự kiến giao dịch thứ 2 tới</h2><span class="meta">{planned_public['summary']}</span></div><table class="forecast-table"><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá TT</th><th class="num">Target</th><th class="num">Stop</th><th>Ghi chú</th></tr></thead><tbody id="plannedRows"></tbody></table></section>
     <section class="sec"><div class="sech"><h2>Lệnh đã khớp gần nhất <span class="scaletag">QUY MÔ MODEL</span></h2><span class="meta">8 dòng mới nhất từ history.js · KL &amp; P/L theo NAV model (~44 tỷ), không scale theo NAV copy</span></div><table><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá</th><th class="num">P/L</th><th>Lý do</th></tr></thead><tbody id="latestRows"></tbody></table></section>
   </section>
   <section class="view" data-view="watch"><div class="pageh"><div><h1>Theo dõi mua</h1><div class="sub">{len(watchlist_rows)} mã từ dashboard online `data.js` + live shortlist · loại {watchlist_summary['excludedHeld']} mã đang nắm</div></div></div><section class="sec"><div class="sech"><h2>Mã đáng theo dõi và có thể mua sắp tới</h2><span class="meta">Không phải rule khớp lệnh live của R46</span></div><div class="watchSummary" id="watchSummary"></div><div class="watchRules" id="watchRules"></div><table><thead><tr><th>Mã</th><th>Nhóm</th><th class="num">Điểm lọc</th><th class="num">Upside</th><th class="num">Target</th><th class="num">R:R</th><th class="num">TK 20D</th><th>Target tuần</th><th>Tín hiệu mua</th><th>Ghi chú</th></tr></thead><tbody id="watchRows"></tbody></table></section></section>
@@ -672,7 +731,7 @@ document.getElementById('ptGrid').innerHTML = [
   ['Cash', f(pt.cashPct,1)+'%'],
   ['Exposure', f(pt.exposurePct,1)+'%']
 ].map(x=>`<div class="ptbox"><span>${{x[0]}}</span><b>${{x[1]}}</b></div>`).join('');
-document.getElementById('paperRows').innerHTML = `<tr><td><strong>${{esc(pt.symbol)}}</strong><div class="meta">${{esc(pt.signalDate)}} → ${{esc(pt.freshDate)}}</div></td><td class="num">${{f(pt.shares,0)}}</td><td class="num">${{f(pt.signalPrice,1)}}k</td><td class="num">${{f(pt.freshPrice,1)}}k</td><td class="num ${{cls(pt.positionPnlMil)}}">${{money(pt.positionPnlMil)}} · ${{pc(pt.positionPnlPct)}}</td></tr>`;
+document.getElementById('paperRows').innerHTML = `<tr><td><strong>${{esc(pt.symbol)}}</strong><div class="meta">${{esc(pt.entryDate||pt.signalDate)}} → ${{esc(pt.freshDate)}}</div></td><td class="num">${{f(pt.shares,0)}}</td><td class="num">${{f(pt.entryPrice,2)}}k</td><td class="num">${{f(pt.freshPrice,2)}}k</td><td class="num ${{cls(pt.positionPnlMil)}}">${{money(pt.positionPnlMil)}} · ${{pc(pt.positionPnlPct)}}</td></tr>`;
 const planned = D.policy.plannedOrders?.rows || [];
 function renderPlannedRows(navBil=Number(document.getElementById('navInput')?.value)||1){{ document.getElementById('plannedRows').innerHTML = planned.length ? planned.map(r=>{{ const baseShares=Number(r.orderShares||0); const shares=baseShares>0?roundLot(baseShares*navBil):null; return `<tr><td>${{esc(r.displayPlanDate||r.planDate)}}</td><td><strong>${{esc(r.symbol)}}</strong></td><td>${{pill(r.action||r.status)}}</td><td class="num">${{shares===null?'-':f(shares,0)}}</td><td class="num">${{f(r.currentPrice,2)}}k</td><td class="num pos">${{f(r.targetPrice,2)}}k</td><td class="num neg">${{f(r.stopPrice,2)}}k</td><td>${{esc(r.note)}}</td></tr>`; }}).join('') : '<tr><td colspan="8">Ch\\u01b0a c\\u00f3 m\\u00e3 v\\u00e0o t\\u1ea7m ng\\u1eafm.</td></tr>'; }}
 document.querySelectorAll('.navPreset').forEach(btn=>btn.addEventListener('click',()=>renderCopyForNav(btn.dataset.nav)));
