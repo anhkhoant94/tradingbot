@@ -129,6 +129,18 @@ def write_payload(payload: dict) -> None:
     sys.stdout.buffer.write((text + "\n").encode("utf-8"))
 
 
+def preserve_existing_computed(existing: dict, reason: str, error: str | None = None) -> bool:
+    """Keep the last verified forecast when cloud recompute is unavailable."""
+    if existing.get("status") != "COMPUTED":
+        return False
+    existing.setdefault("meta", {})
+    existing["meta"]["cloudR46Refresh"] = reason
+    if error:
+        existing["meta"]["cloudR46RefreshError"] = error[:500]
+    write_payload(existing)
+    return True
+
+
 def run_py(script: str) -> None:
     subprocess.run([sys.executable, str(ROOT / script)], cwd=ROOT, check=True)
 
@@ -488,10 +500,24 @@ def main() -> None:
         existing["meta"]["cloudFullUniverseRefresh"] = "FAILED_ALL_REQUESTS_KEEPING_EXISTING_FORECAST"
         write_payload(existing)
         return
+    history_cache_date = ((full_status.get("historyCache") or {}).get("latestPriceDate") if full_status else None)
+    if full_status and as_of and history_cache_date and str(history_cache_date) < str(as_of):
+        if preserve_existing_computed(
+            existing,
+            "HISTORY_CACHE_STALE_KEEPING_LAST_COMPUTED_FORECAST",
+            f"history_cache_latest={history_cache_date}; live_as_of={as_of}",
+        ):
+            return
 
     try:
         targets, meta = generate_targets(plan_date, args.skip_rebuild_inputs)
     except Exception as exc:
+        if preserve_existing_computed(
+            existing,
+            "CHAIN_UNAVAILABLE_KEEPING_LAST_COMPUTED_FORECAST",
+            str(exc),
+        ):
+            return
         write_payload(
             fail_payload(
                 as_of,
