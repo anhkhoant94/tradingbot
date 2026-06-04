@@ -31,6 +31,7 @@ def load_vni_weekly() -> pd.DataFrame:
     vni["date"] = pd.to_datetime(vni["date"])
     daily = vni.set_index("date")["close"].astype(float)
     weekly = daily.resample("W-FRI").last().dropna().to_frame("vni_close").reset_index()
+    weekly["date"] = pd.to_datetime(weekly["date"]).astype("datetime64[ns]")
     weekly["vni_ret_13w"] = weekly["vni_close"].pct_change(13)
     weekly["vni_ret_26w"] = weekly["vni_close"].pct_change(26)
 
@@ -81,6 +82,9 @@ def symbol_weekly(symbol: str, vni_weekly: pd.DataFrame) -> pd.DataFrame:
     df["avg_value_20d_bil"] = df["value_bil"].rolling(20, min_periods=10).mean()
 
     weekly = df.resample("W-FRI").last().dropna(subset=["close"]).reset_index().rename(columns={date_col: "date"})
+    weekly["date"] = pd.to_datetime(weekly["date"]).astype("datetime64[ns]")
+    vni_weekly = vni_weekly.copy()
+    vni_weekly["date"] = pd.to_datetime(vni_weekly["date"]).astype("datetime64[ns]")
     weekly = pd.merge_asof(
         weekly.sort_values("date"),
         vni_weekly.sort_values("date"),
