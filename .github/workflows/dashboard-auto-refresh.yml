@@ -89,13 +89,27 @@ jobs:
 
           payload = json.loads(Path("dashboard/r46_forecast.json").read_text(encoding="utf-8-sig"))
           meta = payload.get("meta") or {}
+          # Dynamic staleness anchor: forecast asOf phải bắt kịp dữ liệu fresh nhất mà
+          # full-universe refresh vừa kéo về (không hard-code ngày). Nếu chậm hơn -> stale.
+          fresh_floor = ""
+          for status_path in ("output/full_universe_live_update_status.json", "dashboard/full_universe_live_update_status.json"):
+              p = Path(status_path)
+              if p.exists():
+                  try:
+                      fu = json.loads(p.read_text(encoding="utf-8-sig"))
+                  except Exception:
+                      continue
+                  fresh_floor = str(fu.get("latestPriceDate") or fu.get("targetDate") or "")
+                  if fresh_floor:
+                      break
           if payload.get("status") == "COMPUTED":
               bad = [k for k in meta if k.startswith("cloudR46Refresh") or k.startswith("cloudFullUniverseRefresh")]
               if bad:
                   raise SystemExit(f"fresh R46 forecast has fallback diagnostics: {bad}")
-              if str(payload.get("asOf") or "") < "2026-06-04":
-                  raise SystemExit(f"R46 forecast asOf is stale: {payload.get('asOf')}")
-              print(f"R46 forecast computed cleanly: asOf={payload.get('asOf')} planDate={payload.get('planDate')} rows={len(payload.get('rows') or [])}")
+              as_of = str(payload.get("asOf") or "")
+              if fresh_floor and as_of < fresh_floor:
+                  raise SystemExit(f"R46 forecast asOf {as_of} is stale vs full-universe latest {fresh_floor}")
+              print(f"R46 forecast computed cleanly: asOf={as_of} planDate={payload.get('planDate')} freshFloor={fresh_floor} rows={len(payload.get('rows') or [])}")
           else:
               print(f"R46 forecast fail-closed: status={payload.get('status')} reason={payload.get('reason')}")
           PY
@@ -161,4 +175,4 @@ jobs:
 
       - name: Verify public dashboard assets
         working-directory: ${{ github.workspace }}
-        run: python tools/check_dashboard_public_health.py --require-vni-history
+        run: python tools/check_dashboard_public_health.py --require-vni-history --require-current-forecast
