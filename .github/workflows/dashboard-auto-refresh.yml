@@ -80,6 +80,26 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: python tools/precompute_r46_forecast.py
 
+      - name: Verify R46 forecast precompute
+        working-directory: ${{ github.workspace }}
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path("dashboard/r46_forecast.json").read_text(encoding="utf-8-sig"))
+          meta = payload.get("meta") or {}
+          if payload.get("status") == "COMPUTED":
+              bad = [k for k in meta if k.startswith("cloudR46Refresh") or k.startswith("cloudFullUniverseRefresh")]
+              if bad:
+                  raise SystemExit(f"fresh R46 forecast has fallback diagnostics: {bad}")
+              if str(payload.get("asOf") or "") < "2026-06-04":
+                  raise SystemExit(f"R46 forecast asOf is stale: {payload.get('asOf')}")
+              print(f"R46 forecast computed cleanly: asOf={payload.get('asOf')} planDate={payload.get('planDate')} rows={len(payload.get('rows') or [])}")
+          else:
+              print(f"R46 forecast fail-closed: status={payload.get('status')} reason={payload.get('reason')}")
+          PY
+
       - name: Preflight dashboard history
         working-directory: ${{ github.workspace }}
         run: |
