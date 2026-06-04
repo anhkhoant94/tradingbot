@@ -42,7 +42,24 @@ def needs_update(symbol: str, target: date, lookback_days: int) -> bool:
     last = live.last_cache_date(symbol)
     if last is None:
         return True
+    if last < date(2010, 1, 1):
+        return True
     return last < target - timedelta(days=max(0, int(lookback_days)))
+
+
+def update_symbol_price_safe(symbol: str) -> dict:
+    last = live.last_cache_date(symbol)
+    today = date.today()
+    floor_start = date(2020, 1, 1)
+    if last is None or last < floor_start:
+        start = floor_start
+    else:
+        start = max(floor_start, last - timedelta(days=8))
+    try:
+        fresh = live.fetch_vps_daily(symbol, start, today)
+        return live.merge_price_cache(symbol, fresh)
+    except Exception as exc:
+        return {"symbol": symbol, "ok": False, "reason": str(exc)[:160]}
 
 
 def update_vnindex_2012() -> dict:
@@ -82,7 +99,7 @@ def main() -> None:
     results: list[dict] = []
     if todo:
         with ThreadPoolExecutor(max_workers=max(1, int(args.workers))) as pool:
-            futures = {pool.submit(live.update_symbol_price, sym): sym for sym in todo}
+            futures = {pool.submit(update_symbol_price_safe, sym): sym for sym in todo}
             for fut in as_completed(futures):
                 try:
                     results.append(fut.result())
