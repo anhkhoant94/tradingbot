@@ -1,3 +1,27 @@
+## 2026-06-04 Claude — Dashboard 2-lane audit + 3 fixes (fail-closed/freshness)
+
+Handoff đầy đủ: `output/beat_vni30_parallel/overnight_collab/claude_to_codex/dashboard_failclosed_freshness_audit_fix_20260604_0745.md`
+
+Audit độc lập 2-lane GitHub Actions (price 5' / forecast 15'). Xương sống PASS: realtime-only đúng, preserve forecast đúng, 65% gate enforce (`update_full_universe_prices.py:238`), overlap gate `max_diff<=1e-9`, fail-closed cloud-meta đúng. Đã sửa 3 lỗ hổng:
+- FIX1: bỏ literal `asOf < "2026-06-04"` trong `dashboard-auto-refresh.yml`, đổi sang anchor động theo `full_universe_live_update_status.json.latestPriceDate` (timezone-proof).
+- FIX2: `build_v7_real.py` khi forecast không hợp lệ → `forecast_rows=[]` (bảng trống), KHÔNG dựng lệnh self-derived từ policy/watchlist.
+- FIX3: forecast age check tại renderer (phủ cả 2 lane): chỉ render khi `planDate==next_monday(live latestPriceDate)`; forecast tuần trước → state STALE, bảng trống. Phơi `forecastDisplayState`/`forecastPlanDate` ra JSON.
+
+Verify: py_compile + yaml.safe_load OK; unit test 3 nhánh (COMPUTED/STALE/NOT_COMPUTED) đúng. CHƯA build_v7 end-to-end (sandbox thiếu pyarrow) — Codex cần chạy build thật + browser-verify trước khi đóng.
+
+Do-not: đừng quay lại fallback hiển thị lệnh self-derived khi forecast NOT_COMPUTED/STALE; đừng hard-code lại ngày trong gate.
+
+## 2026-06-04 Codex — Dashboard fail-closed verification + public health PASS
+
+Codex verified Claude's 3 dashboard freshness fixes and added monitoring enforcement before closing:
+- `tools/check_dashboard_public_health.py` now checks public `/r46_forecast.json`, embedded `forecastDisplayState`, `forecastPlanDate`, row count, and fallback meta.
+- `.github/workflows/dashboard-auto-refresh.yml` final health check now runs `--require-vni-history --require-current-forecast` so forecast lane fails if public forecast is stale/not computed/fallback-derived.
+- Local build PASS: `build_v7_real.py --out dashboard/_preview/codex-audit-build.html` with holdings=1, watchlist=13, ledger=1600, chart=1342, flags=0.
+- GitHub forecast run PASS: `26938581059`.
+- Public health PASS at `https://ez-trading.vercel.app`: live latest price date `2026-06-04`, forecast status `COMPUTED`, forecast asOf `2026-06-04`, planDate `2026-06-08`, rows=1, fallback_meta=false, embedded state=`COMPUTED`, VN-Index history points=4861.
+
+Operational rule: price-only lane may update every 5 minutes, but it must preserve the last clean forecast; forecast lane recomputes every 15 minutes and must fail closed if R46 forecast cannot be computed from fresh full-universe data. Do not display planned orders from stale forecast or self-derived policy fallback.
+
 ## 2026-06-02 Codex — R1 Drift Bisect Verdict
 
 Artifacts:
