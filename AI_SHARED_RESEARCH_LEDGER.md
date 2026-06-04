@@ -4643,3 +4643,28 @@ Dashboard changes/deploy:
 - Planned Monday table shows only current-policy HOLD row when forecast is not computed, with note `chưa có forecast R46 fresh sau 2026-05-25`; no fabricated VIX or quantity.
 - Public HTML verification after Vercel deploy: entryPrice 14.95 present, paper NAV 997.85854 present, forecastStatus NOT_COMPUTED present, orderShares 3000 absent, Be Vietnam Pro count 1, JetBrains/monospace/YEG Capital count 0.
 - Deployment `dpl_F6o8cfjd7Q5ndA5KMhPYo9TNCBaF` READY; public health passes with live_latest_price_date 2026-06-04.
+
+---
+
+2026-06-04 Codex - Ez dashboard cloud R46 forecast now computes cleanly to current date.
+
+Scope:
+- Dashboard automation/data integrity only. No model promotion and no change to R46 research status.
+- Public URL remains `https://ez-trading.vercel.app`.
+
+Fixes:
+- `tools/update_full_universe_prices.py` rebuilds `.cache/backtest/history_cache.pkl` on GitHub from refreshed `.cache/backtest/history_clean/*.parquet`, so cloud forecast no longer reads the old local-only 2026-05-25/2026-06-01 cache.
+- `tools/precompute_r46_forecast.py` now rebuilds the live R46 target tail on GitHub and validates overlap with the locked official artifact through 2026-05-25 before publishing.
+- Added successful-compute meta cleanup and workflow guard: if a newly computed forecast still contains `cloudR46Refresh*` / fallback diagnostics, GitHub Actions fails before Vercel deploy.
+- Fixed cloud-only chain issues: empty risk context now preserves schema/dtypes; M-layer uses the regime panel built inside precompute instead of requiring missing `/tmp/regime_panel.parquet`.
+
+Verification:
+- GitHub Actions run `26935778095` completed `success`.
+- Workflow log: `R46 forecast computed cleanly: asOf=2026-06-04 planDate=2026-06-08 rows=1`.
+- Public `dashboard_live_update_status.json`: `updatedAt=2026-06-04 06:49:39`, `latestPriceDate=2026-06-04`.
+- Public `full_universe_live_update_status.json`: `updatedAt=2026-06-04 06:50:42`, `symbolsUpdated=700`, `symbolsFailed=3`, `historyCache.latestPriceDate=2026-06-04`.
+- Public `r46_forecast.json`: `status=COMPUTED`, `asOf=2026-06-04`, `planDate=2026-06-08`, no fallback meta, `overlapOk=true`, row = MSB `BÁN HẾT` 3,600 shares at current price 14.55k dated 2026-06-04.
+- Public health check passes: index/css/analysis/data/history/live all 200, VNI history points 4,861, no NUL bytes.
+
+Operational rule:
+- GitHub Actions schedule remains every 5 minutes on weekdays (`2-59/5 * * * 1-5`). The browser/Vercel app remains static; all compute happens in GitHub Actions before deploy.
