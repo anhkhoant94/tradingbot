@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "policy": "r46_bear_stop_mcore",
+  "asOf": "2026-06-03",
+  "planDate": "2026-06-08",
+  "generatedAtSource": "dashboard\\dashboard_live_update_status.json",
+  "rows": [],
+  "status": "NOT_COMPUTED",
+  "reason": "missing_fresh_r46_target_rows",
+  "message": "GitHub runner da cap nhat gia, nhung chua co target R46 moi hon policy artifact. Khong publish lenh mua/ban de tranh sizing sai."
+}
