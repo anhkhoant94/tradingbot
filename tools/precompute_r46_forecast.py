@@ -141,6 +141,15 @@ def preserve_existing_computed(existing: dict, reason: str, error: str | None = 
     return True
 
 
+def clean_success_meta(meta: dict) -> dict:
+    """Remove fallback-only diagnostics from a fresh successful compute."""
+    cleaned = dict(meta or {})
+    for key in list(cleaned):
+        if key.startswith("cloudR46Refresh") or key.startswith("cloudFullUniverseRefresh"):
+            cleaned.pop(key, None)
+    return cleaned
+
+
 def run_py(script: str) -> None:
     subprocess.run([sys.executable, str(ROOT / script)], cwd=ROOT, check=True)
 
@@ -541,6 +550,7 @@ def main() -> None:
         )
         return
 
+    meta = clean_success_meta(meta)
     rows = build_rows(targets, plan_date)
     payload = {
         "schemaVersion": 2,
