@@ -63,7 +63,42 @@ def update_symbol_price_safe(symbol: str) -> dict:
 
 
 def update_vnindex_2012() -> dict:
-    result = live.update_vnindex()
+    today = date.today()
+    floor_start = date(2016, 1, 1)
+    path = live.BACKTEST_CACHE / "vnindex_daily.parquet"
+    start = floor_start
+    if path.exists():
+        try:
+            current = pd.read_parquet(path)
+            if not current.empty:
+                last = pd.to_datetime(current["date"], errors="coerce").max().date()
+                if last >= floor_start:
+                    start = max(floor_start, last - timedelta(days=8))
+        except Exception:
+            start = floor_start
+    try:
+        fresh = live.fetch_vps_daily("VNINDEX", start, today)
+        if fresh.empty:
+            result = {"symbol": "VNINDEX", "ok": False, "reason": "no_data"}
+        else:
+            fresh = fresh.rename(columns={"time": "date"})[["date", "close"]]
+            frames = []
+            for p in [live.BACKTEST_CACHE / "vnindex_daily.parquet", live.BACKTEST_CACHE / "vnindex_daily_v6.parquet"]:
+                old = pd.read_parquet(p) if p.exists() else pd.DataFrame()
+                combined = pd.concat([old, fresh], ignore_index=True)
+                combined["date"] = pd.to_datetime(combined["date"], errors="coerce").dt.tz_localize(None).dt.normalize()
+                combined["close"] = pd.to_numeric(combined["close"], errors="coerce")
+                combined = combined.dropna(subset=["date", "close"]).drop_duplicates("date", keep="last").sort_values("date")
+                live.write_parquet(combined, p)
+                frames.append(combined)
+            result = {
+                "symbol": "VNINDEX",
+                "ok": True,
+                "latest": frames[-1]["date"].max().date().isoformat() if frames else None,
+                "rows": len(frames[-1]) if frames else 0,
+            }
+    except Exception as exc:
+        result = {"symbol": "VNINDEX", "ok": False, "reason": str(exc)[:160]}
     src = live.BACKTEST_CACHE / "vnindex_daily.parquet"
     dst = live.BACKTEST_CACHE / "vnindex_daily_2012.parquet"
     try:
