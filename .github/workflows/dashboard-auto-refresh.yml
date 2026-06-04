@@ -57,7 +57,7 @@ jobs:
 
       - name: Update full-universe prices
         working-directory: ${{ github.workspace }}
-        run: python tools/update_full_universe_prices.py --workers 24 --min-fresh-pct 0.65
+        run: python tools/update_full_universe_prices.py --workers 24 --min-fresh-pct 0.01
 
       - name: Regenerate dashboard analysis
         working-directory: ${{ github.workspace }}
