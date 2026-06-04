@@ -38,6 +38,11 @@ def main() -> None:
         action="store_true",
         help="exit non-zero when history.js has no numeric VN-Index points for the performance chart",
     )
+    parser.add_argument(
+        "--require-current-forecast",
+        action="store_true",
+        help="exit non-zero when r46_forecast.json or embedded plannedOrders is not a current COMPUTED forecast",
+    )
     args = parser.parse_args()
 
     idx_status, idx_raw = fetch_bytes(args.url, "/")
@@ -46,7 +51,9 @@ def main() -> None:
     data_status, data_raw = fetch_bytes(args.url, "/data.js")
     hist_status, history_raw = fetch_bytes(args.url, "/history.js")
     live_status, live_raw = fetch_bytes(args.url, "/dashboard_live_update_status.json")
+    forecast_status, forecast_raw = fetch_bytes(args.url, "/r46_forecast.json")
     css = decode(css_raw)
+    index = decode(idx_raw)
     analysis = decode(analysis_raw)
     data_js = decode(data_raw)
     history = decode(history_raw)
@@ -54,8 +61,16 @@ def main() -> None:
     today = dt.date.today().isoformat()
     as_of_match = re.search(r'"as_of"\s*:\s*"(\d{4}-\d{2}-\d{2})"', data_js)
     live_payload = json.loads(decode(live_raw))
+    forecast_payload = json.loads(decode(forecast_raw))
     live_updated_at = str(live_payload.get("updatedAt") or "")
     live_latest_price_date = str(live_payload.get("latestPriceDate") or "")
+    forecast_meta = forecast_payload.get("meta") or {}
+    forecast_display_match = re.search(r'"forecastDisplayState"\s*:\s*"([^"]+)"', index)
+    embedded_forecast_display_state = forecast_display_match.group(1) if forecast_display_match else None
+    forecast_has_fallback_meta = any(
+        str(k).startswith("cloudR46Refresh") or str(k).startswith("cloudFullUniverseRefresh")
+        for k in forecast_meta
+    )
     payload = {
         "base_url": args.url,
         "index_status": idx_status,
@@ -64,10 +79,18 @@ def main() -> None:
         "data_status": data_status,
         "history_status": hist_status,
         "live_status": live_status,
+        "forecast_status_http": forecast_status,
         "data_as_of": as_of_match.group(1) if as_of_match else None,
         "live_updated_at": live_updated_at,
         "live_latest_price_date": live_latest_price_date,
         "live_is_today": live_updated_at.startswith(today) or live_latest_price_date == today,
+        "forecast_status": forecast_payload.get("status"),
+        "forecast_as_of": forecast_payload.get("asOf"),
+        "forecast_plan_date": forecast_payload.get("planDate"),
+        "forecast_rows": len(forecast_payload.get("rows") or []),
+        "forecast_has_fallback_meta": forecast_has_fallback_meta,
+        "embedded_forecast_display_state": embedded_forecast_display_state,
+        "embedded_forecast_is_computed": embedded_forecast_display_state == "COMPUTED",
         "vni_history_points": len(re.findall(r'"vniClose"\s*:\s*[0-9]', history)),
         "has_r46_key": "r46_bear_stop_mcore" in analysis,
         "has_r23_key": "r23_nav3b_mcore" in analysis,
@@ -85,6 +108,13 @@ def main() -> None:
     if args.require_fresh_live and not payload["live_is_today"]:
         raise SystemExit(1)
     if args.require_vni_history and payload["vni_history_points"] <= 0:
+        raise SystemExit(1)
+    if args.require_current_forecast and (
+        payload["forecast_status"] != "COMPUTED"
+        or payload["forecast_rows"] <= 0
+        or payload["forecast_has_fallback_meta"]
+        or payload["embedded_forecast_display_state"] != "COMPUTED"
+    ):
         raise SystemExit(1)
 
 
