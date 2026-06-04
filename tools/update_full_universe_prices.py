@@ -184,6 +184,7 @@ def main() -> None:
     target = pd.Timestamp(args.target_date).date() if args.target_date else date.today()
     symbols = read_universe_symbols(args.limit or None)
     todo = symbols if args.force else [sym for sym in symbols if needs_update(sym, target, args.lookback_days)]
+    attempted_symbols = set(todo)
 
     results: list[dict] = run_price_updates(todo, args.workers)
 
@@ -198,6 +199,7 @@ def main() -> None:
             break
         retry_results = run_price_updates(stale, args.retry_workers)
         results.extend(retry_results)
+        attempted_symbols.update(stale)
         retry_rounds[-1]["attempted"] = len(stale)
         retry_rounds[-1]["ok"] = sum(1 for r in retry_results if r.get("ok"))
 
@@ -206,14 +208,18 @@ def main() -> None:
     latest_by_symbol = latest_date_map(symbols)
     latest_dates = list(latest_by_symbol.values())
 
-    ok = [r for r in results if r.get("ok")]
-    failed = [r for r in results if not r.get("ok")]
+    ok_symbols = {str(r.get("symbol", "")).upper() for r in results if r.get("ok") and r.get("symbol")}
+    failed = [
+        r
+        for r in results
+        if not r.get("ok") and str(r.get("symbol", "")).upper() not in ok_symbols
+    ]
     payload = {
         "updatedAt": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
         "targetDate": target.isoformat(),
         "symbolsTotal": len(symbols),
-        "symbolsAttempted": len(todo),
-        "symbolsUpdated": len(ok),
+        "symbolsAttempted": len(attempted_symbols),
+        "symbolsUpdated": len(ok_symbols),
         "symbolsFailed": len(failed),
         "latestPriceDate": max(latest_dates) if latest_dates else None,
         "symbolsAtTargetOrNewer": sum(1 for d in latest_dates if d >= target.isoformat()),
