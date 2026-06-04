@@ -17,6 +17,20 @@ STATE_DIR = ROOT / "output" / "beat_vni30_parallel" / "technical_t2_state_machin
 OUT = STATE_DIR / "risk_overlay_v3"
 TARGET_START = pd.Timestamp("2021-01-01")
 TARGET_END = pd.Timestamp("2026-05-22")
+RISK_CONTEXT_COLUMNS = [
+    "date",
+    "year",
+    "risk_control",
+    "fire",
+    "active",
+    "multiplier",
+    "breadth_pctile_52w",
+    "dispersion_pctile_52w",
+    "pct_above_sma50",
+    "pct_near_high52",
+    "breadth50_delta_1w",
+    "breadth50_delta_2w",
+]
 
 
 def rolling_percentile(s: pd.Series, window: int = 52) -> pd.Series:
@@ -175,7 +189,7 @@ def build_risk_context(states: pd.DataFrame, risk_control: str) -> pd.DataFrame:
             "breadth50_delta_1w": float(getattr(st, "breadth50_delta_1w", np.nan)),
             "breadth50_delta_2w": float(getattr(st, "breadth50_delta_2w", np.nan)),
         })
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows, columns=RISK_CONTEXT_COLUMNS)
 
 
 def build_targets(risk_control: str, holdings: int, entry_band: float):
