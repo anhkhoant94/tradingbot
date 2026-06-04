@@ -142,6 +142,12 @@ def spread_pp(data: pd.DataFrame, factor: str, target: str) -> float | None:
     return float((data.loc[bucket == 4, target].mean() - data.loc[bucket == 0, target].mean()) * 100.0)
 
 
+def spearman_no_scipy(data: pd.DataFrame, factor: str, target: str) -> float:
+    ranked = data[[factor, target]].dropna().rank(method="average")
+    value = ranked[factor].corr(ranked[target])
+    return float(value) if pd.notna(value) else float("nan")
+
+
 def evaluate(panel: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     year_rows = []
     regime_rows = []
@@ -174,7 +180,7 @@ def evaluate(panel: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFr
                     "target": target,
                     "year": int(year),
                     "n": int(len(data)),
-                    "rank_ic": float(data[factor].corr(data[target], method="spearman")),
+                    "rank_ic": spearman_no_scipy(data, factor, target),
                     "top_minus_bottom_pp": spread_pp(part, factor, target),
                 })
             for regime, part in panel.groupby("vni_regime"):
@@ -188,7 +194,7 @@ def evaluate(panel: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFr
                     "target": target,
                     "regime": regime,
                     "n": int(len(data)),
-                    "rank_ic": float(data[factor].corr(data[target], method="spearman")),
+                    "rank_ic": spearman_no_scipy(data, factor, target),
                     "top_minus_bottom_pp": spread_pp(part, factor, target),
                 })
     return pd.DataFrame(year_rows), pd.DataFrame(regime_rows), pd.DataFrame(breadth_rows)
