@@ -58,6 +58,7 @@ FILES_TO_PUSH = [
     "tools/check_dashboard_public_health.py",
     "tools/deploy_vercel_dashboard.py",
     "tools/deploy_online_dashboard_from_tokens.py",
+    "tools/precompute_r46_forecast.py",
     "ONLINE_AUTO_REFRESH_SETUP.md",
     "AI_SHARED_RESEARCH_LEDGER.md",
     "requirements.txt",
@@ -68,7 +69,9 @@ FILES_TO_PUSH = [
     "output/screening_candidates.csv",
     "output/screening_full_results.csv",
     "output/vnindex_daily.csv",
+    "output/r46_forecast_status.json",
     "dashboard/data.js",
+    "dashboard/r46_forecast.json",
     "dashboard/dashboard_live_update_status.json",
 ]
 
@@ -175,6 +178,7 @@ def build_dashboard() -> None:
     run_step([sys.executable, "generate_deep_analysis.py"])
     run_step([sys.executable, "generate_model_history.py"])
     run_step([sys.executable, "generate_dashboard_data.py"])
+    run_step([sys.executable, "tools/precompute_r46_forecast.py"])
     run_step([sys.executable, "dashboard/_preview/build_v7_real.py", "--out", "dashboard/index.html"])
 
 
