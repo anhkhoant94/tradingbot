@@ -1,0 +1,25 @@
+{
+  "updatedAt": "2026-06-04 12:31:56",
+  "targetDate": "2026-06-04",
+  "symbolsTotal": 703,
+  "symbolsAttempted": 197,
+  "symbolsUpdated": 197,
+  "symbolsFailed": 0,
+  "latestPriceDate": "2026-06-04",
+  "symbolsAtTargetOrNewer": 506,
+  "vnindex": {
+    "symbol": "VNINDEX",
+    "ok": true,
+    "latest": "2026-06-04",
+    "rows": 1602,
+    "vnindex_2012_latest": "2026-06-04",
+    "vnindex_2012_rows": 4179
+  },
+  "historyCache": {
+    "path": ".cache\\backtest\\history_cache.pkl",
+    "symbols": 703,
+    "latestPriceDate": "2026-06-04"
+  },
+  "failedSample": [],
+  "seconds": 51.79
+}
