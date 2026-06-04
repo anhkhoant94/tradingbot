@@ -476,6 +476,19 @@ def main() -> None:
         write_payload(fail_payload(as_of, plan_date, "missing_live_status", "Thiếu live status để xác định ngày forecast."))
         return
 
+    full_status = read_json(OUT / "full_universe_live_update_status.json")
+    existing = read_json(DASH / "r46_forecast.json")
+    if (
+        full_status
+        and int(num(full_status.get("symbolsAttempted"), 0)) > 0
+        and int(num(full_status.get("symbolsUpdated"), 0)) == 0
+        and existing.get("status") == "COMPUTED"
+    ):
+        existing.setdefault("meta", {})
+        existing["meta"]["cloudFullUniverseRefresh"] = "FAILED_ALL_REQUESTS_KEEPING_EXISTING_FORECAST"
+        write_payload(existing)
+        return
+
     try:
         targets, meta = generate_targets(plan_date, args.skip_rebuild_inputs)
     except Exception as exc:
