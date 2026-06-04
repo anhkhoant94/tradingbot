@@ -262,7 +262,7 @@ def main() -> None:
         "",
         "## Top Factors",
         "",
-        summary.head(12).to_markdown(index=False) if not summary.empty else "No factors.",
+        summary.head(12).to_csv(index=False) if not summary.empty else "No factors.",
         "",
         "Gate: positive IC >=6/9 years, positive top-bottom spread >=6/9 years, positive IC in >=2 VNI regimes.",
     ]
