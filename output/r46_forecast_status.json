@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "policy": "r46_bear_stop_mcore",
-  "asOf": "2026-06-03",
+  "asOf": "2026-06-04",
   "planDate": "2026-06-08",
   "generatedAtSource": "dashboard\\dashboard_live_update_status.json",
   "rows": [],
