@@ -58,10 +58,21 @@
     }
   },
   "current_position": {
-    "cash_vnd": 1000000000,
-    "holdings": [],
-    "as_of": "2026-05-30",
-    "note": "Week 1 BUY orders pending Monday 2026-06-01 open execution per signal_week_1_20260601.json"
+    "cash_vnd": 946018540,
+    "holdings": [
+      {
+        "symbol": "MSB",
+        "shares": 3600,
+        "entry_date": "2026-06-01",
+        "entry_px_vnd": 14950,
+        "gross_cost_vnd": 53820000,
+        "buy_cost_vnd": 161460,
+        "net_cost_vnd": 53981460,
+        "fill_reason": "Monday open filled because 14.95k <= 15.00k * 1.09"
+      }
+    ],
+    "as_of": "2026-06-04",
+    "note": "Week 1 BUY executed at Monday 2026-06-01 open under signal_week_1_20260601.json. Fresh R46 target after 2026-05-25 is still not computed/reconciled."
   },
   "weekly_checkpoint_due": {
     "week_1": "2026-06-01",
