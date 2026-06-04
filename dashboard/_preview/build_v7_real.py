@@ -35,6 +35,26 @@ def load_js_object(path: Path, var_name: str):
     return json.loads(match.group(1))
 
 
+def load_json_or(path: Path, fallback):
+    try:
+        if path.exists():
+            return json.loads(path.read_text(encoding="utf-8-sig"))
+    except Exception:
+        pass
+    return fallback
+
+
+def load_jsonl_last_or(path: Path, fallback):
+    try:
+        if path.exists():
+            lines = [line for line in path.read_text(encoding="utf-8-sig").splitlines() if line.strip()]
+            if lines:
+                return json.loads(lines[-1])
+    except Exception:
+        pass
+    return fallback
+
+
 def fmt_num(value, digits=1):
     if value is None:
         return "-"
@@ -104,13 +124,33 @@ def next_monday(date_text):
 dashboard_data = load_js_object(DASH / "data.js", "window.SCREENING_DASHBOARD_DATA")
 analysis = load_js_object(DASH / "analysis.js", "window.SCREENING_DEEP_ANALYSIS")
 history = load_js_object(DASH / "history.js", "window.MODEL_TRADE_HISTORY")
-live_status = json.loads((DASH / "dashboard_live_update_status.json").read_text(encoding="utf-8"))
+live_status = load_json_or(DASH / "dashboard_live_update_status.json", {})
 forecast_status_path = DASH / "r46_forecast.json"
-forecast_status = json.loads(forecast_status_path.read_text(encoding="utf-8")) if forecast_status_path.exists() else {}
-pt_state = json.loads((PT_DIR / "paper_trade_state.json").read_text(encoding="utf-8"))
-signal_w1 = json.loads((PT_DIR / "signal_week_1_20260601.json").read_text(encoding="utf-8"))
-paper_log_lines = (PT_DIR / "paper_trade_log.jsonl").read_text(encoding="utf-8").splitlines()
-paper_log_last = json.loads(paper_log_lines[-1]) if paper_log_lines else {}
+forecast_status = load_json_or(forecast_status_path, {})
+pt_state = load_json_or(PT_DIR / "paper_trade_state.json", {
+    "start_date": "2026-06-01",
+    "end_date": "2026-06-29",
+    "weekly_checkpoint_due": {
+        "week_1": "2026-06-01",
+        "week_2": "2026-06-08",
+        "week_3": "2026-06-15",
+        "week_4": "2026-06-22",
+        "week_4_close": "2026-06-29",
+    },
+})
+signal_w1 = load_json_or(PT_DIR / "signal_week_1_20260601.json", {
+    "execution_date": "2026-06-01",
+    "nav_virtual_vnd": 1_000_000_000,
+    "cash_pct": 94.49,
+    "exposure_pct": 5.51,
+    "targets": [{
+        "symbol": "MSB",
+        "target_weight": 0.05525,
+        "target_shares_round_lot_100": 3600,
+        "prev_close_vnd_per_share": 15000,
+    }],
+})
+paper_log_last = load_jsonl_last_or(PT_DIR / "paper_trade_log.jsonl", {})
 
 policy = next(p for p in analysis["strategyPolicies"] if p["key"] == "r46_bear_stop_mcore")
 hist = next(p for p in history["policies"] if p["key"] == "r46_bear_stop_mcore")
