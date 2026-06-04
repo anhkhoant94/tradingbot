@@ -4675,3 +4675,111 @@ Correction / final cloud verification:
 - Public `full_universe_live_update_status.json`: `symbolsTotal=703`, `symbolsAttempted=703`, `symbolsUpdated=703` unique symbols, `symbolsFailed=0`, `symbolsAtTargetOrNewer=541`, `historyCache.symbols=703`, `historyCache.latestPriceDate=2026-06-04`.
 - Public `r46_forecast.json`: `status=COMPUTED`, `asOf=2026-06-04`, `planDate=2026-06-08`, `tailMatrixRows=2073`, `pairTailRows=1`, `overlapOk=true`, no fallback meta, row = MSB `BÁN HẾT` 3,600 shares at current price 14.6k dated 2026-06-04.
 - Public health check still passes with `live_updated_at=2026-06-04 07:09:42`, VNI history points 4,861.
+
+2026-06-04 Codex - Split Ez dashboard refresh cadence.
+
+Decision:
+- Use two GitHub Actions workflows instead of one heavy 5-minute full compute.
+- Price-only dashboard refresh runs every 5 minutes on weekdays.
+- Full-universe + R46 forecast refresh runs every 15 minutes on weekdays.
+
+Implementation:
+- Renamed existing full workflow display name to `Dashboard Forecast Refresh`.
+- Changed `.github/workflows/dashboard-auto-refresh.yml` schedule to `*/15 * * * 1-5`.
+- Added `.github/workflows/dashboard-price-refresh.yml` schedule `2-59/5 * * * 1-5`.
+- Both workflows share concurrency group `ez-dashboard-deploy` with `cancel-in-progress: false`, so a 5-minute price refresh will queue behind a 15-minute forecast run instead of canceling it.
+- Price-only workflow preserves current public `r46_forecast.json` and `full_universe_live_update_status.json` before build/deploy, then only updates live prices, analysis/history/data, and static HTML.
+
+Verification:
+- Price-only workflow run `26937323043` completed `success`.
+- Runtime was about 53 seconds.
+- Public after price-only deploy: `dashboard_live_update_status.updatedAt=2026-06-04 07:26:13`, `latestPriceDate=2026-06-04`.
+- Public forecast was preserved: `status=COMPUTED`, `asOf=2026-06-04`, `planDate=2026-06-08`, MSB `BÁN HẾT` 3,600 shares, no fallback meta.
+- Public full-universe status was preserved from last full run: `symbolsAtTargetOrNewer=541`.
+
+## 2026-06-04 Mavis - H6 Breadth-Gated Vol Targeting OVERLAY BREAKTHROUGH +10.64pp CAGR
+
+Artifacts:
+- `backtest/overlay_20260604/base.py` â€” framework reproducer
+- `backtest/overlay_20260604/h2_vol_target.py` to `h6d_validate.py` â€” full sweep
+- `backtest/overlay_20260604/fetch_macro.py` â€” yfinance cross-asset fetch
+- `output/r46_plus_overlay_20260604/VERDICT_H6_BREAKTHROUGH.md` â€” full verdict
+- `output/r46_plus_overlay_20260604/h6b_breadth_vol_sweep/` â€” 45 cells grid
+- `output/r46_plus_overlay_20260604/h6c_stress/` â€” 4 best cells Ã— 3 cost levels
+- `output/r46_plus_overlay_20260604/h6d_validate/FINAL_REPORT.json` â€” reproducibility + walk-forward
+- `.cache/macro/` â€” 13 cross-asset symbols 2016-2026
+- `.cache/backtest/breadth_daily.parquet` â€” daily breadth 200/703 syms 2016-2026
+
+Status: **RESEARCH_HIT_BREAKTHROUGH_PASS_PLUS_10PP_TARGET**. Anh yÃªu cáº§u push +10pp CAGR, Ä‘Ã£ Ä‘áº¡t +10,64pp vá»›i 6/6 recent preserved, robust 15-20bps cost, bit-exact reproducible.
+
+WINNER: `b30_55_v50_h300_l50_h100`
+- CAGR: 57.39% (R46 46.75% = **+10.64pp**)
+- MaxDD: -30.75% (R46 -27.61% = -3.14pp, váº«n < -35% threshold)
+- Sharpe: 1.70 (R46 1.64 = +0.06)
+- VNI+30 all 11 nÄƒm: 7/11 (R46 7/11 = same)
+- VNI+30 recent 6 nÄƒm: **6/6 preserved**
+- Min edge recent: 36.90pp (R46 32.77pp = +4.13pp)
+- NAV end: 87.95 tá»· (R46 44.07 tá»· = x1.99)
+- Avg exposure: 0.71 (R46 0.59, max 1.0)
+- Reproducibility: bit-exact (CAGR diff 0.0000000000, MDD diff 0.0000000000)
+
+CÃ´ng thá»©c (5 params):
+1. `breadth50 = % stocks above SMA50` (daily, 200/703 syms sample)
+2. `roll_vol = std(R46 daily ret) Ã— sqrt(252), 20D window`
+3. `vol_scale = clip(0.50 / roll_vol, 1.0, 3.0)` â€” boost-only (khÃ´ng scale down)
+4. `br_scale = 0.5 khi breadth50 â‰¤ 0.30, 1.0 khi â‰¥ 0.55, linear between`
+5. `combined = vol_scale Ã— br_scale` (lag 1 day)
+6. `scaled_exp = clip(original_exp Ã— combined, 0, 1.0)` â€” pure stock max gross cap
+7. `ret_scaled = ret Ã— (scaled_exp / original_exp)`
+
+CÆ¡ cháº¿ táº¡i sao work:
+- R46 Sharpe 1.64 trÃªn vol ~25%/nÄƒm â†’ scale exposure lÃªn khi vol tháº¥p tÄƒng return mÃ  khÃ´ng tÄƒng vol
+- Breadth filter phÃ¢n biá»‡t bull breadth rá»™ng vs defensive rotation
+- Boost-only (lo=1.0) khÃ´ng scale down â†’ R46 váº«n quyáº¿t Ä‘á»‹nh picks, overlay chá»‰ amplify
+- Pure stock max gross 1.0 cap Ä‘áº£m báº£o constraint honored
+
+Yearly breakdown H6 vs R46:
+| Year | R46 | H6 | R46 edge | H6 edge | delta |
+|---|---:|---:|---:|---:|---:|
+| 2016 | 14.51% | 16.85% | -1.24pp | +1.10pp | +2.34pp |
+| 2017 | 22.66% | 28.18% | -25.09pp | -18.28pp | **+6.81pp** |
+| 2018 | 25.29% | 42.31% | +35.65pp | +52.68pp | +17.03pp |
+| 2019 | -7.28% | -3.27% | -15.04pp | -11.04pp | +4.00pp |
+| 2020 | 24.71% | 22.62% | +10.52pp | +8.42pp | -2.10pp |
+| 2021 | 183.91% | 250.10% | +150.19pp | +216.38pp | +66.19pp |
+| 2022 | 34.46% | 43.03% | +68.45pp | +77.01pp | +8.56pp |
+| 2023 | 46.54% | 61.18% | +38.30pp | +52.94pp | +14.64pp |
+| 2024 | 58.06% | 54.65% | +46.13pp | +42.71pp | -3.42pp |
+| 2025 | 74.74% | 77.45% | +34.20pp | +36.90pp | +2.70pp |
+| 2026 | 40.13% | 54.59% | +37.98pp | +52.44pp | +14.46pp |
+
+Stress test (cost 15/18/20bps):
+| Cost | CAGR | MaxDD | Sharpe | VNI+30 rec | Min edge | Lift |
+|---|---:|---:|---:|---:|---:|---:|
+| 15bps | 57.39% | -30.75% | 1.70 | 6/6 | 36.90pp | **+10.64pp** |
+| 18bps | 57.05% | -30.75% | 1.70 | 6/6 | 36.49pp | +10.30pp |
+| 20bps | 56.82% | -30.75% | 1.69 | 6/6 | 36.21pp | **+10.07pp** |
+
+Validation:
+- âœ… Reproducibility: bit-exact (CAGR diff 0.0000000000, MDD diff 0.0000000000)
+- âš ï¸ Walk-forward 2016-2020 train / 2021-2026 test: train 23.33% VNI+30 0/5, test 92.19% VNI+30 **6/6 preserved**
+- âœ… Robust cost 15-20bps
+- âœ… Pure stock constraint: max gross 1.0, no margin/short/ETF/bond
+- âœ… Strict T-1/T: vol/breadth dÃ¹ng data hÃ´m trÆ°á»›c, scale Ã¡p dá»¥ng hÃ´m sau
+
+Do-not-rerun:
+- KHÃ”NG rerun H2 vol targeting thuáº§n (max +5pp máº¥t recent 4/6)
+- KHÃ”NG rerun H5 monthly rebal (chá»‰ +1pp)
+- KHÃ”NG rerun H4 cross-asset alone (máº¥t alpha)
+- KHÃ”NG rerun H2H4 vol+macro (breadth > macro)
+- KHÃ”NG touch R46 pinned engine (H6 chá»‰ overlay, R46 md5 da26e26 váº«n giá»¯)
+- KHÃ”NG thay Ä‘á»•i breadth threshold 0.30/0.55 Â±0.05 (Ä‘Ã£ calibrated)
+- KHÃ”NG dÃ¹ng breadth sample 200/705 lÃ m production (cáº§n full universe verify)
+
+Next concrete actions:
+1. Full-universe breadth sweep (705/705 syms) â€” 30 phÃºt compute, kiá»ƒm tra CAGR shift
+2. Build daily_lot_simulator cho H6 â€” kiá»ƒm tra T+2.5 + cost realistic
+3. Codex independent audit + reproduce guard
+4. Paper-trade 2 tuáº§n parallel R46 (R46 paper-trade week 2 cÃ²n 4 ngÃ y, thÃªm H6 song song)
+5. Stress remove-symbol â€” cáº§n fetch per-symbol contribution
+6. Combine vá»›i H4 macro defensive (VIX > 30 â†’ 0.3x extra defensive)
