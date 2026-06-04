@@ -470,30 +470,37 @@ model_summary_cards = [
 ]
 forecast_date = next_monday(live_status.get("latestPriceDate") or signal_w1.get("execution_date"))
 planned_symbols = {str(row.get("symbol", "")).upper() for row in planned_rows}
-if forecast_status.get("status") == "COMPUTED" and forecast_status.get("rows"):
+
+# Fail-closed display + forecast age guard (áp dụng cho cả lane price-only và forecast):
+# chỉ render lệnh khi forecast COMPUTED, có rows, và còn đúng tuần kế hoạch hiện tại.
+# Forecast cũ tuần trước (planDate lệch expected) bị coi như chưa publish -> bảng trống.
+forecast_is_computed = forecast_status.get("status") == "COMPUTED" and bool(forecast_status.get("rows"))
+forecast_plan_date = forecast_status.get("planDate")
+forecast_is_current = forecast_is_computed and (forecast_plan_date == forecast_date)
+
+if forecast_is_current:
     forecast_rows = forecast_status.get("rows", [])
     forecast_source_label = forecast_status.get("source") or "r46_forecast.json"
     forecast_summary = forecast_status.get("message") or "Forecast R46 precompute tu dong."
+    forecast_display_state = "COMPUTED"
 else:
-    forecast_rows = [{
-        "displayPlanDate": forecast_date,
-        "planDate": row.get("planDate"),
-        "symbol": row.get("symbol"),
-        "action": row.get("action"),
-        "status": row.get("status"),
-        "currentPrice": row.get("currentPrice"),
-        "targetPrice": row.get("targetPrice"),
-        "stopPrice": row.get("stopPrice"),
-        "currentCopyShares": row.get("currentCopyShares"),
-        "targetCopyShares": row.get("targetCopyShares"),
-        "orderShares": row.get("orderShares"),
-        "note": "Giữ trạng thái hiện tại; chưa có forecast R46 fresh sau 2026-05-25.",
-    } for row in planned_rows]
-    forecast_source_label = "current_policy"
-    forecast_summary = (
-        "Chưa publish lệnh mới vì target R46 fresh chưa reproduce được artifact 2026-05-25. "
-        "Bảng này chỉ là trạng thái policy hiện tại."
-    )
+    # Fail-closed: KHÔNG dựng lệnh tự suy diễn từ policy/watchlist. Bảng để trống.
+    forecast_rows = []
+    forecast_source_label = "fail_closed"
+    if forecast_is_computed and not forecast_is_current:
+        forecast_display_state = "STALE"
+        forecast_summary = (
+            f"Chưa publish lệnh tuần này. Forecast R46 mới nhất là cho ngày {forecast_plan_date}, "
+            f"đã cũ so với tuần kế hoạch {forecast_date}. Giữ nguyên danh mục hiện tại, chờ forecast fresh."
+        )
+    else:
+        forecast_display_state = "NOT_COMPUTED"
+        reason = forecast_status.get("reason")
+        forecast_summary = (
+            "Chưa publish lệnh mới: forecast R46 chưa reproduce được artifact khóa hoặc thiếu dữ liệu fresh"
+            + (f" ({reason})" if reason else "")
+            + ". Dashboard giữ nguyên danh mục hiện tại, không tự suy diễn lệnh."
+        )
 
 planned_public = {
     "asOf": policy.get("plannedOrders", {}).get("asOf"),
@@ -501,6 +508,8 @@ planned_public = {
     "stage": policy.get("plannedOrders", {}).get("stage"),
     "source": forecast_source_label,
     "forecastStatus": forecast_status.get("status") or "NOT_CONFIGURED",
+    "forecastDisplayState": forecast_display_state,
+    "forecastPlanDate": forecast_plan_date,
     "forecastReason": forecast_status.get("reason"),
     "summary": forecast_summary,
     "rows": forecast_rows,
@@ -733,7 +742,7 @@ document.getElementById('ptGrid').innerHTML = [
 ].map(x=>`<div class="ptbox"><span>${{x[0]}}</span><b>${{x[1]}}</b></div>`).join('');
 document.getElementById('paperRows').innerHTML = `<tr><td><strong>${{esc(pt.symbol)}}</strong><div class="meta">${{esc(pt.entryDate||pt.signalDate)}} → ${{esc(pt.freshDate)}}</div></td><td class="num">${{f(pt.shares,0)}}</td><td class="num">${{f(pt.entryPrice,2)}}k</td><td class="num">${{f(pt.freshPrice,2)}}k</td><td class="num ${{cls(pt.positionPnlMil)}}">${{money(pt.positionPnlMil)}} · ${{pc(pt.positionPnlPct)}}</td></tr>`;
 const planned = D.policy.plannedOrders?.rows || [];
-function renderPlannedRows(navBil=Number(document.getElementById('navInput')?.value)||1){{ document.getElementById('plannedRows').innerHTML = planned.length ? planned.map(r=>{{ const baseShares=Number(r.orderShares||0); const shares=baseShares>0?roundLot(baseShares*navBil):null; return `<tr><td>${{esc(r.displayPlanDate||r.planDate)}}</td><td><strong>${{esc(r.symbol)}}</strong></td><td>${{pill(r.action||r.status)}}</td><td class="num">${{shares===null?'-':f(shares,0)}}</td><td class="num">${{f(r.currentPrice,2)}}k</td><td class="num pos">${{f(r.targetPrice,2)}}k</td><td class="num neg">${{f(r.stopPrice,2)}}k</td><td>${{esc(r.note)}}</td></tr>`; }}).join('') : '<tr><td colspan="8">Ch\\u01b0a c\\u00f3 m\\u00e3 v\\u00e0o t\\u1ea7m ng\\u1eafm.</td></tr>'; }}
+function renderPlannedRows(navBil=Number(document.getElementById('navInput')?.value)||1){{ document.getElementById('plannedRows').innerHTML = planned.length ? planned.map(r=>{{ const baseShares=Number(r.orderShares||0); const shares=baseShares>0?roundLot(baseShares*navBil):null; return `<tr><td>${{esc(r.displayPlanDate||r.planDate)}}</td><td><strong>${{esc(r.symbol)}}</strong></td><td>${{pill(r.action||r.status)}}</td><td class="num">${{shares===null?'-':f(shares,0)}}</td><td class="num">${{f(r.currentPrice,2)}}k</td><td class="num pos">${{f(r.targetPrice,2)}}k</td><td class="num neg">${{f(r.stopPrice,2)}}k</td><td>${{esc(r.note)}}</td></tr>`; }}).join('') : '<tr><td colspan="8">Kh\\u00f4ng c\\u00f3 l\\u1ec7nh d\\u1ef1 ki\\u1ebfn \\u2014 xem ghi ch\\u00fa ph\\u00eda tr\\u00ean.</td></tr>'; }}
 document.querySelectorAll('.navPreset').forEach(btn=>btn.addEventListener('click',()=>renderCopyForNav(btn.dataset.nav)));
 document.getElementById('navInput').addEventListener('input',e=>renderCopyForNav(e.target.value));
 renderCopyForNav(1);
