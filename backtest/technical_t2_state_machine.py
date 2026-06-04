@@ -47,6 +47,7 @@ def load_vni_daily() -> pd.DataFrame:
 def weekly_vni_features() -> pd.DataFrame:
     vni = load_vni_daily().set_index("date")
     weekly = vni.resample("W-FRI").last().dropna(subset=["close"]).reset_index()
+    weekly["date"] = pd.to_datetime(weekly["date"]).astype("datetime64[ns]")
     weekly = weekly.rename(columns={"close": "vni_close"})
     weekly["vni_above_sma20"] = weekly["vni_close"] > weekly["sma20"]
     weekly["vni_above_sma50"] = weekly["vni_close"] > weekly["sma50"]
@@ -103,6 +104,9 @@ def symbol_weekly_features(symbol: str, vni_weekly: pd.DataFrame) -> pd.DataFram
 
     weekly = df.resample("W-FRI").last().dropna(subset=["close"]).reset_index()
     weekly = weekly.rename(columns={date_col: "date"})
+    weekly["date"] = pd.to_datetime(weekly["date"]).astype("datetime64[ns]")
+    vni_weekly = vni_weekly.copy()
+    vni_weekly["date"] = pd.to_datetime(vni_weekly["date"]).astype("datetime64[ns]")
     weekly = pd.merge_asof(
         weekly.sort_values("date"),
         vni_weekly[["date", "vni_ret_13w", "vni_ret_26w"]].sort_values("date"),
