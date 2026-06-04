@@ -1,3 +1,11 @@
+## 2026-06-04 Codex — Copy Trade KPI cleanup + empty live-status deploy guard
+
+User asked to remove meaningless top KPIs (`Copy NAV hiện tại`, `Paper NAV ước tính`) and remove `Paper Trade` wording from the Copy Trade title area. Fix: `dashboard/_preview/build_v7_real.py` now uses top KPI row = displayed position, actionable orders, VN-Index, audit model; paper section is renamed `Theo dõi thử nghiệm`; sidebar regime now uses execution/forecast regime (`NARROW_BULL`) instead of stale `Chờ phân loại`.
+
+Production deploy: direct Vercel deployment `dpl_7ExZDXBsZtvgmpCvxSHhinx5pHt4` to `https://ez-trading.vercel.app`. Public verification PASS: old labels absent, new labels present, sidebar `Regime=NARROW_BULL`, VNI `2026-06-04 close=1831.55` matches VPS source, forecast `COMPUTED` asOf `2026-06-04` planDate `2026-06-08`, planned MSB `BÁN HẾT 3,800`, execution desk present.
+
+Incident fixed: a GitHub price refresh run had deployed an empty `dashboard_live_update_status.json` when VPS timed out for all quotes. `update_dashboard_live_data.py` now fail-closes before writing/deploying if valid quotes are below 65%, `latestPriceDate` is missing, or VNINDEX lacks `latestClose`. Do-not: never deploy a fresh `updatedAt` payload with null quotes/VNINDEX; fail the workflow and preserve the last good public dashboard instead.
+
 ## 2026-06-04 Claude — Executable audit of Mavis H6 overlay (H6P/H6n) — +17,81pp là return-space artifact
 
 Verdict file: `output/r46_plus_overlay_20260604/CLAUDE_EXECUTABLE_AUDIT_H6.md`. Script: `backtest/overlay_20260604/overlay_executable_sim.py`.

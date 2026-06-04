@@ -608,6 +608,8 @@ if regime_now.get("regime") == "UNKNOWN":
             "regime": str(forecast_meta.get("currentRegime")).upper(),
         }
 regime_text = regime_now.get("regime") or "UNKNOWN"
+if regime_text and regime_text != "UNKNOWN":
+    regime_label = regime_text
 bear_stop_active = "BEAR" in regime_text
 
 execution_rows = []

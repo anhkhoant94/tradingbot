@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
@@ -290,11 +291,26 @@ def main() -> None:
     price_results = sorted(price_results, key=lambda item: item["symbol"])
     vni_result = update_vnindex()
     bctc_results = update_bctc(symbols)
+    ok_prices = sum(1 for row in price_results if row.get("ok") and row.get("latest") and row.get("latestClose") is not None)
+    min_ok_prices = max(1, math.ceil(len(price_results) * 0.65)) if price_results else 0
+    latest_price_date = finite_latest(price_results)
+    vni_ok = bool(vni_result.get("ok") and vni_result.get("latest") and vni_result.get("latestClose") is not None)
+    if len(price_results) > 0 and (ok_prices < min_ok_prices or not latest_price_date or not vni_ok):
+        failed = [f"{row.get('symbol')}:{row.get('reason', 'fail')}" for row in price_results if not row.get("ok")]
+        print(
+            "Dashboard live update REFUSED: "
+            f"prices {ok_prices}/{len(price_results)} below gate {min_ok_prices}, "
+            f"latest={latest_price_date}, vni_ok={vni_ok}",
+            file=sys.stderr,
+        )
+        if failed:
+            print("Price failures: " + "; ".join(failed[:12]), file=sys.stderr)
+        sys.exit(1)
     payload = {
         "updatedAt": time.strftime("%Y-%m-%d %H:%M:%S"),
         "seconds": round(time.time() - started, 2),
         "symbols": symbols,
-        "latestPriceDate": finite_latest(price_results),
+        "latestPriceDate": latest_price_date,
         "quotes": {
             row.get("symbol", ""): {
                 "ok": bool(row.get("ok")),
@@ -312,7 +328,6 @@ def main() -> None:
     STATUS_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     DASHBOARD_STATUS_PATH.parent.mkdir(parents=True, exist_ok=True)
     DASHBOARD_STATUS_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    ok_prices = sum(1 for row in price_results if row.get("ok"))
     ok_bctc = sum(1 for row in bctc_results if row.get("ok"))
     print(
         f"Dashboard live update: prices {ok_prices}/{len(price_results)}, "
