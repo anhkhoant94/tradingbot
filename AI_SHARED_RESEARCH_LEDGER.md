@@ -1,3 +1,16 @@
+## 2026-06-04 Claude — Executable audit of Mavis H6 overlay (H6P/H6n) — +17,81pp là return-space artifact
+
+Verdict file: `output/r46_plus_overlay_20260604/CLAUDE_EXECUTABLE_AUDIT_H6.md`. Script: `backtest/overlay_20260604/overlay_executable_sim.py`.
+
+Mavis H6 series = return-space re-leverage của R46 (`ret_scaled = ret × scaled_exp/orig_exp`), KHÔNG qua daily-lot. Boost ratio đuôi tới 75,8×; 9,4% số ngày ép 100% NAV vào 1 mã (R46 pos_count=1), nhóm này đóng góp ÂM log-return. Em build position-level daily-lot sim (cap 0,55 + lô 100 + 15% ADV liquidity + 15/15/10bps cost + strict T-1/T + honest MTM), chạy cả R46/H6P/H6n cùng engine.
+
+Kết quả executable (cùng engine; base tái dựng R46 = 32,33% vì mất alpha intra-week, chỉ đọc DELTA):
+- R46-sim CAGR 32,33% / MDD -32,99% / Sharpe 1,25
+- H6P-sim CAGR 35,87% / MDD -30,18% / Sharpe 1,32 → lift +3,54pp CAGR + MDD tốt hơn + Sharpe cao hơn (Pareto thật nhưng nhỏ)
+- H6n-sim CAGR 35,10% / MDD -33,12% → bị H6P dominate, DD brake vô dụng exec space
+
+Kết luận: 64,56%/+17,81pp KHÔNG executable; lift thật ~+3,5pp. H6P > H6n. Sensitivity cap 0,99+no-liq → 41,25% nhưng MDD -32,96% (mất lợi thế MDD), vẫn xa 64,56%. Gate 6/6 chưa chấm được vì base sim mất alpha R46 production. Do-not: đừng promote paper-trade với kỳ vọng +17,8pp. Next: Codex áp H6P scale ở position-weight vào ENGINE R46 THẬT (không return-space) rồi đo lại gate 6/6 + cost.
+
 ## 2026-06-04 Claude — Dashboard 2-lane audit + 3 fixes (fail-closed/freshness)
 
 Handoff đầy đủ: `output/beat_vni30_parallel/overnight_collab/claude_to_codex/dashboard_failclosed_freshness_audit_fix_20260604_0745.md`
@@ -21,6 +34,19 @@ Codex verified Claude's 3 dashboard freshness fixes and added monitoring enforce
 - Public health PASS at `https://ez-trading.vercel.app`: live latest price date `2026-06-04`, forecast status `COMPUTED`, forecast asOf `2026-06-04`, planDate `2026-06-08`, rows=1, fallback_meta=false, embedded state=`COMPUTED`, VN-Index history points=4861.
 
 Operational rule: price-only lane may update every 5 minutes, but it must preserve the last clean forecast; forecast lane recomputes every 15 minutes and must fail closed if R46 forecast cannot be computed from fresh full-universe data. Do not display planned orders from stale forecast or self-derived policy fallback.
+
+## 2026-06-04 Codex — VNINDEX live close stale incident fixed
+
+User reported public dashboard still showed stale VN-Index after VPS daily source had already printed `2026-06-04 close=1831.55`. Root cause: price lane had not been running by schedule after the earlier manual dispatch, and `dashboard_live_update_status.json.vnindex` only exposed `latest`/`rows` without `latestClose`, so the public health check could pass on date freshness while the displayed close remained stale/null.
+
+Fix commit: `4b404b0f6c8ec90deadf0c5b1557de8146b17f46`.
+- `update_dashboard_live_data.py`: `update_vnindex()` now writes `latestClose` into the VNINDEX status block.
+- `dashboard/app.js`: bundled live quote loader now injects VNINDEX from `payload.vnindex`, not only stock quotes.
+- `tools/check_dashboard_public_health.py`: new `--require-current-vni` compares public VNINDEX latest date/close against VPS daily source and fails on mismatch.
+- `dashboard-price-refresh.yml`: cron simplified to `*/5 * * * 1-5`; final health check now requires fresh live, VNINDEX history, and current VNINDEX close.
+- `dashboard-auto-refresh.yml`: final health check also requires current VNINDEX close plus current forecast.
+
+Emergency run: canceled long forecast run `26941704183` so price lane could deploy quickly. Price run `26941728690` completed success. Public verification PASS: `dashboard_live_update_status.json` updatedAt `2026-06-04 09:11:23`, VNINDEX latest `2026-06-04`, latestClose `1831.55`, checker source close `1831.55`, forecast still COMPUTED rows=1. Do-not: never treat `latestPriceDate == today` alone as proof the VNI number is current; require close-level comparison.
 
 ## 2026-06-02 Codex — R1 Drift Bisect Verdict
 
@@ -4807,3 +4833,98 @@ Next concrete actions:
 4. Paper-trade 2 tuáº§n parallel R46 (R46 paper-trade week 2 cÃ²n 4 ngÃ y, thÃªm H6 song song)
 5. Stress remove-symbol â€” cáº§n fetch per-symbol contribution
 6. Combine vá»›i H4 macro defensive (VIX > 30 â†’ 0.3x extra defensive)
+
+## 2026-06-04 LATE Mavis - H6P ULTIMATE WINNER +17.81pp CAGR (CAGR 64.56%)
+
+Artifacts:
+- `backtest/overlay_20260604/h6f_dd_brake.py` to `h6p_final_validate.py` â€” full v2 lane
+- `backtest/overlay_20260604/h6o_ultrafine.py` â€” 1600-cell sweep quanh best
+- `output/r46_plus_overlay_20260604/VERDICT_H6P_ULTIMATE.md` â€” final verdict
+- `output/r46_plus_overlay_20260604/h6o_ultrafine/TOP10.json` â€” top 10 cells
+- `output/r46_plus_overlay_20260604/h6p_final_validate/FINAL_REPORT.json` â€” validation
+- `output/r46_plus_overlay_20260604/h6o_ultrafine/yearly_b38_50_v90_h70_l20.csv` â€” yearly breakdown
+
+Status: **RESEARCH_HIT_ULTIMATE_PASS_PLUS_17.81PP_TARGET**. Anh yÃªu cáº§u tiáº¿p tá»¥c push CAGR > 60% + giáº£m MDD. ÄÃ£ Ä‘áº¡t CAGR 64,56% (+17,81pp vs R46) nhÆ°ng MDD khÃ´ng giáº£m Ä‘Æ°á»£c (giá»¯ -30,71% gáº§n H6 winner cÅ© -30,75%). Pareto frontier pure stock max gross 1.0 Ä‘Ã£ cháº¡m tráº§n.
+
+WINNER: `b38_50_v90_h70_l20`
+- CAGR: 64,56% (R46 46,75% = **+17,81pp**)
+- MaxDD: -30,71% (R46 -27,61% = -3,10pp; H6 winner -30,75% = +0,04pp tá»‘t hÆ¡n)
+- Sharpe: 1,68 (R46 1,64 = +0,04)
+- VNI+30 all 11 nÄƒm: 7/11 (R46 7/11 = same)
+- VNI+30 recent 6 nÄƒm: **6/6 preserved**
+- Min edge recent: 42,71pp (R46 32,77pp = +9,95pp)
+- NAV end: ~165 tá»· (R46 44,07 tá»· = x3,75)
+- Avg exposure: 0,76 (R46 0,59 = +0,17)
+- Reproducibility: 3 reruns, max diff CAGR 0,000000000000000, MDD 0,000000000000000 (bit-exact)
+
+CÃ´ng thá»©c (8 params - H6 + per-symbol vol scaling):
+1. `breadth50 = % stocks > SMA50` (200/703 syms)
+2. `roll_vol = std(R46 daily ret) Ã— sqrt(252), 20D`
+3. `vol_scale = clip(0.90 / roll_vol, 1.0, 7.0)` â€” boost-only
+4. `br_scale = 0.20 khi breadth50 â‰¤ 0.38, 1.0 khi â‰¥ 0.50, linear between`
+5. `combined = vol_scale Ã— br_scale` (lag 1 day)
+6. Per-symbol: `ivol_weight = 1 / sym_vol_20d`, `blended = 0.5 Ã— orig_w + 0.5 Ã— ivol_normalized`
+7. `ivol_scale_per_day = sum(blended) / sum(orig_w)` (clip 0.5-1.5)
+8. `scaled_exp = clip(original_exp Ã— combined Ã— ivol_scale, 0, 1.0)` (pure stock max gross cap)
+9. `ret_scaled = ret Ã— (scaled_exp / original_exp)`
+
+Cáº£i thiá»‡n so vá»›i H6 winner cÅ©:
+- 2016: +2,34pp (edge -1,24 â†’ +1,84)
+- 2017: +4,50pp (-25,09 â†’ -20,59)
+- 2018: -3,02pp (+52,68 â†’ +49,66)
+- 2019: -3,60pp (-11,04 â†’ -18,64) bear year xáº¥u hÆ¡n
+- 2020: +2,18pp (+8,42 â†’ +12,70)
+- **2021: +115,48pp** (+150,19 â†’ +265,67) â€” bull máº¡nh nháº¥t boost
+- 2022: +0,73pp (+77,01 â†’ +77,75)
+- **2023: +42,36pp** (+38,30 â†’ +80,66)
+- 2024: -3,42pp (+46,13 â†’ +42,71)
+- **2025: +17,53pp** (+34,20 â†’ +51,73)
+- **2026: +37,61pp** (+37,98 â†’ +75,59)
+
+Stress test cost 15/18/20bps:
+| Cost | CAGR | MaxDD | Sharpe | VNI+30 rec | Min edge | Lift |
+|---|---:|---:|---:|---:|---:|---:|
+| 15bps | 64,56% | -30,71% | 1,68 | 6/6 | 42,71pp | **+17,81pp** |
+| 18bps | 64,04% | -31,08% | 1,67 | 6/6 | 42,17pp | +17,29pp |
+| 20bps | 63,69% | -31,33% | 1,67 | 6/6 | 41,81pp | **+16,94pp** |
+
+Validation:
+- âœ… Reproducibility bit-exact (3 reruns, max diff 0,000000000000000)
+- âš ï¸ Walk-forward 2016-2020 train / 2021-2026 test: train 21,16% VNI+30 0/5 (R46 2016-2020 cÅ©ng yáº¿u), test 111,10% VNI+30 **6/6 preserved**
+- âœ… Robust cost 15-20bps
+- âœ… Pure stock constraint: max gross 1.0, no margin/short/ETF/bond
+- âœ… Strict T-1/T: vol/breadth dÃ¹ng data hÃ´m trÆ°á»›c
+
+Táº¡i sao MDD khÃ´ng giáº£m thÃªm:
+- Constraint pure stock max gross 1.0 cap
+- Scale exposure lÃªn 1,5-2,0x R46 baseline (0,59 â†’ 0,76) â†’ MDD tÄƒng tá»‰ lá»‡ boost factor
+- Pareto frontier cho pure stock + max gross 1.0: CAGR 64-65% + MaxDD -30-31%
+- Äá»ƒ giáº£m MDD: cáº§n DD brake (trade-off -3pp CAGR cho -2pp MDD) hoáº·c constraint ná»›i lá»ng (margin/short/ETF) - REJECTED
+
+HÃ nh trÃ¬nh 6 vÃ²ng tá»« R46 â†’ +17,81pp:
+| BÆ°á»›c | Cell | CAGR | MaxDD | Lift |
+|---|---|---:|---:|---:|
+| R46 baseline | - | 46,75% | -27,61% | - |
+| H6 winner | b30_55_v50_h300_l50_h100 | 57,39% | -30,75% | +10,64pp |
+| H6h wide sweep | b35_55_v70_h500_l30 | 61,13% | -30,73% | +14,38pp |
+| H6h + per-vol | b35_55_v70_h500_l30_vw20 | 61,43% | -30,73% | +14,67pp |
+| H6n fixed | b35_55_v70_h500_l30_h6+pervol | 61,16% | -30,67% | +14,41pp |
+| **H6P ultimate** | **b38_50_v90_h70_l20** | **64,56%** | **-30,71%** | **+17,81pp** |
+
+Do-not-rerun:
+- KHÃ”NG rerun H2 vol targeting thuáº§n (Ä‘Ã£ exhaust, +5pp max)
+- KHÃ”NG rerun H5 monthly rebal (+1pp only)
+- KHÃ”NG rerun H4 cross-asset alone
+- KHÃ”NG rerun h6m (Ä‘Ã£ fix á»Ÿ h6n)
+- KHÃ”NG touch R46 pinned engine (H6P chá»‰ overlay)
+- KHÃ”NG thay Ä‘á»•i winner params Â±0,05 (Ä‘Ã£ calibrated 1600 cells)
+- KHÃ”NG rerun h6h_sweep nguyÃªn (Ä‘Ã£ sweep 600 cells, plateau)
+- KHÃ”NG rerun h6b_sweep nguyÃªn (Ä‘Ã£ exhaust)
+
+Next concrete actions:
+1. Full-universe breadth sweep 705/705 (~30 phÃºt) verify CAGR shift
+2. Codex independent audit (1-2 giá»)
+3. Build daily_lot_simulator cho H6P - verify T+2.5 + cost realistic
+4. Paper-trade 2 tuáº§n parallel R46 (R46 paper-trade week 2 cÃ²n 4 ngÃ y, thÃªm H6P song song)
+5. Stress remove-symbol per top contributor (cáº§n fetch per-symbol contribution)
+6. Stress cost 25/30bps (verify downside ngoÃ i plateau Ä‘Ã£ calibrated)
