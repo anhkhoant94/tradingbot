@@ -92,18 +92,30 @@ def latest_quote(symbol: str) -> dict:
 
 
 def current_copy_shares() -> dict[str, int]:
-    state = read_json(OUT / "beat_vni30_parallel" / "paper_trade_v4_r46" / "paper_trade_state.json")
-    cur = state.get("current_position") or {}
-    rows = cur.get("holdings") or []
-    if rows:
-        out: dict[str, int] = {}
-        for row in rows:
-            sym = str(row.get("symbol", "")).upper().strip()
-            shares = int(num(row.get("shares"), 0))
-            if sym and shares > 0:
-                out[sym] = shares
-        if out:
-            return out
+    # Copy-trade forecast must reconcile to the displayed copy holdings, not the
+    # separate paper-trade lane. Otherwise "BÁN HẾT" can show a different
+    # quantity from the holdings table.
+    analysis_path = DASH / "analysis.js"
+    if analysis_path.exists():
+        try:
+            text = analysis_path.read_text(encoding="utf-8")
+            match = text.split("=", 1)[1].rsplit(";", 1)[0]
+            analysis = json.loads(match)
+            policy = next(
+                (p for p in analysis.get("strategyPolicies", []) if p.get("key") == "r46_bear_stop_mcore"),
+                {},
+            )
+            out: dict[str, int] = {}
+            for row in policy.get("holdings", []) or []:
+                sym = str(row.get("symbol", "")).upper().strip()
+                shares = int(num(row.get("copyShares", row.get("modelShares", 0)), 0))
+                shares = floor_lot(shares)
+                if sym and shares > 0:
+                    out[sym] = shares
+            if out:
+                return out
+        except Exception:
+            pass
 
     trades_path = POLICY_DIR / "trades.parquet"
     equity_path = POLICY_DIR / "equity_curve.parquet"

@@ -571,6 +571,14 @@ for row in forecast_rows:
     if quote.get("close"):
         row["currentPrice"] = quote.get("close")
         row["priceAsOf"] = quote.get("date") or row.get("priceAsOf")
+    held = next((h for h in holdings if str(h.get("symbol", "")).upper() == sym), None)
+    held_shares = int(as_float((held or {}).get("copyShares", (held or {}).get("modelShares")), 0) or 0)
+    action_text = str(row.get("action") or "").upper()
+    target_copy = int(as_float(row.get("targetCopyShares"), 0) or 0)
+    if held_shares > 0 and (target_copy == 0 or "BÁN HẾT" in action_text or "BAN HET" in action_text):
+        row["currentCopyShares"] = held_shares
+        row["targetCopyShares"] = 0
+        row["orderShares"] = held_shares
 
 planned_public = {
     "asOf": policy.get("plannedOrders", {}).get("asOf"),
