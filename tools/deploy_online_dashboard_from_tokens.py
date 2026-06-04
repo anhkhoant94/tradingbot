@@ -59,6 +59,7 @@ FILES_TO_PUSH = [
     "tools/deploy_vercel_dashboard.py",
     "tools/deploy_online_dashboard_from_tokens.py",
     "tools/precompute_r46_forecast.py",
+    "tools/update_full_universe_prices.py",
     "ONLINE_AUTO_REFRESH_SETUP.md",
     "AI_SHARED_RESEARCH_LEDGER.md",
     "requirements.txt",
@@ -180,6 +181,7 @@ def vercel_json(method: str, path: str, secrets: dict, body: dict | None = None)
 
 def build_dashboard() -> None:
     run_step([sys.executable, "update_dashboard_live_data.py"])
+    run_step([sys.executable, "tools/update_full_universe_prices.py", "--workers", "24", "--min-fresh-pct", "0.65"])
     run_step([sys.executable, "generate_deep_analysis.py"])
     run_step([sys.executable, "generate_model_history.py"])
     run_step([sys.executable, "generate_dashboard_data.py"])
