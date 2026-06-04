@@ -4617,3 +4617,29 @@ Important:
 - R46 forecast remains **fail-closed**: `dashboard/r46_forecast.json` has `status=NOT_COMPUTED`, `reason=missing_fresh_r46_target_rows`, `asOf=2026-06-04`, `planDate=2026-06-08`.
 - Smoke attempted to rebuild fresh target chain from live candidate matrix through G2 run657 + pair sleeve + deadside/adaptive/v8/band. It produced `PVP/PHR/NAF/MSB` at 2026-05-25, while official `pair657_m_turnover_controls_20260527/best_15bps_holdings.parquet` / dashboard policy has only `MSB 5.525%`. Because overlap diff was material, do **not** publish this generated target as R46 forecast.
 - Operational rule: GitHub cloud can refresh live prices and redeploy every 5 minutes without local machine. True Monday buy/sell forecast must stay hidden/fail-closed until a fresh R46 target generator reproduces the official 2026-05-25 artifact before extending to 2026-06-01/2026-06-08.
+
+---
+
+2026-06-04 Codex - R46 forecast chain audit + Ez dashboard paper-trade correction.
+
+Scope:
+- Dashboard/paper-trade data integrity only. No model promotion, no new R46 target publication.
+- Public URL remains `https://ez-trading.vercel.app`.
+
+Findings:
+- Official M_bb35 layer is reproducible through `backtest/pair657_m_stress_20260527.py::build_candidate(default_cap=0.55, broad_bull_cap=0.35, v8_threshold=-0.08)` and matches `output/beat_vni30_parallel/pair657_m_turnover_controls_20260527/best_15bps_holdings.parquet` exactly: 1,149 rows, max diff 0.0, latest 2026-05-25 MSB weight 0.05525 only.
+- Earlier smoke that produced PVP/PHR/NAF/MSB at 2026-05-25 used the wrong reconstruction layer. Do not treat it as formula evidence.
+- Reconstructing the upstream direct-combo source from documented pieces (`generate_targets` + pair sleeve w_pair=10%, cap=40%) still does not match the saved `codex_pair657_direct_combo_20260527_fullsignals/best_holdings.parquet` byte-for-byte across history, even though 2026-05-25 happens to match MSB. Therefore it is not acceptable for live forecast.
+- True R46 Monday forecast remains fail-closed: `dashboard/r46_forecast.json` status `NOT_COMPUTED`, reason `missing_fresh_r46_target_rows`, asOf 2026-06-04, planDate 2026-06-08. Do not publish fresh buy/sell rows until a generator reproduces the official 2026-05-25 target chain before extending beyond 2026-05-25.
+
+Paper-trade correction:
+- Week 1 signal remains internally consistent with locked 2026-05-25 R46 target: MSB 5.525% / 3,600 shares.
+- Execution was no longer just pending: MSB filled on Monday 2026-06-01 open 14.95k because open <= 15.00k * 1.09.
+- Updated `paper_trade_state.json` current position: MSB 3,600 shares, entry 14.95k, buy cost 0.30%, cash 946.01854M.
+- Appended `paper_trade_log.jsonl` checkpoint as_of 2026-06-04: NAV 997.85854M (-0.214%), MSB close 14.4k, VNI close 1,817.58 (-2.464% from 2026-05-29), edge +2.250pp, T+ violations 0.
+
+Dashboard changes/deploy:
+- `dashboard/_preview/build_v7_real.py` now derives paper fill from state/history and renders paper trade with entry price 14.95k, NAV 997.9M, cash 94.6%, exposure 5.2%.
+- Planned Monday table shows only current-policy HOLD row when forecast is not computed, with note `chưa có forecast R46 fresh sau 2026-05-25`; no fabricated VIX or quantity.
+- Public HTML verification after Vercel deploy: entryPrice 14.95 present, paper NAV 997.85854 present, forecastStatus NOT_COMPUTED present, orderShares 3000 absent, Be Vietnam Pro count 1, JetBrains/monospace/YEG Capital count 0.
+- Deployment `dpl_F6o8cfjd7Q5ndA5KMhPYo9TNCBaF` READY; public health passes with live_latest_price_date 2026-06-04.
