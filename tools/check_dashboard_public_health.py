@@ -142,7 +142,12 @@ def main() -> None:
         "forecast_has_fallback_meta": forecast_has_fallback_meta,
         "embedded_forecast_display_state": embedded_forecast_display_state,
         "embedded_forecast_is_computed": embedded_forecast_display_state == "COMPUTED",
-        "has_execution_desk": '"executionDesk"' in index and '"bearStop"' in index and 'id="execRows"' in index,
+        "has_execution_desk": (
+            '"executionDesk"' in index
+            and '"bearStop"' in index
+            and 'id="execRows"' in index
+            and '"regime": "UNKNOWN"' not in index
+        ),
         "vni_history_points": len(re.findall(r'"vniClose"\s*:\s*[0-9]', history)),
         "has_r46_key": "r46_bear_stop_mcore" in analysis,
         "has_r23_key": "r23_nav3b_mcore" in analysis,

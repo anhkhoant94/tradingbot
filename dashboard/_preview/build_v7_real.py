@@ -592,6 +592,13 @@ pullback_days = int(as_float(policy_config.get("entry_pullback_days"), as_float(
 min_sell_sessions = int(as_float(policy_config.get("entry_min_sell_sessions"), as_float(exec_cfg.get("min_sell"), 4)) or 4)
 bear_stop_loss = as_float(policy_config.get("daily_stop_loss"), as_float(exec_cfg.get("bear_regime_stop"), 0.05)) or 0.05
 regime_now = latest_regime(live_status.get("latestPriceDate"))
+if regime_now.get("regime") == "UNKNOWN":
+    forecast_meta = forecast_status.get("meta") or {}
+    if forecast_meta.get("currentRegime"):
+        regime_now = {
+            "date": forecast_meta.get("currentRegimeDate"),
+            "regime": str(forecast_meta.get("currentRegime")).upper(),
+        }
 regime_text = regime_now.get("regime") or "UNKNOWN"
 bear_stop_active = "BEAR" in regime_text
 

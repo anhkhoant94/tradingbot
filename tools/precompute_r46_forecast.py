@@ -382,7 +382,7 @@ def validate_overlap(candidate: pd.DataFrame) -> tuple[bool, float, int]:
     return bool(diff.max() <= 1e-9), float(diff.max()), int((diff > 1e-9).sum())
 
 
-def generate_targets(plan_date: str, skip_rebuild_inputs: bool) -> tuple[pd.DataFrame, dict]:
+def generate_targets(plan_date: str, skip_rebuild_inputs: bool, as_of: str | None = None) -> tuple[pd.DataFrame, dict]:
     maybe_rebuild_inputs(skip_rebuild_inputs)
     tail = build_tail_matrix(plan_date)
     matrix = combined_matrix(tail)
@@ -410,11 +410,23 @@ def generate_targets(plan_date: str, skip_rebuild_inputs: bool) -> tuple[pd.Data
     capped = capped.sort_values(["date", "weight", "symbol"], ascending=[True, False, True]).reset_index(drop=True)
 
     ok, max_diff, diff_count = validate_overlap(capped)
+    regime_for_status = regime.copy()
+    if not regime_for_status.empty and "date" in regime_for_status.columns:
+        regime_for_status["date"] = pd.to_datetime(regime_for_status["date"], errors="coerce").dt.normalize()
+        regime_for_status = regime_for_status.dropna(subset=["date"]).sort_values("date")
+        if as_of:
+            regime_for_status = regime_for_status[regime_for_status["date"].le(pd.Timestamp(as_of).normalize())]
+    latest_regime_row = regime_for_status.iloc[-1] if not regime_for_status.empty else {}
+    current_regime_date = latest_regime_row.get("date") if hasattr(latest_regime_row, "get") else None
     meta = {
         "tailMatrixRows": int(len(tail)),
         "tailMatrixDates": [d.date().isoformat() for d in sorted(tail["date"].dropna().unique())],
         "pairTailRows": int(len(pair_tail)),
         "latestComputedDate": plan_date,
+        "currentRegimeDate": current_regime_date.date().isoformat() if hasattr(current_regime_date, "date") else None,
+        "currentRegime": str(latest_regime_row.get("regime") or latest_regime_row.get("market_regime") or "UNKNOWN").upper()
+        if hasattr(latest_regime_row, "get")
+        else "UNKNOWN",
         "overlapOk": ok,
         "overlapMaxDiff": max_diff,
         "overlapDiffCount": diff_count,
@@ -522,7 +534,7 @@ def main() -> None:
             return
 
     try:
-        targets, meta = generate_targets(plan_date, args.skip_rebuild_inputs)
+        targets, meta = generate_targets(plan_date, args.skip_rebuild_inputs, as_of=as_of)
     except Exception as exc:
         if preserve_existing_computed(
             existing,
