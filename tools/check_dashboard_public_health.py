@@ -6,6 +6,7 @@ import argparse
 import datetime as dt
 import json
 import re
+import time
 import urllib.request
 
 
@@ -25,6 +26,26 @@ def decode(raw: bytes) -> str:
     return raw.decode("utf-8", errors="replace")
 
 
+def fetch_vps_vnindex_latest() -> dict:
+    today = dt.date.today()
+    start = today - dt.timedelta(days=14)
+    fr = int(time.mktime(start.timetuple()))
+    to = int(time.mktime((today + dt.timedelta(days=1)).timetuple()))
+    url = (
+        "https://histdatafeed.vps.com.vn/tradingview/history"
+        f"?symbol=VNINDEX&resolution=D&from={fr}&to={to}"
+    )
+    req = urllib.request.Request(url, headers={"User-Agent": "codex-dashboard-health/1.0"})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        payload = json.loads(decode(resp.read()))
+    if payload.get("s") != "ok" or not payload.get("t") or not payload.get("c"):
+        raise RuntimeError("VPS VNINDEX returned no daily close")
+    idx = len(payload["t"]) - 1
+    close = float(payload["c"][idx])
+    date = dt.datetime.fromtimestamp(int(payload["t"][idx])).date().isoformat()
+    return {"date": date, "close": close}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("-u", "--url", default=DEFAULT_BASE_URL)
@@ -42,6 +63,11 @@ def main() -> None:
         "--require-current-forecast",
         action="store_true",
         help="exit non-zero when r46_forecast.json or embedded plannedOrders is not a current COMPUTED forecast",
+    )
+    parser.add_argument(
+        "--require-current-vni",
+        action="store_true",
+        help="exit non-zero when public VN-Index close is stale vs VPS daily source",
     )
     args = parser.parse_args()
 
@@ -65,6 +91,14 @@ def main() -> None:
     live_updated_at = str(live_payload.get("updatedAt") or "")
     live_latest_price_date = str(live_payload.get("latestPriceDate") or "")
     forecast_meta = forecast_payload.get("meta") or {}
+    live_vnindex = live_payload.get("vnindex") or {}
+    live_vni_date = str(live_vnindex.get("latest") or live_vnindex.get("date") or "")
+    live_vni_close = live_vnindex.get("latestClose", live_vnindex.get("close"))
+    try:
+        live_vni_close = float(live_vni_close)
+    except (TypeError, ValueError):
+        live_vni_close = None
+    source_vni = fetch_vps_vnindex_latest() if args.require_current_vni else None
     forecast_display_match = re.search(r'"forecastDisplayState"\s*:\s*"([^"]+)"', index)
     embedded_forecast_display_state = forecast_display_match.group(1) if forecast_display_match else None
     forecast_has_fallback_meta = any(
@@ -84,6 +118,18 @@ def main() -> None:
         "live_updated_at": live_updated_at,
         "live_latest_price_date": live_latest_price_date,
         "live_is_today": live_updated_at.startswith(today) or live_latest_price_date == today,
+        "live_vni_date": live_vni_date or None,
+        "live_vni_close": live_vni_close,
+        "source_vni_date": source_vni.get("date") if source_vni else None,
+        "source_vni_close": source_vni.get("close") if source_vni else None,
+        "live_vni_matches_source": (
+            source_vni is None
+            or (
+                live_vni_date == source_vni.get("date")
+                and live_vni_close is not None
+                and abs(live_vni_close - float(source_vni.get("close"))) <= 0.01
+            )
+        ),
         "forecast_status": forecast_payload.get("status"),
         "forecast_as_of": forecast_payload.get("asOf"),
         "forecast_plan_date": forecast_payload.get("planDate"),
@@ -108,6 +154,8 @@ def main() -> None:
     if args.require_fresh_live and not payload["live_is_today"]:
         raise SystemExit(1)
     if args.require_vni_history and payload["vni_history_points"] <= 0:
+        raise SystemExit(1)
+    if args.require_current_vni and not payload["live_vni_matches_source"]:
         raise SystemExit(1)
     if args.require_current_forecast and (
         payload["forecast_status"] != "COMPUTED"

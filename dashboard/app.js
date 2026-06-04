@@ -186,6 +186,15 @@ async function fetchBundledLiveQuotes() {
         if (parsed) quoteMap.set(parsed.symbol, parsed);
       }
     }
+    const vni = payload?.vnindex;
+    if (vni && typeof vni === "object") {
+      const parsed = normalizeQuoteRow({
+        symbol: "VNINDEX",
+        close: vni.latestClose ?? vni.close,
+        date: vni.latest ?? vni.date,
+      });
+      if (parsed) quoteMap.set(parsed.symbol, parsed);
+    }
     return {
       quoteMap,
       latestDate: (String(payload?.latestPriceDate || payload?.latest_date || "").slice(0, 10)) || null,

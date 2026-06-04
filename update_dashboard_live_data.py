@@ -169,7 +169,17 @@ def update_vnindex() -> dict:
             write_parquet(combined, p)
             frames.append(combined)
         latest = frames[-1]["date"].max().date().isoformat() if frames else None
-        return {"symbol": "VNINDEX", "ok": True, "latest": latest, "rows": len(frames[-1]) if frames else 0}
+        latest_close = None
+        if frames and not frames[-1].empty:
+            close_value = float(frames[-1].sort_values("date").iloc[-1]["close"])
+            latest_close = close_value if math.isfinite(close_value) else None
+        return {
+            "symbol": "VNINDEX",
+            "ok": True,
+            "latest": latest,
+            "rows": len(frames[-1]) if frames else 0,
+            "latestClose": latest_close,
+        }
     except Exception as exc:
         return {"symbol": "VNINDEX", "ok": False, "reason": str(exc)[:160]}
 

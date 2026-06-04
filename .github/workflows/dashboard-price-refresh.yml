@@ -2,7 +2,7 @@ name: Dashboard Price Refresh
 
 on:
   schedule:
-    - cron: "2-59/5 * * * 1-5"
+    - cron: "*/5 * * * 1-5"
   workflow_dispatch:
 
 concurrency:
@@ -158,4 +158,4 @@ jobs:
 
       - name: Verify public dashboard assets
         working-directory: ${{ github.workspace }}
-        run: python tools/check_dashboard_public_health.py --require-vni-history
+        run: python tools/check_dashboard_public_health.py --require-fresh-live --require-vni-history --require-current-vni
