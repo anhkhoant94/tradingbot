@@ -72,6 +72,10 @@ jobs:
             echo "generate_dashboard_data.py not present in this repo checkout; keeping existing dashboard/data.js"
           fi
 
+      - name: Precompute R46 forecast
+        working-directory: ${{ github.workspace }}
+        run: python tools/precompute_r46_forecast.py
+
       - name: Preflight dashboard history
         working-directory: ${{ github.workspace }}
         run: |
