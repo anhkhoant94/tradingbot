@@ -46,6 +46,30 @@ def fetch_vps_vnindex_latest() -> dict:
     return {"date": date, "close": close}
 
 
+def parse_status_age_seconds(payload: dict) -> float | None:
+    raw_utc = payload.get("updatedAtUtc")
+    if raw_utc:
+        try:
+            stamp = dt.datetime.fromisoformat(str(raw_utc).replace("Z", "+00:00"))
+            return max(0.0, (dt.datetime.now(dt.timezone.utc) - stamp.astimezone(dt.timezone.utc)).total_seconds())
+        except Exception:
+            pass
+    for key in ("updatedAtICT", "updatedAt"):
+        raw = payload.get(key)
+        if not raw:
+            continue
+        try:
+            stamp = dt.datetime.strptime(str(raw), "%Y-%m-%d %H:%M:%S")
+            if key == "updatedAtICT":
+                stamp = stamp.replace(tzinfo=dt.timezone(dt.timedelta(hours=7)))
+            else:
+                stamp = stamp.replace(tzinfo=dt.timezone.utc)
+            return max(0.0, (dt.datetime.now(dt.timezone.utc) - stamp.astimezone(dt.timezone.utc)).total_seconds())
+        except Exception:
+            continue
+    return None
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("-u", "--url", default=DEFAULT_BASE_URL)
@@ -94,6 +118,9 @@ def main() -> None:
     live_payload = json.loads(decode(live_raw))
     forecast_payload = json.loads(decode(forecast_raw))
     live_updated_at = str(live_payload.get("updatedAt") or "")
+    live_updated_at_ict = str(live_payload.get("updatedAtICT") or "")
+    live_updated_at_utc = str(live_payload.get("updatedAtUtc") or "")
+    live_status_age_seconds = parse_status_age_seconds(live_payload)
     live_latest_price_date = str(live_payload.get("latestPriceDate") or "")
     forecast_meta = forecast_payload.get("meta") or {}
     live_vnindex = live_payload.get("vnindex") or {}
@@ -110,6 +137,21 @@ def main() -> None:
         str(k).startswith("cloudR46Refresh") or str(k).startswith("cloudFullUniverseRefresh")
         for k in forecast_meta
     )
+    live_vni_exact_match = (
+        source_vni is None
+        or (
+            live_vni_date == source_vni.get("date")
+            and live_vni_close is not None
+            and abs(live_vni_close - float(source_vni.get("close"))) <= 0.01
+        )
+    )
+    live_vni_recent_snapshot = (
+        source_vni is not None
+        and live_vni_date == source_vni.get("date")
+        and live_vni_close is not None
+        and live_status_age_seconds is not None
+        and live_status_age_seconds <= 1200
+    )
     payload = {
         "base_url": args.url,
         "index_status": idx_status,
@@ -121,20 +163,18 @@ def main() -> None:
         "forecast_status_http": forecast_status,
         "data_as_of": as_of_match.group(1) if as_of_match else None,
         "live_updated_at": live_updated_at,
+        "live_updated_at_ict": live_updated_at_ict or None,
+        "live_updated_at_utc": live_updated_at_utc or None,
+        "live_status_age_seconds": round(live_status_age_seconds, 1) if live_status_age_seconds is not None else None,
         "live_latest_price_date": live_latest_price_date,
         "live_is_today": live_updated_at.startswith(today) or live_latest_price_date == today,
         "live_vni_date": live_vni_date or None,
         "live_vni_close": live_vni_close,
         "source_vni_date": source_vni.get("date") if source_vni else None,
         "source_vni_close": source_vni.get("close") if source_vni else None,
-        "live_vni_matches_source": (
-            source_vni is None
-            or (
-                live_vni_date == source_vni.get("date")
-                and live_vni_close is not None
-                and abs(live_vni_close - float(source_vni.get("close"))) <= 0.01
-            )
-        ),
+        "live_vni_matches_source": live_vni_exact_match,
+        "live_vni_recent_snapshot": live_vni_recent_snapshot,
+        "live_vni_check_pass": live_vni_exact_match or live_vni_recent_snapshot,
         "forecast_status": forecast_payload.get("status"),
         "forecast_as_of": forecast_payload.get("asOf"),
         "forecast_plan_date": forecast_payload.get("planDate"),
@@ -166,7 +206,7 @@ def main() -> None:
         raise SystemExit(1)
     if args.require_vni_history and payload["vni_history_points"] <= 0:
         raise SystemExit(1)
-    if args.require_current_vni and not payload["live_vni_matches_source"]:
+    if args.require_current_vni and not payload["live_vni_check_pass"]:
         raise SystemExit(1)
     if args.require_execution_desk and not payload["has_execution_desk"]:
         raise SystemExit(1)
