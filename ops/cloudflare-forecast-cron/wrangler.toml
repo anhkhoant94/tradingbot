@@ -6,5 +6,14 @@ workers_dev = true
 [triggers]
 crons = ["*/15 2-8 * * 1-5"]
 
+[durable_objects]
+bindings = [
+  { name = "FORECAST_TIMER", class_name = "ForecastTimer" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ForecastTimer"]
+
 [vars]
 TRIGGER_URL = "https://ez-trading.vercel.app/api/trigger-forecast"

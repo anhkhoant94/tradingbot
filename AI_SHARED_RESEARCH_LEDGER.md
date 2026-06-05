@@ -25,6 +25,14 @@ Validation:
 Operational rule:
 - Cloudflare Worker Cron is now the primary 15-minute forecast timer. GitHub native schedule remains best-effort fallback. Vercel API `/api/trigger-forecast` remains the dispatch/debounce gate and prevents duplicate dispatches while a forecast run is active or just succeeded.
 
+Follow-up audit at 15:17-16:00 ICT:
+- User reported public forecast still computed only to `13:57:30` at 15:17. Audit confirmed no GitHub forecast run after `27000081088`; Cloudflare manual trigger worked but Cloudflare Cron trigger did not fire automatically at 14:15/14:30/14:45/15:00/15:15 despite `wrangler deploy` showing the cron schedule.
+- Ran `wrangler triggers deploy`; still no GitHub run at the 15:45 cron boundary. Therefore plain Cloudflare Cron is not accepted as reliable for this deployment.
+- Reworked Worker to use a Durable Object Alarm as the primary timer. New deployment version `956fa6f7-9310-475f-93d1-307fa29d6e86` adds `ForecastTimer` Durable Object with `/timer/start`, `/timer/state`, and `/timer/stop`.
+- Started the Durable Object timer with `immediate=1`. State check: `enabled=true`, `lastAlarmAtICT=2026-06-05 15:52:13`, `lastTriggerResult.action=skip_outside_market_window`, and `pendingAlarm=2026-06-08T01:45:05.000Z` (Monday 08:45 ICT).
+- Separately, GitHub fallback schedule run `27005332736` fired at 15:51 and completed SUCCESS. Public dashboard after deploy: `dashboard_live_update_status.updatedAtICT=2026-06-05 15:52:04`, `full_universe_live_update_status.updatedAtICT=2026-06-05 15:58:10`, `symbolsAtTargetOrNewer=550/703`, `r46_forecast.status=COMPUTED`, `computedAtICT=2026-06-05 16:00:52`.
+- Updated operating rule: Durable Object Alarm is now the Cloudflare primary timer; plain Cloudflare Cron and GitHub schedule are fallback only.
+
 ## 2026-06-05 Codex - Forecast trigger cadence hardening
 
 User asked to stop relying on GitHub schedule for forecast and change forecast cadence back to 15 minutes if the trigger is reliable.
