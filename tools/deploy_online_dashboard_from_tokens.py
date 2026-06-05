@@ -49,6 +49,7 @@ FILES_TO_PUSH = [
     "dashboard/history.js",
     "dashboard/index.html",
     "dashboard/styles.css",
+    "dashboard/api/live-status.js",
     "dashboard/_preview/build_v7_real.py",
     "update_dashboard_live_data.py",
     "run_stock_screen.py",
@@ -253,7 +254,15 @@ def verify_public() -> None:
     # Vercel aliases can take a few seconds to settle.
     for attempt in range(1, 7):
         try:
-            run_step([sys.executable, "tools/check_dashboard_public_health.py", "--require-fresh-live", "--require-vni-history"])
+            run_step([
+                sys.executable,
+                "tools/check_dashboard_public_health.py",
+                "--require-fresh-live",
+                "--require-edge-live",
+                "--require-vni-history",
+                "--require-current-vni",
+                "--require-execution-desk",
+            ])
             return
         except subprocess.CalledProcessError:
             if attempt == 6:

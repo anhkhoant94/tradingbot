@@ -811,6 +811,7 @@ data = {
         "source": "signal_week_1_20260601.json + dashboard_live_update_status.json",
         "startDate": pt_state.get("start_date"),
         "endDate": pt_state.get("end_date"),
+        "navStartMil": paper_nav_start_vnd / 1e6,
         "logAsOf": paper_log_last.get("as_of"),
         "symbol": paper_symbol,
         "shares": paper_shares,
@@ -822,8 +823,10 @@ data = {
         "freshPrice": paper_fresh_px,
         "freshDate": paper_quote.get("date"),
         "positionValueMil": paper_value_m,
+        "entryCostMil": paper_ref_cost_m,
         "positionPnlMil": paper_position_pnl_m,
         "positionPnlPct": paper_position_pnl_pct,
+        "cashMil": paper_cash_after_m,
         "navMil": paper_nav_m,
         "navPnlMil": paper_nav_pnl_m,
         "navPnlPct": paper_nav_pnl_pct,
@@ -957,7 +960,7 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
   </div>
 </aside>
 <main class="main">
-<header class="topbar"><div class="crumb"><a>Ez Trading</a><span>/</span><b id="crumb">Copy Trade</b></div><div class="spacer"></div><label class="search"><span>⌕</span><input id="globalSearch" placeholder="Tìm mã, lệnh, ghi chú..." /></label><span class="live">LIVE {data['asOf']} · {live_updated_label}</span></header>
+<header class="topbar"><div class="crumb"><a>Ez Trading</a><span>/</span><b id="crumb">Copy Trade</b></div><div class="spacer"></div><label class="search"><span>⌕</span><input id="globalSearch" placeholder="Tìm mã, lệnh, ghi chú..." /></label><span class="live" id="liveBadge">LIVE {data['asOf']} · {live_updated_label}</span></header>
 <div class="content">
   <section class="view on" data-view="copy">
     <div class="pageh"><div><h1>Copy Trade</h1><div class="sub">R46 Bear Stop 15bps · dữ liệu từ dashboard online hiện tại · {hist.get('tradeCount')} lệnh full history</div></div><div><button class="btn">In PDF</button></div></div>
@@ -965,13 +968,13 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
     <div class="kpis">
       <div class="kpi"><div class="l">Vị thế đang nắm</div><div class="v" id="positionKpiValue">{len(holdings)} mã</div><div class="s" id="positionKpiSub">Quy đổi theo NAV copy</div></div>
       <div class="kpi"><div class="l">Lệnh cần làm</div><div class="v">{urgent_count} ngay · {planned_count} T2</div><div class="s">{forecast_display_state} · dữ liệu {forecast_as_of or '-'}</div></div>
-      <div class="kpi"><div class="l">VNI gần nhất</div><div class="v">{fmt_num(data['vni']['close'],2)}</div><div class="s">{data['vni']['date'] or '-'}</div></div>
+      <div class="kpi"><div class="l">VNI gần nhất</div><div class="v" id="vniKpiClose">{fmt_num(data['vni']['close'],2)}</div><div class="s" id="vniKpiDate">{data['vni']['date'] or '-'}</div></div>
       <div class="kpi"><div class="l">Audit model</div><div class="v">VNI+30 {perf['passVni30']}/6</div><div class="s">Min edge +{fmt_num(perf['minEdge'],1)}pp · {perf['slippageBps']}bps</div></div>
     </div>
     <div class="statusline">
-      <span>Giá live: <b>{live_price_date or '-'}</b> · cập nhật {live_updated_label}</span>
-      <span>Forecast: <b>{forecast_display_state}</b> · dữ liệu {forecast_as_of or '-'} · lần chạy {forecast_timing_label}</span>
-      <span>Universe: <b>{full_fresh}/{full_total}</b> mã · cập nhật {full_updated_label}</span>
+      <span id="liveStatusText">Giá live: <b>{live_price_date or '-'}</b> · cập nhật {live_updated_label}</span>
+      <span id="forecastStatusText">Forecast: <b>{forecast_display_state}</b> · dữ liệu {forecast_as_of or '-'} · lần chạy {forecast_timing_label}</span>
+      <span id="universeStatusText">Universe: <b>{full_fresh}/{full_total}</b> mã · cập nhật {full_updated_label}</span>
     </div>
     <section class="sec">
       <div class="sech"><h2>Lệnh cần làm · Execution Desk</h2><span class="meta">{execution_summary}</span></div>
@@ -1015,22 +1018,27 @@ document.querySelectorAll('.nav').forEach(b=>b.addEventListener('click',()=>{{ d
 function roundLot(x){{ return Math.max(0, Math.floor(Number(x || 0) / 100) * 100); }}
 function renderCopyForNav(navBilRaw, syncInput=true){{ const parsed=parseNavValue(navBilRaw); if(parsed===null) return; const navBil=parsed; if(syncInput) document.getElementById('navInput').value=navLabel(navBil); document.querySelectorAll('.navPreset').forEach(b=>b.classList.toggle('primary', Number(b.dataset.nav)===navBil)); let market=0,cost=0; const posLabels=[]; const holdHtml=D.holdings.length ? D.holdings.map(h=>{{ const baseShares=Number(h.copyShares||h.modelShares||0); const shares=roundLot(baseShares*navBil); const entry=Number(h.entryPrice||0); const px=Number(h.currentPrice||0); const value=shares*px/1000; const rowCost=shares*entry/1000; const weight=value/(navBil*1000)*100; const pnl=value-rowCost; const pnlPct=rowCost>0?pnl/rowCost*100:null; market+=value; cost+=rowCost; posLabels.push(`${{esc(h.symbol)}} · ${{f(shares,0)}} cp`); return `<tr><td><strong>${{esc(h.symbol)}}</strong></td><td>${{esc(h.industry||h.sleeve||'-')}}</td><td class="num">${{f(shares,0)}}</td><td class="num">${{priceK(entry,3)}}</td><td class="num">${{priceK(px)}}</td><td class="num">${{valueTr(value)}}</td><td class="num">${{wp(weight)}}</td><td class="num ${{cls(pnl)}}">${{money(pnl)}}</td><td class="num ${{cls(pnlPct)}}">${{pc(pnlPct)}}</td></tr>`; }}).join('') : '<tr><td colspan="9">Chưa có vị thế.</td></tr>'; document.getElementById('holdRows').innerHTML=holdHtml; const exposure=navBil>0?market/(navBil*1000)*100:0; const posValue=document.getElementById('positionKpiValue'); const posSub=document.getElementById('positionKpiSub'); if(posValue) posValue.textContent=posLabels.length?posLabels.join(', '):'0 mã'; if(posSub) posSub.textContent='Giá trị '+f(market,1)+' tr · tỷ trọng '+wp(exposure,1); renderExecutionDesk(navBil); renderPlannedRows(navBil); }}
 const pt = D.paperTrade;
-document.getElementById('ptGrid').innerHTML = [
+function recomputePaperFromPrice(){{ const value=Number(pt.shares||0)*Number(pt.freshPrice||0)/1000; if(Number.isFinite(value)&&value>0) pt.positionValueMil=value; const cost=Number(pt.entryCostMil||0); if(cost>0){{ pt.positionPnlMil=pt.positionValueMil-cost; pt.positionPnlPct=pt.positionPnlMil/cost*100; }} const cash=Number(pt.cashMil||0); const navStart=Number(pt.navStartMil||1000); if(cash>0&&pt.positionValueMil){{ pt.navMil=cash+pt.positionValueMil; pt.navPnlMil=pt.navMil-navStart; pt.navPnlPct=navStart>0?pt.navPnlMil/navStart*100:null; pt.exposurePct=pt.positionValueMil/pt.navMil*100; pt.cashPct=navStart>0?cash/navStart*100:null; }} }}
+function renderPaperTrade(){{ recomputePaperFromPrice(); document.getElementById('ptGrid').innerHTML = [
   ['NAV', pt.navMil===null?'-':f(pt.navMil,1)+' tr'],
   ['P/L', money(pt.navPnlMil)+' · '+pc(pt.navPnlPct,2)],
   ['Cash', f(pt.cashPct,1)+'%'],
   ['Exposure', f(pt.exposurePct,1)+'%']
-].map(x=>`<div class="ptbox"><span>${{x[0]}}</span><b>${{x[1]}}</b></div>`).join('');
-document.getElementById('paperRows').innerHTML = `<tr><td><strong>${{esc(pt.symbol)}}</strong><div class="meta">${{esc(pt.entryDate||pt.signalDate)}} → ${{esc(pt.freshDate)}}</div></td><td class="num">${{f(pt.shares,0)}}</td><td class="num">${{priceK(pt.entryPrice)}}</td><td class="num">${{priceK(pt.freshPrice)}}</td><td class="num ${{cls(pt.positionPnlMil)}}">${{money(pt.positionPnlMil)}} · ${{pc(pt.positionPnlPct)}}</td></tr>`;
+].map(x=>`<div class="ptbox"><span>${{x[0]}}</span><b>${{x[1]}}</b></div>`).join(''); document.getElementById('paperRows').innerHTML = `<tr><td><strong>${{esc(pt.symbol)}}</strong><div class="meta">${{esc(pt.entryDate||pt.signalDate)}} → ${{esc(pt.freshDate)}}</div></td><td class="num">${{f(pt.shares,0)}}</td><td class="num">${{priceK(pt.entryPrice)}}</td><td class="num">${{priceK(pt.freshPrice)}}</td><td class="num ${{cls(pt.positionPnlMil)}}">${{money(pt.positionPnlMil)}} · ${{pc(pt.positionPnlPct)}}</td></tr>`; }}
+renderPaperTrade();
 const planned = D.policy.plannedOrders?.rows || [];
 const execDesk = D.executionDesk?.rows || [];
 function thresholdHtml(r){{ const lines=[]; if(r.maxOpen) lines.push(`Open <= <b>${{priceK(r.maxOpen)}}</b>`); if(r.limitPrice) lines.push(`Pullback <= <b>${{priceK(r.limitPrice)}}</b>`); if(r.bearStop) lines.push(`Bear stop <b>${{priceK(r.bearStop)}}</b>`); if(r.lowPrice) lines.push(`Low mới nhất ${{priceK(r.lowPrice)}}`); if(!lines.length && r.referenceClose) lines.push(`Tham chiếu <b>${{priceK(r.referenceClose)}}</b>`); return `<div class="thresholds">${{lines.map(x=>`<span>${{x}}</span>`).join('')}}</div>`; }}
 function renderExecutionDesk(navBil=parseNavValue(document.getElementById('navInput')?.value)||1){{ const body=document.getElementById('execRows'); if(!body) return; body.innerHTML = execDesk.length ? execDesk.map(r=>{{ const shares=roundLot(Number(r.shares||0)*navBil); return `<tr><td>${{esc(r.group)}}<div class="meta">${{esc(r.date||'-')}}</div></td><td><strong>${{esc(r.symbol)}}</strong></td><td>${{pill(r.action||'-')}}</td><td class="num">${{shares?f(shares,0):'-'}}</td><td class="num">${{priceK(r.currentPrice)}}</td><td>${{thresholdHtml(r)}}</td><td>${{pill(r.status||'-')}}</td><td>${{esc(r.note||'')}}</td></tr>`; }}).join('') : '<tr><td colspan="8">Chưa có lệnh cần xử lý.</td></tr>'; }}
 function renderPlannedRows(navBil=parseNavValue(document.getElementById('navInput')?.value)||1){{ document.getElementById('plannedRows').innerHTML = planned.length ? planned.map(r=>{{ const baseShares=Number(r.orderShares||0); const shares=baseShares>0?roundLot(baseShares*navBil):null; return `<tr><td>${{esc(r.displayPlanDate||r.planDate)}}</td><td><strong>${{esc(r.symbol)}}</strong></td><td>${{pill(r.action||r.status)}}</td><td class="num">${{shares===null?'-':f(shares,0)}}</td><td class="num">${{priceK(r.currentPrice)}}</td><td class="num pos">${{priceK(r.targetPrice)}}</td><td class="num neg">${{priceK(r.stopPrice)}}</td><td>${{esc(r.note)}}</td></tr>`; }}).join('') : '<tr><td colspan="8">Kh\\u00f4ng c\\u00f3 l\\u1ec7nh d\\u1ef1 ki\\u1ebfn \\u2014 xem ghi ch\\u00fa ph\\u00eda tr\\u00ean.</td></tr>'; }}
+function liveSymbols(){{ const syms=new Set(); D.holdings.forEach(h=>h.symbol&&syms.add(h.symbol)); planned.forEach(r=>r.symbol&&syms.add(r.symbol)); execDesk.forEach(r=>r.symbol&&syms.add(r.symbol)); if(pt.symbol) syms.add(pt.symbol); return Array.from(syms).slice(0,40); }}
+function applyEdgeLiveStatus(payload){{ if(!payload||!payload.quotes) return; const updated=payload.updatedAtICT||payload.updatedAtUtc||'-'; const latest=payload.latestPriceDate||D.asOf||'-'; D.asOf=latest; D.liveUpdatedLabel=updated; const liveBadge=document.getElementById('liveBadge'); if(liveBadge) liveBadge.textContent='LIVE '+latest+' · '+updated; const liveStatus=document.getElementById('liveStatusText'); if(liveStatus) liveStatus.innerHTML='Giá live: <b>'+esc(latest)+'</b> · cập nhật '+esc(updated)+' <span class="meta">edge 5p</span>'; if(payload.vnindex&&payload.vnindex.ok){{ D.vni.date=payload.vnindex.latest||D.vni.date; D.vni.close=Number(payload.vnindex.latestClose||D.vni.close); const vc=document.getElementById('vniKpiClose'); const vd=document.getElementById('vniKpiDate'); if(vc) vc.textContent=f(D.vni.close,2); if(vd) vd.textContent=D.vni.date||'-'; }} const quotes=payload.quotes||{{}}; const applyQuote=(row)=>{{ const sym=String(row.symbol||'').toUpperCase(); const q=quotes[sym]; if(q&&q.ok&&Number(q.close)>0){{ row.currentPrice=Number(q.close); row.priceAsOf=q.date||row.priceAsOf; if(row.lowPrice!==undefined&&Number(q.low)>0) row.lowPrice=Number(q.low); }} }}; D.holdings.forEach(applyQuote); planned.forEach(applyQuote); execDesk.forEach(applyQuote); const pq=quotes[String(pt.symbol||'').toUpperCase()]; if(pq&&pq.ok&&Number(pq.close)>0){{ pt.freshPrice=Number(pq.close); pt.freshDate=pq.date||pt.freshDate; }} renderCopyForNav(document.getElementById('navInput')?.value||1,false); renderPaperTrade(); }}
+async function refreshEdgeLiveStatus(){{ const syms=liveSymbols(); if(!syms.length) return; try{{ const res=await fetch('/api/live-status?symbols='+encodeURIComponent(syms.join(',')), {{ cache:'no-store' }}); if(!res.ok) throw new Error('HTTP '+res.status); applyEdgeLiveStatus(await res.json()); }}catch(err){{ const liveStatus=document.getElementById('liveStatusText'); if(liveStatus) liveStatus.innerHTML += ' <span class="meta">edge lỗi</span>'; }} }}
 document.querySelectorAll('.navPreset').forEach(btn=>btn.addEventListener('click',()=>renderCopyForNav(btn.dataset.nav,true)));
 document.getElementById('navInput').addEventListener('input',e=>renderCopyForNav(e.target.value,false));
 document.getElementById('navInput').addEventListener('blur',e=>{{ const n=parseNavValue(e.target.value); if(n!==null) e.target.value=navLabel(n); }});
 renderCopyForNav(1);
+refreshEdgeLiveStatus(); setInterval(refreshEdgeLiveStatus, 5*60*1000);
 document.getElementById('latestRows').innerHTML = D.tradesLatest.map(r=>`<tr><td>${{esc(r.date)}}</td><td><strong>${{esc(r.symbol)}}</strong></td><td>${{pill(r.actionLabel||r.side)}}</td><td class="num">${{f(r.shares,0)}}</td><td class="num">${{priceK(r.executionPriceK)}}</td><td class="num">${{r.tradeWeightPct==null?'-':wp(r.tradeWeightPct,1)}}</td><td class="num ${{cls(r.pnlBil)}}">${{r.pnlBil==null?'-':money(Number(r.pnlBil)*1000)}}</td><td class="num ${{cls(r.returnPct)}}">${{pc(r.returnPct)}}</td><td>${{esc(r.reason)}}</td></tr>`).join('');
 const ws = D.watchlistSummary || {{}};
 document.getElementById('watchSummary').innerHTML = [

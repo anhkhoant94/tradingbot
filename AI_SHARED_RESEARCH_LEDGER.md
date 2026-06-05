@@ -4978,3 +4978,27 @@ Next concrete actions:
 4. Paper-trade 2 tuáº§n parallel R46 (R46 paper-trade week 2 cÃ²n 4 ngÃ y, thÃªm H6P song song)
 5. Stress remove-symbol per top contributor (cáº§n fetch per-symbol contribution)
 6. Stress cost 25/30bps (verify downside ngoÃ i plateau Ä‘Ã£ calibrated)
+
+---
+
+2026-06-05 Codex - Ez dashboard live-price hotfix: Vercel edge live layer.
+
+Issue:
+- User reported at 11:18 ICT that the online dashboard still displayed live price timestamp around 11:01.
+- Public static `dashboard_live_update_status.json` was stale intraday even though forecast/public artifacts could be newer. GitHub weekday 5-minute schedule did not create a price-refresh run in the required window, so static redeploy is not reliable enough for user-visible live quotes.
+
+Fix:
+- Added `dashboard/api/live-status.js` as a Vercel API endpoint. It reads VPS TradingView daily history for dashboard symbols plus VNINDEX and returns `updatedAtICT`, `latestPriceDate`, per-symbol OHLC, and VNINDEX close. Intended cache cadence: 5 minutes.
+- `dashboard/_preview/build_v7_real.py` now embeds client refresh: on page load and every 5 minutes it calls `/api/live-status`, then updates the LIVE badge, live status line, VNINDEX KPI, holdings, execution desk, planned Monday table, and paper trade P/L. Static GitHub files remain fallback only.
+- Paper trade recompute now uses `paperTrade.navStartMil` instead of a hard-coded 1,000 million NAV baseline.
+- `tools/check_dashboard_public_health.py` now checks the edge live API and can require `--require-edge-live`; both dashboard workflows now require this gate.
+- `tools/deploy_online_dashboard_from_tokens.py` now includes `dashboard/api/live-status.js` in future GitHub pushes and verifies edge live in public checks.
+
+Validation:
+- Direct Vercel deploy `dpl_F7ZW7vv9r9ApemKv3t16FSv2SXWb` READY and aliased to `https://ez-trading.vercel.app`.
+- Public API test: `/api/live-status?symbols=MSB,VIX` returned HTTP 200 at `2026-06-05 11:30:22`, MSB 14.75k, VIX 17.95k, VNINDEX 1843.09.
+- Browser DOM test after load: `liveBadge = LIVE 2026-06-05 · 2026-06-05 11:31:09`, `liveStatus = Gia live ... edge 5p`, holdings MSB 14.75k, planned table MSB 14.75k, VNI KPI 1843.09.
+- New public health gate with `--require-fresh-live --require-edge-live --require-vni-history --require-current-vni --require-execution-desk` passed. Static VNI snapshot was stale versus VPS, but edge live matched VPS and kept the public gate green.
+
+Operational rule:
+- Do not rely on GitHub schedule alone for user-visible 5-minute live quotes. GitHub Actions remains the heavy/static lane: price artifact fallback and R46 forecast every 30 minutes. Browser-visible live price must come from the Vercel API layer or another always-available hosted endpoint.
