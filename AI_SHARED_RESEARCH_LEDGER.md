@@ -1,3 +1,7 @@
+## 2026-06-05 Codex — NAV input accepts decimals
+
+User reported Copy Trade NAV input could not accept decimal values such as `0.8`. Root cause: `renderCopyForNav()` rewrote `navInput.value` on every `input` event, so intermediate typing states like `0` or `0.` were immediately normalized before the user could finish typing. Fix: `dashboard/_preview/build_v7_real.py` changes the input to `type="text"` with `inputmode="decimal"`, adds `parseNavValue()` supporting `0.8`, `.8`, and `0,8`, and stops syncing the input value while typing. Browser verification on production: typing `0.8` updates MSB display to `3,000` shares and value `44 tr` without resetting the field.
+
 ## 2026-06-04 Codex — Trade tables add NAV weight + P/L % and zero-price formatting
 
 User asked to add weight and P/L percentage to historical/latest trade displays, and to render missing/zero prices as `-` instead of `-k`. Fix: `dashboard/_preview/build_v7_real.py` now adds `Tỷ trọng NAV` and `P/L %` to `Lệnh đã khớp gần nhất`; adds `P/L %` to `Lịch sử giao dịch`; and routes all displayed price fields through `priceK()` so null/NaN/0 prints `-`. Production deploy `dpl_DgH3ci2h6SzKxrUA1hnu6cA2xxrP` verified: public health PASS, latest trade rows show NAV weights (e.g. MSB `2,8%`, VIC `32,1%`) and P/L % (e.g. VIC `-4,5%`), no visible `-k`.
