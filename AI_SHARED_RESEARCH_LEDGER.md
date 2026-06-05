@@ -11,6 +11,7 @@ Local verification after rebuild:
 - GitHub API commit pushed: `1487235fdec28688797d4e947148af5e00f8ca68`.
 - Vercel direct deploy `dpl_92KAVBNxXqeUrU2j6HYESQf1qsmp` READY and aliased to `https://ez-trading.vercel.app`.
 - Public verification after deploy: `tools/check_dashboard_public_health.py --require-fresh-live --require-edge-live --require-vni-history --require-current-vni --require-current-forecast --require-execution-desk` PASS; public `index.html` contains `tradeCount=922`, `fullTradeCount=1600`, and `ledgerBasis.startDate=2021-01-01`.
+- GitHub workflow run `27008716779` on commit `1487235` also completed SUCCESS after the direct deploy. Final public state after the cloud run: live `2026-06-05 17:06:56`, edge live `2026-06-05 17:18:24`, forecast `COMPUTED` at `2026-06-05 17:16:02`, `tradeCount=922`, `fullTradeCount=1600`, latest displayed MSB trade `42,200` shares, gross `0.605` tỷ, NAV basis `21.299` tỷ.
 
 ## 2026-06-05 Codex - Fixes after Claude audit of live dashboard automation
 
