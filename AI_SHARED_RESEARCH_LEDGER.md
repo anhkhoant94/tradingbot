@@ -1,3 +1,27 @@
+## 2026-06-05 Codex - Cloudflare Worker Cron deployed for 15-minute forecast trigger
+
+User approved Cloudflare as the free external timer. Implemented a dedicated Worker under `ops/cloudflare-forecast-cron/`.
+
+Artifacts:
+- `ops/cloudflare-forecast-cron/wrangler.toml`
+- `ops/cloudflare-forecast-cron/src/worker.js`
+- `ops/cloudflare-forecast-cron/README.md`
+
+Deployment:
+- Cloudflare Wrangler login completed successfully on this machine.
+- Secret `EZ_TRIGGER_SECRET` set from local `cron_secret`; secret is not committed.
+- Worker deployed successfully: `https://ez-trading-forecast-cron.anhkhoant94.workers.dev`
+- Version ID: `bf0174d4-b550-4e62-82a9-640b07716686`
+- Cron trigger active: `*/15 2-8 * * 1-5` UTC, mapping to 09:00-15:45 ICT weekdays.
+
+Validation:
+- Health endpoint returned 200 with `triggerUrlConfigured=true` and `secretConfigured=true` at `2026-06-05 13:37:52 ICT`.
+- Manual authenticated call returned downstream `{"action":"dispatched"}` at `2026-06-05 13:37:52 ICT`.
+- GitHub Actions run created from Cloudflare trigger: `26999694348`, event `workflow_dispatch`, workflow `Dashboard Forecast Refresh`, commit `21a2d1f`.
+
+Operational rule:
+- Cloudflare Worker Cron is now the primary 15-minute forecast timer. GitHub native schedule remains best-effort fallback. Vercel API `/api/trigger-forecast` remains the dispatch/debounce gate and prevents duplicate dispatches while a forecast run is active or just succeeded.
+
 ## 2026-06-05 Codex - Forecast trigger cadence hardening
 
 User asked to stop relying on GitHub schedule for forecast and change forecast cadence back to 15 minutes if the trigger is reliable.
