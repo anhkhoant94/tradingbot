@@ -68,7 +68,17 @@ jobs:
 
       - name: Update live prices
         working-directory: ${{ github.workspace }}
-        run: python update_dashboard_live_data.py
+        run: |
+          for attempt in 1 2 3; do
+            if python update_dashboard_live_data.py; then
+              exit 0
+            fi
+            echo "Live price update failed on attempt ${attempt}/3"
+            if [ "$attempt" != "3" ]; then
+              sleep 45
+            fi
+          done
+          exit 1
 
       - name: Regenerate dashboard analysis
         working-directory: ${{ github.workspace }}
