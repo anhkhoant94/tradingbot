@@ -50,6 +50,8 @@ FILES_TO_PUSH = [
     "dashboard/index.html",
     "dashboard/styles.css",
     "dashboard/api/live-status.js",
+    "dashboard/api/trigger-forecast.js",
+    "dashboard/vercel.json",
     "dashboard/_preview/build_v7_real.py",
     "update_dashboard_live_data.py",
     "run_stock_screen.py",

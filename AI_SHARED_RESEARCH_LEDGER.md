@@ -1,3 +1,23 @@
+## 2026-06-05 Codex - Forecast trigger cadence hardening
+
+User asked to stop relying on GitHub schedule for forecast and change forecast cadence back to 15 minutes if the trigger is reliable.
+
+Finding: GitHub Actions schedule is not reliable enough as the primary clock. Official docs allow delay/drop under high load, and repo history showed price schedule gaps plus forecast schedule mixed success/failure. Vercel Cron 15 minutes was attempted but deployment failed because the current Vercel project is on Hobby: `cron_jobs_limits_reached`, Hobby only allows daily cron jobs. Therefore Vercel Cron cannot be the 15-minute timer unless the project is upgraded to Pro/Enterprise.
+
+Implemented now:
+- Added secure Vercel API route `dashboard/api/trigger-forecast.js`. It dispatches `.github/workflows/dashboard-auto-refresh.yml` via GitHub API, requires `CRON_SECRET`, skips outside the Vietnam trading window unless `force=1`, and skips if the workflow is already running or had a successful run in the last 12 minutes.
+- Set Vercel production env vars: `GITHUB_DISPATCH_TOKEN`, `GITHUB_DISPATCH_REPO`, `GITHUB_DISPATCH_BRANCH`, `CRON_SECRET`.
+- GitHub native schedule changed to best-effort fallback every 15 minutes at offset minutes `7,22,37,52` from 09:00-15:45 ICT weekdays, avoiding the top-of-hour congestion window.
+- Kept `dashboard/vercel.json` without `crons` so Hobby production deploy remains valid; the trigger route is ready for an external scheduler or Vercel Pro Cron later.
+
+Validation:
+- Direct Vercel deploy without cron succeeded: `dpl_37vov6oZFXhVXFNF74ZS1eNdgrxF` READY.
+- Manual secure trigger call returned `{"ok":true,"action":"dispatched"}` at `2026-06-05 11:59:02 ICT`.
+- GitHub Actions run created from that trigger: `26996346764`, event `workflow_dispatch`, workflow `Dashboard Forecast Refresh`.
+
+Operational rule:
+- To get truly reliable 15-minute forecast without a local PC, use one of: (1) upgrade Vercel to Pro and re-enable the `vercel.json` cron `*/15 2-8 * * 1-5`, or (2) point an external cron service such as cron-job.org/UptimeRobot/Cloudflare Worker Cron at `/api/trigger-forecast` with `Authorization: Bearer <CRON_SECRET>`. Until then, GitHub's own 15-minute schedule is only a best-effort fallback.
+
 ## 2026-06-05 Codex — Dashboard exposes live/forecast timestamps and fail-closed forecast attempt
 
 User asked why public dashboard did not visibly update live prices/forecast and requested last compute time on the dashboard. Root cause: price refresh can update live prices, but forecast lane can fail before a dashboard deploy; old UI did not expose last live/full-universe/forecast timestamps. Also, a stale computed forecast could look valid if only `planDate` matched the next Monday.

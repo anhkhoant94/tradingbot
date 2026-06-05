@@ -2,7 +2,7 @@ name: Dashboard Forecast Refresh
 
 on:
   schedule:
-    - cron: "*/30 * * * 1-5"
+    - cron: "7,22,37,52 2-8 * * 1-5"
   push:
     branches:
       - main
