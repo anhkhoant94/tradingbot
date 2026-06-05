@@ -1,3 +1,22 @@
+## 2026-06-05 Codex - Fixes after Claude audit of live dashboard automation
+
+Claude audit found three production-readiness bugs and Codex patched them:
+
+- `ops/cloudflare-forecast-cron/src/worker.js`: fixed `nextQuarterHour()` from `15 - (minutes % 15 || 15)` to `(15 - (minutes % 15)) % 15 || 15`, preventing an alarm burst loop when the current minute is exactly a quarter-hour.
+- `dashboard/api/trigger-forecast.js`: changed auth from fail-open to fail-closed. If `CRON_SECRET` is missing, the endpoint now returns `MISSING_CRON_SECRET` instead of accepting any caller.
+- `tools/check_dashboard_public_health.py`: `--require-current-forecast` now compares `r46_forecast.asOf` to the latest VPS VNINDEX trading date, not only `status=COMPUTED`.
+- `.github/workflows/dashboard-auto-refresh.yml` and `dashboard-price-refresh.yml`: public health gate now includes `--require-current-forecast`.
+- Worker public `/health` now returns a sanitized timer state only; raw `lastTriggerResult` remains behind authenticated `/timer/state`.
+
+Validation before push:
+- `python -m py_compile tools/check_dashboard_public_health.py` PASS.
+- Public health with `--require-current-forecast` PASS while forecast asOf matched VPS latest trading date `2026-06-05`.
+- Cloudflare Worker `wrangler deploy --dry-run` PASS; deployed version `5d7ced39-068a-4eb9-b172-ce41f24f2f51`.
+- Vercel deploy `dpl_BxtZAKyZrxmzGVwY7t5y8MYGY5Cn` READY; unauthenticated `/api/trigger-forecast` returned 401.
+
+Note:
+- Direct Vercel deploy from local `dashboard/` can overwrite public static JSON with stale local files. After this patch, prefer GitHub workflow deploy for production refreshes, or refresh/preserve static JSON before direct deploy. Codex will trigger the cloud workflow after push to restore public static live/full-universe/forecast artifacts.
+
 ## 2026-06-05 Codex - Cloudflare Worker Cron deployed for 15-minute forecast trigger
 
 User approved Cloudflare as the free external timer. Implemented a dedicated Worker under `ops/cloudflare-forecast-cron/`.

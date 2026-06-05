@@ -77,7 +77,11 @@ module.exports = async function handler(req, res) {
 
   const expected = process.env.CRON_SECRET;
   const auth = req.headers.authorization || "";
-  if (expected && auth !== `Bearer ${expected}`) {
+  if (!expected) {
+    res.status(500).json({ ok: false, reason: "MISSING_CRON_SECRET", updatedAtICT: ictStamp() });
+    return;
+  }
+  if (auth !== `Bearer ${expected}`) {
     res.status(401).json({ ok: false, reason: "UNAUTHORIZED", updatedAtICT: ictStamp() });
     return;
   }

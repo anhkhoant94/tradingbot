@@ -145,7 +145,7 @@ def main() -> None:
         live_vni_close = float(live_vni_close)
     except (TypeError, ValueError):
         live_vni_close = None
-    source_vni = fetch_vps_vnindex_latest() if args.require_current_vni else None
+    source_vni = fetch_vps_vnindex_latest() if (args.require_current_vni or args.require_current_forecast) else None
     edge_payload = fetch_edge_live_status(args.url)
     edge_age_seconds = parse_status_age_seconds(edge_payload or {}) if edge_payload else None
     edge_latest_price_date = str((edge_payload or {}).get("latestPriceDate") or "")
@@ -162,6 +162,8 @@ def main() -> None:
         str(k).startswith("cloudR46Refresh") or str(k).startswith("cloudFullUniverseRefresh")
         for k in forecast_meta
     )
+    forecast_as_of = str(forecast_payload.get("asOf") or "")
+    forecast_as_of_matches_source = source_vni is None or forecast_as_of == source_vni.get("date")
     live_vni_exact_match = (
         source_vni is None
         or (
@@ -232,10 +234,11 @@ def main() -> None:
         "edge_vni_recent_snapshot": edge_vni_recent_snapshot,
         "live_vni_check_pass": live_vni_exact_match or live_vni_recent_snapshot or edge_vni_exact_match or edge_vni_recent_snapshot,
         "forecast_status": forecast_payload.get("status"),
-        "forecast_as_of": forecast_payload.get("asOf"),
+        "forecast_as_of": forecast_as_of or None,
         "forecast_plan_date": forecast_payload.get("planDate"),
         "forecast_rows": len(forecast_payload.get("rows") or []),
         "forecast_has_fallback_meta": forecast_has_fallback_meta,
+        "forecast_as_of_matches_source": forecast_as_of_matches_source,
         "embedded_forecast_display_state": embedded_forecast_display_state,
         "embedded_forecast_is_computed": embedded_forecast_display_state == "COMPUTED",
         "has_execution_desk": (
@@ -272,6 +275,7 @@ def main() -> None:
         payload["forecast_status"] != "COMPUTED"
         or payload["forecast_rows"] <= 0
         or payload["forecast_has_fallback_meta"]
+        or not payload["forecast_as_of_matches_source"]
         or payload["embedded_forecast_display_state"] != "COMPUTED"
     ):
         raise SystemExit(1)

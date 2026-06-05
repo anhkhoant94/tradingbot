@@ -44,7 +44,7 @@ function inVietnamTradingWindow(date = new Date()) {
 function nextQuarterHour(date = new Date()) {
   const next = new Date(date.getTime());
   const minutes = next.getUTCMinutes();
-  const add = 15 - (minutes % 15 || 15);
+  const add = (15 - (minutes % 15)) % 15 || 15;
   next.setUTCMinutes(minutes + add, 5, 0);
   return next;
 }
@@ -173,6 +173,23 @@ function timerObject(env) {
   return env.FORECAST_TIMER.get(id);
 }
 
+function publicTimerState(state) {
+  if (!state) return null;
+  const result = state.lastTriggerResult || {};
+  const body = result.body || {};
+  return {
+    enabled: state.enabled,
+    startedAtICT: state.startedAtICT,
+    lastAlarmAtICT: state.lastAlarmAtICT,
+    nextAlarmAt: state.nextAlarmAt,
+    pendingAlarm: state.pendingAlarm,
+    lastTriggerOk: result.ok ?? null,
+    lastTriggerStatus: result.status ?? null,
+    lastTriggerAction: body.action || result.action || null,
+    updatedAtICT: state.updatedAtICT,
+  };
+}
+
 export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil(triggerForecast(env, { source: "cloudflare-cron", cron: event.cron }));
@@ -188,7 +205,7 @@ export default {
         triggerUrlConfigured: Boolean(env.TRIGGER_URL),
         secretConfigured: Boolean(env.EZ_TRIGGER_SECRET),
         durableTimerConfigured: Boolean(env.FORECAST_TIMER),
-        timerState,
+        timerState: publicTimerState(timerState),
         updatedAtICT: ictStamp(),
       });
     }
