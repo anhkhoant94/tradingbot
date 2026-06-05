@@ -14,6 +14,7 @@ Validation:
 - Direct Vercel deploy without cron succeeded: `dpl_37vov6oZFXhVXFNF74ZS1eNdgrxF` READY.
 - Manual secure trigger call returned `{"ok":true,"action":"dispatched"}` at `2026-06-05 11:59:02 ICT`.
 - GitHub Actions run created from that trigger: `26996346764`, event `workflow_dispatch`, workflow `Dashboard Forecast Refresh`.
+- Follow-up guard fix: recent-success debounce now uses GitHub `updated_at` for completed runs, not `created_at`; deployed `dpl_7CbF81pB5qHQ3NEiwzhCTmAGEJi5`. Re-test during run `26996978437` returned `{"action":"skip_running"}`, proving the endpoint no longer dispatches duplicates while a forecast run is active.
 
 Operational rule:
 - To get truly reliable 15-minute forecast without a local PC, use one of: (1) upgrade Vercel to Pro and re-enable the `vercel.json` cron `*/15 2-8 * * 1-5`, or (2) point an external cron service such as cron-job.org/UptimeRobot/Cloudflare Worker Cron at `/api/trigger-forecast` with `Authorization: Bearer <CRON_SECRET>`. Until then, GitHub's own 15-minute schedule is only a best-effort fallback.

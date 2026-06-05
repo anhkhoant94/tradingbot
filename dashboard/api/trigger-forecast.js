@@ -59,12 +59,13 @@ async function recentWorkflowState(repo, branch) {
   const now = Date.now();
   for (const run of payload.workflow_runs || []) {
     const status = String(run.status || "");
-    const ageSeconds = Math.max(0, (now - Date.parse(run.created_at)) / 1000);
+    const runningAgeSeconds = Math.max(0, (now - Date.parse(run.created_at)) / 1000);
+    const completedAgeSeconds = Math.max(0, (now - Date.parse(run.updated_at || run.created_at)) / 1000);
     if (["queued", "in_progress", "waiting", "requested"].includes(status)) {
-      return { action: "skip_running", runId: run.id, status, ageSeconds: Math.round(ageSeconds), url: run.html_url };
+      return { action: "skip_running", runId: run.id, status, ageSeconds: Math.round(runningAgeSeconds), url: run.html_url };
     }
-    if (run.conclusion === "success" && ageSeconds < MIN_RECENT_SECONDS) {
-      return { action: "skip_recent_success", runId: run.id, status, conclusion: run.conclusion, ageSeconds: Math.round(ageSeconds), url: run.html_url };
+    if (run.conclusion === "success" && completedAgeSeconds < MIN_RECENT_SECONDS) {
+      return { action: "skip_recent_success", runId: run.id, status, conclusion: run.conclusion, ageSeconds: Math.round(completedAgeSeconds), url: run.html_url };
     }
   }
   return { action: "dispatch" };
