@@ -8,6 +8,9 @@ Local verification after rebuild:
 - Latest displayed model NAV basis is `21.299476167942284` tỷ on `2026-05-25`, not the full-history `44.07153044682513` tỷ.
 - UI copy no longer mentions `NAV model (~44 tỷ)`, `full history`, or `1600 dòng` in the displayed trade sections; labels say `NAV 2021 = 1 tỷ` / `NAV 1 tỷ từ 2021-01-01`.
 - Static public data was synced before rebuild: live `2026-06-05 16:27:24`, full-universe `551/703` at `2026-06-05 16:33:24`, forecast `COMPUTED` at `2026-06-05 16:36:07`.
+- GitHub API commit pushed: `1487235fdec28688797d4e947148af5e00f8ca68`.
+- Vercel direct deploy `dpl_92KAVBNxXqeUrU2j6HYESQf1qsmp` READY and aliased to `https://ez-trading.vercel.app`.
+- Public verification after deploy: `tools/check_dashboard_public_health.py --require-fresh-live --require-edge-live --require-vni-history --require-current-vni --require-current-forecast --require-execution-desk` PASS; public `index.html` contains `tradeCount=922`, `fullTradeCount=1600`, and `ledgerBasis.startDate=2021-01-01`.
 
 ## 2026-06-05 Codex - Fixes after Claude audit of live dashboard automation
 
