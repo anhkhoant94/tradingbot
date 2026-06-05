@@ -15,6 +15,8 @@ ROOT = Path(__file__).resolve().parents[2]
 DASH = ROOT / "dashboard"
 PREVIEW = DASH / "_preview"
 PT_DIR = ROOT / "output" / "beat_vni30_parallel" / "paper_trade_v4_r46"
+LEDGER_REBASE_START_DATE = "2021-01-01"
+LEDGER_REBASE_NAV_BIL = 1.0
 
 
 parser = argparse.ArgumentParser(description="Build the Ez Trading v7 static dashboard HTML.")
@@ -108,6 +110,18 @@ def as_float(value, default=None):
     except (TypeError, ValueError):
         return default
     return x if math.isfinite(x) else default
+
+
+def scale_lot(value, scale):
+    raw = as_float(value)
+    if raw is None:
+        return value
+    if abs(raw) < 1e-9:
+        return 0
+    scaled = int(round(raw * scale / 100.0) * 100)
+    if scaled == 0 and raw > 0:
+        scaled = 100
+    return scaled
 
 
 def next_monday(date_text):
@@ -332,19 +346,44 @@ curve = [
 ]
 curve_2021 = [r for r in curve if r["date"] >= "2021-01-01"] or curve
 nav_by_date = {r["date"]: float(r["navBil"]) for r in curve if r.get("date") and r.get("navBil")}
+ledger_base_curve = [
+    r for r in curve
+    if r.get("date") and r.get("navBil") and r["date"] >= LEDGER_REBASE_START_DATE
+]
+if not ledger_base_curve:
+    ledger_base_curve = curve
+ledger_base_nav_bil = float(ledger_base_curve[0]["navBil"]) if ledger_base_curve else 1.0
+ledger_scale = LEDGER_REBASE_NAV_BIL / ledger_base_nav_bil if ledger_base_nav_bil else 1.0
+trades_period = [row for row in trades_full if str(row.get("date") or "") >= LEDGER_REBASE_START_DATE]
 
 
 def enrich_trade(row):
     out = dict(row)
-    nav_bil = nav_by_date.get(out.get("date"))
-    gross_bil = as_float(out.get("grossBil"))
+    nav_bil_original = nav_by_date.get(out.get("date"))
+    nav_bil = nav_bil_original * ledger_scale if nav_bil_original is not None else None
+    gross_bil_original = as_float(out.get("grossBil"))
+    gross_bil = gross_bil_original * ledger_scale if gross_bil_original is not None else None
+    pnl_bil_original = as_float(out.get("pnlBil"))
+    fees_bil_original = as_float(out.get("feesBil"))
+    out["modelFullNavBilAtTrade"] = nav_bil_original
+    out["modelFullGrossBil"] = gross_bil_original
+    out["modelFullShares"] = out.get("shares")
     out["navBilAtTrade"] = nav_bil
+    out["grossBil"] = gross_bil
+    out["pnlBil"] = pnl_bil_original * ledger_scale if pnl_bil_original is not None else None
+    out["feesBil"] = fees_bil_original * ledger_scale if fees_bil_original is not None else fees_bil_original
+    for key in ("shares", "rawShares", "positionBeforeShares", "positionAfterShares"):
+        if key in out:
+            out[key] = scale_lot(out.get(key), ledger_scale)
     out["tradeWeightPct"] = gross_bil / nav_bil * 100 if nav_bil and gross_bil is not None else None
     return out
 
 
-trades_latest = [enrich_trade(row) for row in list(reversed(trades_full))[:8]]
-ledger_rows = [enrich_trade(row) for row in list(reversed(trades_full))]
+trades_latest = [enrich_trade(row) for row in list(reversed(trades_period))[:8]]
+ledger_rows = [enrich_trade(row) for row in list(reversed(trades_period))]
+ledger_first_trade_date = min((str(row.get("date")) for row in trades_period if row.get("date")), default="-")
+ledger_last_trade_date = max((str(row.get("date")) for row in trades_period if row.get("date")), default="-")
+ledger_basis_label = f"NAV 1 tỷ từ {LEDGER_REBASE_START_DATE}"
 
 memos = analysis.get("memos", [])
 memo_by_symbol = {str(row.get("symbol", "")).upper(): row for row in memos}
@@ -795,9 +834,18 @@ data = {
     "modelSummaryCards": model_summary_cards,
     "tradesLatest": trades_latest,
     "ledger": ledger_rows,
-    "tradeCount": hist.get("tradeCount") or len(trades_full),
-    "firstTradeDate": hist.get("firstTradeDate"),
-    "lastTradeDate": hist.get("lastTradeDate"),
+    "tradeCount": len(ledger_rows),
+    "fullTradeCount": hist.get("tradeCount") or len(trades_full),
+    "firstTradeDate": ledger_first_trade_date,
+    "lastTradeDate": ledger_last_trade_date,
+    "ledgerBasis": {
+        "startDate": LEDGER_REBASE_START_DATE,
+        "startNavBil": LEDGER_REBASE_NAV_BIL,
+        "baseCurveDate": ledger_base_curve[0]["date"] if ledger_base_curve else None,
+        "baseOriginalNavBil": ledger_base_nav_bil,
+        "scale": ledger_scale,
+        "label": ledger_basis_label,
+    },
     "chart": chart_rows,
     "copyAccount": {
         "navMil": copy_nav_m,
@@ -845,7 +893,7 @@ data_js = json.dumps(data, ensure_ascii=False)
 
 # --- Sanity asserts: bắt lỗi sớm trước khi ghi HTML ---
 assert holdings, "FAIL: holdings rỗng — kiểm tra analysis.js policy r46_bear_stop_mcore"
-assert len(ledger_rows) == (hist.get("tradeCount") or len(trades_full)), "FAIL: ledger count lệch tradeCount"
+assert len(ledger_rows) == len(trades_period), "FAIL: ledger count lệch trades_period"
 assert chart_rows and len(chart_rows) > 100, "FAIL: chart_rows quá ít — kiểm tra equityCurve"
 assert data["vni"]["close"] > 0, "FAIL: VNI close không hợp lệ"
 
@@ -951,7 +999,7 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
   <button class="nav on" data-view="copy"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path d="M4 19V5m0 14h16M8 16l3-4 3 2 4-7"/></svg>Copy Trade<span class="ct">{len(holdings)}</span></button>
   <button class="nav" data-view="watch"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/></svg>Theo dõi mua<span class="ct">{len(watchlist_rows)}</span></button>
   <button class="nav" data-view="model"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path d="M3 4h18l-7 8v6l-4 2v-8L3 4z"/></svg>Bộ lọc model</button>
-  <button class="nav" data-view="ledger"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Lịch sử<span class="ct">{hist.get('tradeCount') or len(trades_full)}</span></button>
+  <button class="nav" data-view="ledger"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Lịch sử<span class="ct">{len(ledger_rows)}</span></button>
   <div class="sidefoot">
     <div class="sfrow"><span>Regime</span><b>{regime_label}</b></div>
     <div class="sfrow"><span>Cash</span><b>{fmt_num(policy.get('cashBuffer'),1)}%</b></div>
@@ -963,7 +1011,7 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
 <header class="topbar"><div class="crumb"><a>Ez Trading</a><span>/</span><b id="crumb">Copy Trade</b></div><div class="spacer"></div><label class="search"><span>⌕</span><input id="globalSearch" placeholder="Tìm mã, lệnh, ghi chú..." /></label><span class="live" id="liveBadge">LIVE {data['asOf']} · {live_updated_label}</span></header>
 <div class="content">
   <section class="view on" data-view="copy">
-    <div class="pageh"><div><h1>Copy Trade</h1><div class="sub">R46 Bear Stop 15bps · dữ liệu từ dashboard online hiện tại · {hist.get('tradeCount')} lệnh full history</div></div><div><button class="btn">In PDF</button></div></div>
+    <div class="pageh"><div><h1>Copy Trade</h1><div class="sub">R46 Bear Stop 15bps · dữ liệu từ dashboard online hiện tại · lịch sử từ 2021 theo {ledger_basis_label}</div></div><div><button class="btn">In PDF</button></div></div>
     <div class="controls"><span class="ctrl-lbl">NAV copy</span><input class="input" id="navInput" value="1" type="text" inputmode="decimal" autocomplete="off" style="width:80px" /><span class="ctrl-lbl">tỷ</span><button class="btn primary navPreset" data-nav="1">1 tỷ</button><button class="btn navPreset" data-nav="3">3 tỷ</button><button class="btn navPreset" data-nav="5">5 tỷ</button></div>
     <div class="kpis">
       <div class="kpi"><div class="l">Vị thế đang nắm</div><div class="v" id="positionKpiValue">{len(holdings)} mã</div><div class="s" id="positionKpiSub">Quy đổi theo NAV copy</div></div>
@@ -991,11 +1039,11 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
       <section class="sec"><div class="sech"><h2>Theo dõi thử nghiệm <span class="scaletag">{data['paperStatus']}</span></h2><span class="meta">Tài khoản giả lập 1 tỷ · bắt đầu {data['paperTrade']['startDate']}</span></div><div class="ptgrid" id="ptGrid"></div><table><thead><tr><th>Mã</th><th class="num">KL</th><th class="num">Giá vốn</th><th class="num">Giá TT</th><th class="num">P/L</th></tr></thead><tbody id="paperRows"></tbody></table></section>
     </div>
     <section class="sec"><div class="sech"><h2>Dự kiến giao dịch thứ 2 tới <span class="scaletag">{forecast_display_state}</span></h2><span class="meta">{planned_public['summary']}</span></div><table class="forecast-table"><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá TT</th><th class="num">Target</th><th class="num">Stop</th><th>Ghi chú</th></tr></thead><tbody id="plannedRows"></tbody></table></section>
-    <section class="sec"><div class="sech"><h2>Lệnh đã khớp gần nhất <span class="scaletag">QUY MÔ MODEL</span></h2><span class="meta">8 dòng mới nhất từ history.js · KL, tỷ trọng &amp; P/L theo NAV model (~44 tỷ), không scale theo NAV copy</span></div><table><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá</th><th class="num">Tỷ trọng NAV</th><th class="num">P/L</th><th class="num">P/L %</th><th>Lý do</th></tr></thead><tbody id="latestRows"></tbody></table></section>
+    <section class="sec"><div class="sech"><h2>Lệnh đã khớp gần nhất <span class="scaletag">NAV 2021 = 1 tỷ</span></h2><span class="meta">8 dòng mới nhất từ history.js · KL, giá trị, tỷ trọng &amp; P/L quy đổi theo {ledger_basis_label}; không scale theo ô NAV copy</span></div><table><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá</th><th class="num">Tỷ trọng NAV</th><th class="num">P/L</th><th class="num">P/L %</th><th>Lý do</th></tr></thead><tbody id="latestRows"></tbody></table></section>
   </section>
   <section class="view" data-view="watch"><div class="pageh"><div><h1>Theo dõi mua</h1><div class="sub">{len(watchlist_rows)} mã từ dashboard online `data.js` + live shortlist · loại {watchlist_summary['excludedHeld']} mã đang nắm</div></div></div><section class="sec"><div class="sech"><h2>Mã đáng theo dõi và có thể mua sắp tới</h2><span class="meta">Không phải rule khớp lệnh live của R46</span></div><div class="watchSummary" id="watchSummary"></div><div class="watchRules" id="watchRules"></div><table><thead><tr><th>Mã</th><th>Nhóm</th><th class="num">Điểm lọc</th><th class="num">Upside</th><th class="num">Target</th><th class="num">R:R</th><th class="num">TK 20D</th><th>Target tuần</th><th>Tín hiệu mua</th><th>Ghi chú</th></tr></thead><tbody id="watchRows"></tbody></table></section></section>
   <section class="view" data-view="model"><div class="pageh"><div><h1>Bộ lọc model · R46 Bear Stop 15bps</h1><div class="sub">Tóm tắt vận hành, không công bố công thức nội bộ</div></div><span class="pill buy">AUDIT {policy.get('productionAudit',{}).get('status','R46')}</span></div><section class="sec"><div class="sech"><h2>Tóm tắt</h2><span class="meta">Public view</span></div><div class="secb"><div class="logic" id="logicGrid"></div></div></section></section>
-  <section class="view" data-view="ledger"><div class="pageh"><div><h1>Lịch sử giao dịch</h1><div class="sub">{len(ledger_rows)} dòng từ {hist.get('firstTradeDate')} đến {hist.get('lastTradeDate')} · KL, tỷ trọng &amp; P/L theo NAV model (~44 tỷ)</div></div></div><section class="sec"><div class="ledgerbar"><b id="ledgerCount"></b><input id="ledgerSearch" placeholder="Tìm theo mã, lệnh, lý do..." /><div class="pager" id="pager"></div></div><div class="scroll"><table><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá</th><th class="num">Giá trị</th><th class="num">Tỷ trọng NAV</th><th class="num">P/L</th><th class="num">P/L %</th><th class="num">Nắm giữ</th><th>Lý do</th></tr></thead><tbody id="ledgerBody"></tbody></table></div></section></section>
+  <section class="view" data-view="ledger"><div class="pageh"><div><h1>Lịch sử giao dịch</h1><div class="sub">{len(ledger_rows)} dòng từ {ledger_first_trade_date} đến {ledger_last_trade_date} · KL, giá trị, tỷ trọng &amp; P/L quy đổi theo {ledger_basis_label}</div></div></div><section class="sec"><div class="ledgerbar"><b id="ledgerCount"></b><input id="ledgerSearch" placeholder="Tìm theo mã, lệnh, lý do..." /><div class="pager" id="pager"></div></div><div class="scroll"><table><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá</th><th class="num">Giá trị</th><th class="num">Tỷ trọng NAV</th><th class="num">P/L</th><th class="num">P/L %</th><th class="num">Nắm giữ</th><th>Lý do</th></tr></thead><tbody id="ledgerBody"></tbody></table></div></section></section>
 </div>
 </main>
 </div>

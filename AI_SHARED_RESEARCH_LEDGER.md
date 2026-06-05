@@ -1,3 +1,14 @@
+## 2026-06-05 Codex - Dashboard trade ledger rebased to 2021 NAV 1B
+
+User corrected the dashboard ledger basis: "Lệnh đã khớp gần nhất" and "Lịch sử giao dịch" must align with the displayed 2021-present chart/CAGR, not the full 2016 model NAV. `dashboard/_preview/build_v7_real.py` now filters displayed trade history to trades dated `>= 2021-01-01` and rebases trade notional/P&L/share quantities by `1.0 / first_2021_curve_nav` so the displayed ledger starts from NAV `1 tỷ` on `2021-01-01`.
+
+Local verification after rebuild:
+- Full source trade history remains `1600` rows, but displayed ledger is now `922` rows from `2021-01-04` to `2026-05-25`.
+- Rebase anchor: first 2021 equity curve row `2021-01-04`, original NAV `2.0691368228650115` tỷ, display scale `0.48329331774945605`.
+- Latest displayed model NAV basis is `21.299476167942284` tỷ on `2026-05-25`, not the full-history `44.07153044682513` tỷ.
+- UI copy no longer mentions `NAV model (~44 tỷ)`, `full history`, or `1600 dòng` in the displayed trade sections; labels say `NAV 2021 = 1 tỷ` / `NAV 1 tỷ từ 2021-01-01`.
+- Static public data was synced before rebuild: live `2026-06-05 16:27:24`, full-universe `551/703` at `2026-06-05 16:33:24`, forecast `COMPUTED` at `2026-06-05 16:36:07`.
+
 ## 2026-06-05 Codex - Fixes after Claude audit of live dashboard automation
 
 Claude audit found three production-readiness bugs and Codex patched them:
@@ -16,6 +27,14 @@ Validation before push:
 
 Note:
 - Direct Vercel deploy from local `dashboard/` can overwrite public static JSON with stale local files. After this patch, prefer GitHub workflow deploy for production refreshes, or refresh/preserve static JSON before direct deploy. Codex will trigger the cloud workflow after push to restore public static live/full-universe/forecast artifacts.
+
+Post-push public validation:
+- GitHub workflow run `27006930349` completed SUCCESS after the patch push.
+- Public static live status restored to `updatedAtICT=2026-06-05 16:27:24`, `latestPriceDate=2026-06-05`.
+- Public full-universe status restored to `updatedAtICT=2026-06-05 16:33:24`, `latestPriceDate=2026-06-05`, `symbolsAtTargetOrNewer=551/703`.
+- Public R46 forecast restored to `status=COMPUTED`, `asOf=2026-06-05`, `planDate=2026-06-08`, `computedAtICT=2026-06-05 16:36:07`.
+- Public health command `python tools/check_dashboard_public_health.py --require-fresh-live --require-edge-live --require-vni-history --require-current-vni --require-current-forecast --require-execution-desk` PASS at `2026-06-05 16:42 ICT`: edge live `updatedAtICT=2026-06-05 16:42:22`, VNINDEX `1838.9`, forecast current vs source.
+- Cloudflare Worker health PASS at `2026-06-05 16:42:47`; Durable Object timer `enabled=true`, `nextAlarmAt=2026-06-08T01:45:05.000Z` (Monday 08:45 ICT). Need Monday 08:45/09:00/09:15 live audit to prove in-session alarms dispatch continuously.
 
 ## 2026-06-05 Codex - Cloudflare Worker Cron deployed for 15-minute forecast trigger
 

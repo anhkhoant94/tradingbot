@@ -1,14 +1,14 @@
 {
-  "updatedAt": "2026-06-05 03:49:34",
-  "updatedAtUtc": "2026-06-05T03:49:34Z",
-  "updatedAtICT": "2026-06-05 10:49:34",
+  "updatedAt": "2026-06-05 09:33:24",
+  "updatedAtUtc": "2026-06-05T09:33:24Z",
+  "updatedAtICT": "2026-06-05 16:33:24",
   "targetDate": "2026-06-05",
   "symbolsTotal": 703,
   "symbolsAttempted": 703,
   "symbolsUpdated": 703,
   "symbolsFailed": 0,
   "latestPriceDate": "2026-06-05",
-  "symbolsAtTargetOrNewer": 473,
+  "symbolsAtTargetOrNewer": 551,
   "vnindex": {
     "symbol": "VNINDEX",
     "ok": true,
@@ -28,14 +28,14 @@
       "freshBefore": 8,
       "staleBefore": 695,
       "attempted": 695,
-      "ok": 695
+      "ok": 694
     },
     {
       "round": 2,
-      "freshBefore": 473,
-      "staleBefore": 230
+      "freshBefore": 551,
+      "staleBefore": 152
     }
   ],
   "failedSample": [],
-  "seconds": 381.19
+  "seconds": 358.46
 }

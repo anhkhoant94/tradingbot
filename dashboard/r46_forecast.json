@@ -5,8 +5,8 @@
   "planDate": "2026-06-08",
   "generatedAtSource": "dashboard/dashboard_live_update_status.json",
   "status": "COMPUTED",
-  "computedAtUtc": "2026-06-05T03:52:14Z",
-  "computedAtICT": "2026-06-05 10:52:14",
+  "computedAtUtc": "2026-06-05T09:36:07Z",
+  "computedAtICT": "2026-06-05 16:36:07",
   "source": "output/beat_vni30_parallel/r46_live_forecast/latest_targets.parquet",
   "message": "Forecast R46 đã precompute từ full-universe live chain.",
   "rows": [
@@ -26,7 +26,7 @@
     }
   ],
   "meta": {
-    "tailMatrixRows": 2076,
+    "tailMatrixRows": 2079,
     "tailMatrixDates": [
       "2026-05-25",
       "2026-06-01",
