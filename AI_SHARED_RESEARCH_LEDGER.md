@@ -10,6 +10,8 @@ GitHub run `26993307936` after commit proved the cloud chain can compute forecas
 
 Follow-up run `26993737352` on commit `b616b37` failed at `Update live data` because GitHub runner got VPS connection failures for 10/10 symbols (`prices 0/10 below gate 7`). The script correctly refused to write an empty live payload. Workflow fix: both `dashboard-auto-refresh.yml` and `dashboard-price-refresh.yml` now retry `update_dashboard_live_data.py` up to 3 times with 45-second backoff before failing. This preserves the hard no-empty-quotes gate while reducing transient VPS/GitHub false failures.
 
+Validation: manual dispatch `26993973032` on commit `2acd2f7` completed SUCCESS end-to-end. Steps passed: live update, full-universe update, R46 forecast precompute, forecast verification, build v7 static dashboard, Vercel deploy, public freshness check, and public asset health check. This is the current green workflow baseline.
+
 ## 2026-06-05 Codex — NAV input accepts decimals
 
 User reported Copy Trade NAV input could not accept decimal values such as `0.8`. Root cause: `renderCopyForNav()` rewrote `navInput.value` on every `input` event, so intermediate typing states like `0` or `0.` were immediately normalized before the user could finish typing. Fix: `dashboard/_preview/build_v7_real.py` changes the input to `type="text"` with `inputmode="decimal"`, adds `parseNavValue()` supporting `0.8`, `.8`, and `0,8`, and stops syncing the input value while typing. Browser verification on production: typing `0.8` updates MSB display to `3,000` shares and value `44 tr` without resetting the field.
