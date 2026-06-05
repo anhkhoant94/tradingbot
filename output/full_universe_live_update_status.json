@@ -1,14 +1,14 @@
 {
-  "updatedAt": "2026-06-05 10:10:36",
-  "updatedAtUtc": "2026-06-05T03:10:36Z",
-  "updatedAtICT": "2026-06-05 10:10:36",
+  "updatedAt": "2026-06-05 03:49:34",
+  "updatedAtUtc": "2026-06-05T03:49:34Z",
+  "updatedAtICT": "2026-06-05 10:49:34",
   "targetDate": "2026-06-05",
   "symbolsTotal": 703,
-  "symbolsAttempted": 695,
-  "symbolsUpdated": 695,
+  "symbolsAttempted": 703,
+  "symbolsUpdated": 703,
   "symbolsFailed": 0,
   "latestPriceDate": "2026-06-05",
-  "symbolsAtTargetOrNewer": 445,
+  "symbolsAtTargetOrNewer": 473,
   "vnindex": {
     "symbol": "VNINDEX",
     "ok": true,
@@ -18,26 +18,24 @@
     "vnindex_2012_rows": 4180
   },
   "historyCache": {
-    "path": ".cache\\backtest\\history_cache.pkl",
+    "path": ".cache/backtest/history_cache.pkl",
     "symbols": 703,
     "latestPriceDate": "2026-06-05"
   },
   "retryRounds": [
     {
       "round": 1,
-      "freshBefore": 442,
-      "staleBefore": 261,
-      "attempted": 261,
-      "ok": 261
+      "freshBefore": 8,
+      "staleBefore": 695,
+      "attempted": 695,
+      "ok": 695
     },
     {
       "round": 2,
-      "freshBefore": 443,
-      "staleBefore": 260,
-      "attempted": 260,
-      "ok": 260
+      "freshBefore": 473,
+      "staleBefore": 230
     }
   ],
   "failedSample": [],
-  "seconds": 299.81
+  "seconds": 381.19
 }

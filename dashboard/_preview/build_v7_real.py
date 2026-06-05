@@ -964,13 +964,13 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
     <div class="controls"><span class="ctrl-lbl">NAV copy</span><input class="input" id="navInput" value="1" type="text" inputmode="decimal" autocomplete="off" style="width:80px" /><span class="ctrl-lbl">tỷ</span><button class="btn primary navPreset" data-nav="1">1 tỷ</button><button class="btn navPreset" data-nav="3">3 tỷ</button><button class="btn navPreset" data-nav="5">5 tỷ</button></div>
     <div class="kpis">
       <div class="kpi"><div class="l">Vị thế đang nắm</div><div class="v" id="positionKpiValue">{len(holdings)} mã</div><div class="s" id="positionKpiSub">Quy đổi theo NAV copy</div></div>
-      <div class="kpi"><div class="l">Lệnh cần làm</div><div class="v">{urgent_count} ngay · {planned_count} T2</div><div class="s">{forecast_display_state} · asOf {forecast_as_of or '-'}</div></div>
+      <div class="kpi"><div class="l">Lệnh cần làm</div><div class="v">{urgent_count} ngay · {planned_count} T2</div><div class="s">{forecast_display_state} · dữ liệu {forecast_as_of or '-'}</div></div>
       <div class="kpi"><div class="l">VNI gần nhất</div><div class="v">{fmt_num(data['vni']['close'],2)}</div><div class="s">{data['vni']['date'] or '-'}</div></div>
       <div class="kpi"><div class="l">Audit model</div><div class="v">VNI+30 {perf['passVni30']}/6</div><div class="s">Min edge +{fmt_num(perf['minEdge'],1)}pp · {perf['slippageBps']}bps</div></div>
     </div>
     <div class="statusline">
       <span>Giá live: <b>{live_price_date or '-'}</b> · cập nhật {live_updated_label}</span>
-      <span>Forecast: <b>{forecast_display_state}</b> · asOf {forecast_as_of or '-'} · lần chạy {forecast_timing_label}</span>
+      <span>Forecast: <b>{forecast_display_state}</b> · dữ liệu {forecast_as_of or '-'} · lần chạy {forecast_timing_label}</span>
       <span>Universe: <b>{full_fresh}/{full_total}</b> mã · cập nhật {full_updated_label}</span>
     </div>
     <section class="sec">
