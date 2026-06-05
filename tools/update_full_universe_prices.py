@@ -5,9 +5,10 @@ import json
 import pickle
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 import sys
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -23,6 +24,7 @@ OUT = ROOT / "output"
 STATUS_PATH = OUT / "full_universe_live_update_status.json"
 DASH_STATUS_PATH = ROOT / "dashboard" / "full_universe_live_update_status.json"
 HISTORY_CACHE_PATH = ROOT / ".cache" / "backtest" / "history_cache.pkl"
+ICT = ZoneInfo("Asia/Ho_Chi_Minh")
 
 
 def read_universe_symbols(limit: int | None = None) -> list[str]:
@@ -216,6 +218,8 @@ def main() -> None:
     ]
     payload = {
         "updatedAt": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "updatedAtUtc": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "updatedAtICT": datetime.now(ICT).strftime("%Y-%m-%d %H:%M:%S"),
         "targetDate": target.isoformat(),
         "symbolsTotal": len(symbols),
         "symbolsAttempted": len(attempted_symbols),

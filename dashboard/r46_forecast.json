@@ -1,39 +1,21 @@
 {
   "schemaVersion": 2,
   "policy": "r46_bear_stop_mcore",
-  "asOf": "2026-06-04",
+  "asOf": "2026-06-05",
   "planDate": "2026-06-08",
-  "generatedAtSource": "dashboard\\dashboard_live_update_status.json",
-  "status": "COMPUTED",
-  "source": "output/beat_vni30_parallel/r46_live_forecast/latest_targets.parquet",
-  "message": "Forecast R46 đã precompute từ full-universe live chain.",
-  "rows": [
-    {
-      "displayPlanDate": "2026-06-08",
-      "planDate": "2026-06-08",
-      "symbol": "MSB",
-      "action": "BÁN HẾT",
-      "status": "DỰ KIẾN",
-      "currentPrice": 14.4,
-      "priceAsOf": "2026-06-04",
-      "targetWeight": 0.0,
-      "currentCopyShares": 3600,
-      "targetCopyShares": 0,
-      "orderShares": 3600,
-      "note": "Precompute R46 trên GitHub; chỉ chốt sau close thứ 6."
-    }
-  ],
+  "status": "NOT_COMPUTED",
+  "reason": "full_universe_freshness_gate_failed",
+  "message": "Full-universe live cache chi fresh 445/703 ma (<65%); khong publish forecast moi.",
+  "attemptedAtUtc": "2026-06-05T03:10:58Z",
+  "attemptedAtICT": "2026-06-05 10:10:58",
+  "rows": [],
   "meta": {
-    "tailMatrixRows": 2085,
-    "tailMatrixDates": [
-      "2026-05-25",
-      "2026-06-01",
-      "2026-06-08"
-    ],
-    "pairTailRows": 1,
-    "latestComputedDate": "2026-06-08",
-    "overlapOk": true,
-    "overlapMaxDiff": 0.0,
-    "overlapDiffCount": 0
+    "symbolsTotal": 703,
+    "symbolsAtTargetOrNewer": 445,
+    "minFreshSymbols": 457,
+    "targetDate": "2026-06-05",
+    "latestPriceDate": "2026-06-05",
+    "updatedAt": "2026-06-05 10:10:36",
+    "updatedAtICT": "2026-06-05 10:10:36"
   }
 }

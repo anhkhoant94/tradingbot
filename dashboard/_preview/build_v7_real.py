@@ -189,6 +189,7 @@ history = load_js_object(DASH / "history.js", "window.MODEL_TRADE_HISTORY")
 live_status = load_json_or(DASH / "dashboard_live_update_status.json", {})
 forecast_status_path = DASH / "r46_forecast.json"
 forecast_status = load_json_or(forecast_status_path, {})
+full_universe_status = load_json_or(DASH / "full_universe_live_update_status.json", load_json_or(ROOT / "output" / "full_universe_live_update_status.json", {}))
 policy_config = load_json_or(ROOT / "output" / "dashboard_policies" / "r46_bear_stop_mcore" / "config.json", {})
 pt_state = load_json_or(PT_DIR / "paper_trade_state.json", {
     "start_date": "2026-06-01",
@@ -533,13 +534,41 @@ model_summary_cards = [
 ]
 forecast_date = next_monday(live_status.get("latestPriceDate") or signal_w1.get("execution_date"))
 planned_symbols = {str(row.get("symbol", "")).upper() for row in planned_rows}
+live_price_date = str(live_status.get("latestPriceDate") or "")
+live_updated_label = (
+    live_status.get("updatedAtICT")
+    or live_status.get("updatedAt")
+    or live_status.get("updatedAtUtc")
+    or "-"
+)
+forecast_as_of = str(forecast_status.get("asOf") or "")
+forecast_computed_label = (
+    forecast_status.get("computedAtICT")
+    or forecast_status.get("computedAt")
+    or forecast_status.get("computedAtUtc")
+    or "chưa ghi timestamp"
+)
+forecast_attempt_label = (
+    forecast_status.get("attemptedAtICT")
+    or (forecast_status.get("meta") or {}).get("lastAttemptAtICT")
+    or forecast_status.get("attemptedAtUtc")
+)
+forecast_timing_label = forecast_computed_label if forecast_status.get("status") == "COMPUTED" else (forecast_attempt_label or forecast_computed_label)
+full_fresh = int(as_float(full_universe_status.get("symbolsAtTargetOrNewer"), 0) or 0)
+full_total = int(as_float(full_universe_status.get("symbolsTotal"), 0) or 0)
+full_updated_label = (
+    full_universe_status.get("updatedAtICT")
+    or full_universe_status.get("updatedAt")
+    or "-"
+)
 
 # Fail-closed display + forecast age guard (áp dụng cho cả lane price-only và forecast):
 # chỉ render lệnh khi forecast COMPUTED, có rows, và còn đúng tuần kế hoạch hiện tại.
 # Forecast cũ tuần trước (planDate lệch expected) bị coi như chưa publish -> bảng trống.
 forecast_is_computed = forecast_status.get("status") == "COMPUTED" and bool(forecast_status.get("rows"))
 forecast_plan_date = forecast_status.get("planDate")
-forecast_is_current = forecast_is_computed and (forecast_plan_date == forecast_date)
+forecast_is_fresh_to_live = bool(forecast_as_of and live_price_date and forecast_as_of >= live_price_date)
+forecast_is_current = forecast_is_computed and (forecast_plan_date == forecast_date) and forecast_is_fresh_to_live
 
 if forecast_is_current:
     forecast_rows = forecast_status.get("rows", [])
@@ -552,10 +581,16 @@ else:
     forecast_source_label = "fail_closed"
     if forecast_is_computed and not forecast_is_current:
         forecast_display_state = "STALE"
-        forecast_summary = (
-            f"Chưa publish lệnh tuần này. Forecast R46 mới nhất là cho ngày {forecast_plan_date}, "
-            f"đã cũ so với tuần kế hoạch {forecast_date}. Giữ nguyên danh mục hiện tại, chờ forecast fresh."
-        )
+        if forecast_plan_date != forecast_date:
+            forecast_summary = (
+                f"Chưa publish lệnh tuần này. Forecast R46 mới nhất là cho ngày {forecast_plan_date}, "
+                f"đã cũ so với tuần kế hoạch {forecast_date}. Giữ nguyên danh mục hiện tại, chờ forecast fresh."
+            )
+        else:
+            forecast_summary = (
+                f"Chưa publish lệnh mới. Forecast R46 asOf {forecast_as_of or '-'} chưa bắt kịp giá live "
+                f"{live_price_date or '-'}; lần chạy gần nhất {forecast_timing_label}. Giữ nguyên danh mục hiện tại."
+            )
     else:
         forecast_display_state = "NOT_COMPUTED"
         reason = forecast_status.get("reason")
@@ -588,6 +623,9 @@ planned_public = {
     "forecastStatus": forecast_status.get("status") or "NOT_CONFIGURED",
     "forecastDisplayState": forecast_display_state,
     "forecastPlanDate": forecast_plan_date,
+    "forecastAsOf": forecast_as_of,
+    "forecastComputedAt": forecast_computed_label,
+    "forecastAttemptedAt": forecast_attempt_label,
     "forecastReason": forecast_status.get("reason"),
     "summary": forecast_summary,
     "rows": forecast_rows,
@@ -710,6 +748,24 @@ execution_summary = (
 data = {
     "asOf": live_status.get("latestPriceDate") or max([h.get("priceAsOf") or "" for h in holdings] + [""]),
     "liveUpdatedAt": live_status.get("updatedAt"),
+    "liveUpdatedAtICT": live_status.get("updatedAtICT"),
+    "liveUpdatedAtUtc": live_status.get("updatedAtUtc"),
+    "liveUpdatedLabel": live_updated_label,
+    "forecastComputedAtICT": forecast_status.get("computedAtICT"),
+    "forecastComputedAtUtc": forecast_status.get("computedAtUtc"),
+    "forecastAttemptedAtICT": forecast_attempt_label,
+    "forecastAsOf": forecast_as_of,
+    "forecastComputedLabel": forecast_computed_label,
+    "forecastTimingLabel": forecast_timing_label,
+    "fullUniverseStatus": {
+        "latestPriceDate": full_universe_status.get("latestPriceDate"),
+        "targetDate": full_universe_status.get("targetDate"),
+        "updatedAt": full_universe_status.get("updatedAt"),
+        "updatedAtICT": full_universe_status.get("updatedAtICT"),
+        "updatedLabel": full_updated_label,
+        "symbolsAtTargetOrNewer": full_fresh,
+        "symbolsTotal": full_total,
+    },
     "regimeLabel": regime_label,
     "paperStatus": paper_status,
     "policy": {
@@ -844,6 +900,10 @@ h1 {{ font-size:var(--t7); letter-spacing:0; }} .sub {{ color:var(--muted); marg
 .kpis {{ display:grid; grid-template-columns:repeat(4,1fr); border:1px solid var(--border); border-radius:var(--r); background:var(--surface); overflow:hidden; margin-bottom:16px; }}
 .kpi {{ padding:14px 16px; border-right:1px solid var(--soft); }} .kpi:last-child {{ border-right:0; }}
 .kpi .l {{ color:var(--muted); font-size:var(--t1); font-weight:800; letter-spacing:.06em; text-transform:uppercase; }} .kpi .v {{ margin-top:4px; font-size:var(--t7); font-weight:800; }} .kpi .s {{ color:var(--muted); font-size:var(--t2); }}
+.statusline {{ display:grid; grid-template-columns:repeat(3,1fr); gap:0; border:1px solid var(--border); border-radius:var(--r); background:var(--surface); overflow:hidden; margin:-4px 0 16px; }}
+.statusline span {{ padding:9px 12px; border-right:1px solid var(--soft); color:var(--muted); font-size:var(--t2); }}
+.statusline span:last-child {{ border-right:0; }}
+.statusline b {{ color:var(--text); }}
 .pos {{ color:var(--green)!important; }} .neg {{ color:var(--red)!important; }} .amb {{ color:var(--amber)!important; }}
 .scaletag {{ background:var(--amberSoft); color:var(--amber); border-radius:999px; padding:1px 8px; font-size:var(--t1); font-weight:800; letter-spacing:.04em; }}
 .sec {{ background:var(--surface); border:1px solid var(--border); border-radius:var(--r); overflow:hidden; margin-bottom:16px; }}
@@ -877,7 +937,7 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
 .logic {{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }} .logicCard {{ border:1px solid var(--border); border-radius:var(--r); padding:14px; background:var(--surface); }} .logicCard h3 {{ font-size:var(--t3); margin-bottom:6px; }} .logicCard p {{ color:var(--muted); font-size:var(--t2); line-height:1.5; }}
 .ledgerbar {{ display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid var(--soft); background:var(--surface2); }} .ledgerbar input {{ width:360px; max-width:45vw; height:30px; border:1px solid var(--border); border-radius:7px; padding:0 10px; background:var(--surface); color:var(--text); font:inherit; }} .pager {{ margin-left:auto; display:flex; gap:4px; }} .pager button {{ min-width:28px; height:28px; border:1px solid var(--border); border-radius:7px; background:var(--surface); color:var(--text); font:inherit; cursor:pointer; }} .pager button.on {{ background:var(--accent); color:white; border-color:var(--accent); }}
 .scroll {{ max-height:calc(100vh - 235px); overflow:auto; }}
-@media(max-width:900px) {{ .app {{ grid-template-columns:1fr; }} .sidebar {{ display:none; }} .topbar {{ padding:0 14px; }} .search {{ display:none; }} .content {{ padding:16px; }} .kpis,.split,.logic,.watchSummary {{ grid-template-columns:1fr; }} svg {{ height:220px; }} }}
+@media(max-width:900px) {{ .app {{ grid-template-columns:1fr; }} .sidebar {{ display:none; }} .topbar {{ padding:0 14px; }} .search {{ display:none; }} .content {{ padding:16px; }} .kpis,.split,.logic,.watchSummary,.statusline {{ grid-template-columns:1fr; }} svg {{ height:220px; }} }}
 </style>
 </head>
 <body>
@@ -897,16 +957,21 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
   </div>
 </aside>
 <main class="main">
-<header class="topbar"><div class="crumb"><a>Ez Trading</a><span>/</span><b id="crumb">Copy Trade</b></div><div class="spacer"></div><label class="search"><span>⌕</span><input id="globalSearch" placeholder="Tìm mã, lệnh, ghi chú..." /></label><span class="live">LIVE {data['asOf']}</span></header>
+<header class="topbar"><div class="crumb"><a>Ez Trading</a><span>/</span><b id="crumb">Copy Trade</b></div><div class="spacer"></div><label class="search"><span>⌕</span><input id="globalSearch" placeholder="Tìm mã, lệnh, ghi chú..." /></label><span class="live">LIVE {data['asOf']} · {live_updated_label}</span></header>
 <div class="content">
   <section class="view on" data-view="copy">
     <div class="pageh"><div><h1>Copy Trade</h1><div class="sub">R46 Bear Stop 15bps · dữ liệu từ dashboard online hiện tại · {hist.get('tradeCount')} lệnh full history</div></div><div><button class="btn">In PDF</button></div></div>
     <div class="controls"><span class="ctrl-lbl">NAV copy</span><input class="input" id="navInput" value="1" type="text" inputmode="decimal" autocomplete="off" style="width:80px" /><span class="ctrl-lbl">tỷ</span><button class="btn primary navPreset" data-nav="1">1 tỷ</button><button class="btn navPreset" data-nav="3">3 tỷ</button><button class="btn navPreset" data-nav="5">5 tỷ</button></div>
     <div class="kpis">
       <div class="kpi"><div class="l">Vị thế đang nắm</div><div class="v" id="positionKpiValue">{len(holdings)} mã</div><div class="s" id="positionKpiSub">Quy đổi theo NAV copy</div></div>
-      <div class="kpi"><div class="l">Lệnh cần làm</div><div class="v">{urgent_count} ngay · {planned_count} T2</div><div class="s">{forecast_date} · {regime_text}</div></div>
+      <div class="kpi"><div class="l">Lệnh cần làm</div><div class="v">{urgent_count} ngay · {planned_count} T2</div><div class="s">{forecast_display_state} · asOf {forecast_as_of or '-'}</div></div>
       <div class="kpi"><div class="l">VNI gần nhất</div><div class="v">{fmt_num(data['vni']['close'],2)}</div><div class="s">{data['vni']['date'] or '-'}</div></div>
       <div class="kpi"><div class="l">Audit model</div><div class="v">VNI+30 {perf['passVni30']}/6</div><div class="s">Min edge +{fmt_num(perf['minEdge'],1)}pp · {perf['slippageBps']}bps</div></div>
+    </div>
+    <div class="statusline">
+      <span>Giá live: <b>{live_price_date or '-'}</b> · cập nhật {live_updated_label}</span>
+      <span>Forecast: <b>{forecast_display_state}</b> · asOf {forecast_as_of or '-'} · lần chạy {forecast_timing_label}</span>
+      <span>Universe: <b>{full_fresh}/{full_total}</b> mã · cập nhật {full_updated_label}</span>
     </div>
     <section class="sec">
       <div class="sech"><h2>Lệnh cần làm · Execution Desk</h2><span class="meta">{execution_summary}</span></div>
@@ -922,7 +987,7 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
       <section class="sec"><div class="sech"><h2>Danh mục copy đang nắm giữ</h2><span class="meta">{len(holdings)} mã · quy đổi theo NAV copy</span></div><table><thead><tr><th>Mã</th><th>Ngành</th><th class="num">KL</th><th class="num">Giá vốn</th><th class="num">Giá TT</th><th class="num">Giá trị</th><th class="num">Tỷ trọng</th><th class="num">P/L</th><th class="num">P/L %</th></tr></thead><tbody id="holdRows"></tbody></table></section>
       <section class="sec"><div class="sech"><h2>Theo dõi thử nghiệm <span class="scaletag">{data['paperStatus']}</span></h2><span class="meta">Tài khoản giả lập 1 tỷ · bắt đầu {data['paperTrade']['startDate']}</span></div><div class="ptgrid" id="ptGrid"></div><table><thead><tr><th>Mã</th><th class="num">KL</th><th class="num">Giá vốn</th><th class="num">Giá TT</th><th class="num">P/L</th></tr></thead><tbody id="paperRows"></tbody></table></section>
     </div>
-    <section class="sec"><div class="sech"><h2>Dự kiến giao dịch thứ 2 tới</h2><span class="meta">{planned_public['summary']}</span></div><table class="forecast-table"><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá TT</th><th class="num">Target</th><th class="num">Stop</th><th>Ghi chú</th></tr></thead><tbody id="plannedRows"></tbody></table></section>
+    <section class="sec"><div class="sech"><h2>Dự kiến giao dịch thứ 2 tới <span class="scaletag">{forecast_display_state}</span></h2><span class="meta">{planned_public['summary']}</span></div><table class="forecast-table"><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá TT</th><th class="num">Target</th><th class="num">Stop</th><th>Ghi chú</th></tr></thead><tbody id="plannedRows"></tbody></table></section>
     <section class="sec"><div class="sech"><h2>Lệnh đã khớp gần nhất <span class="scaletag">QUY MÔ MODEL</span></h2><span class="meta">8 dòng mới nhất từ history.js · KL, tỷ trọng &amp; P/L theo NAV model (~44 tỷ), không scale theo NAV copy</span></div><table><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá</th><th class="num">Tỷ trọng NAV</th><th class="num">P/L</th><th class="num">P/L %</th><th>Lý do</th></tr></thead><tbody id="latestRows"></tbody></table></section>
   </section>
   <section class="view" data-view="watch"><div class="pageh"><div><h1>Theo dõi mua</h1><div class="sub">{len(watchlist_rows)} mã từ dashboard online `data.js` + live shortlist · loại {watchlist_summary['excludedHeld']} mã đang nắm</div></div></div><section class="sec"><div class="sech"><h2>Mã đáng theo dõi và có thể mua sắp tới</h2><span class="meta">Không phải rule khớp lệnh live của R46</span></div><div class="watchSummary" id="watchSummary"></div><div class="watchRules" id="watchRules"></div><table><thead><tr><th>Mã</th><th>Nhóm</th><th class="num">Điểm lọc</th><th class="num">Upside</th><th class="num">Target</th><th class="num">R:R</th><th class="num">TK 20D</th><th>Target tuần</th><th>Tín hiệu mua</th><th>Ghi chú</th></tr></thead><tbody id="watchRows"></tbody></table></section></section>

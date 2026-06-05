@@ -6,7 +6,9 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
+from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import requests
@@ -18,6 +20,7 @@ BACKTEST_CACHE = ROOT / ".cache" / "backtest"
 STATUS_PATH = OUT / "dashboard_live_update_status.json"
 DASHBOARD_STATUS_PATH = ROOT / "dashboard" / "dashboard_live_update_status.json"
 POLICY_DIR = OUT / "dashboard_policies" / "r46_bear_stop_mcore"
+ICT = ZoneInfo("Asia/Ho_Chi_Minh")
 
 PRICE_DIRS = [
     ROOT / ".cache" / "history",
@@ -308,6 +311,8 @@ def main() -> None:
         sys.exit(1)
     payload = {
         "updatedAt": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "updatedAtUtc": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "updatedAtICT": datetime.now(ICT).strftime("%Y-%m-%d %H:%M:%S"),
         "seconds": round(time.time() - started, 2),
         "symbols": symbols,
         "latestPriceDate": latest_price_date,

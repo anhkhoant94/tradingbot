@@ -1,6 +1,8 @@
 {
-  "updatedAt": "2026-05-28 15:45:47",
-  "seconds": 2.51,
+  "updatedAt": "2026-06-05 10:16:21",
+  "updatedAtUtc": "2026-06-05T03:16:21Z",
+  "updatedAtICT": "2026-06-05 10:16:21",
+  "seconds": 3.09,
   "symbols": [
     "MSB",
     "DXP",
@@ -13,123 +15,196 @@
     "BVB",
     "HNG"
   ],
-  "latestPriceDate": "2026-05-28",
+  "latestPriceDate": "2026-06-05",
+  "quotes": {
+    "BVB": {
+      "ok": true,
+      "date": "2026-06-05",
+      "close": 12.3,
+      "reason": null
+    },
+    "DXP": {
+      "ok": true,
+      "date": "2026-06-05",
+      "close": 12.9,
+      "reason": null
+    },
+    "GEE": {
+      "ok": true,
+      "date": "2026-06-05",
+      "close": 102.5,
+      "reason": null
+    },
+    "HNG": {
+      "ok": true,
+      "date": "2026-06-05",
+      "close": 7.1,
+      "reason": null
+    },
+    "KSV": {
+      "ok": true,
+      "date": "2026-06-05",
+      "close": 160.0,
+      "reason": null
+    },
+    "MSB": {
+      "ok": true,
+      "date": "2026-06-05",
+      "close": 14.6,
+      "reason": null
+    },
+    "NVL": {
+      "ok": true,
+      "date": "2026-06-05",
+      "close": 13.85,
+      "reason": null
+    },
+    "PVP": {
+      "ok": true,
+      "date": "2026-06-05",
+      "close": 17.55,
+      "reason": null
+    },
+    "VIC": {
+      "ok": true,
+      "date": "2026-06-05",
+      "close": 205.8,
+      "reason": null
+    },
+    "YEG": {
+      "ok": true,
+      "date": "2026-06-05",
+      "close": 8.97,
+      "reason": null
+    }
+  },
   "prices": [
     {
       "symbol": "BVB",
       "ok": true,
-      "latest": "2026-05-28",
-      "rows": 1468
+      "latest": "2026-06-05",
+      "rows": 1474,
+      "latestClose": 12.3
     },
     {
       "symbol": "DXP",
       "ok": true,
-      "latest": "2026-05-28",
-      "rows": 2532
+      "latest": "2026-06-05",
+      "rows": 2538,
+      "latestClose": 12.9
     },
     {
       "symbol": "GEE",
       "ok": true,
-      "latest": "2026-05-28",
-      "rows": 1021
+      "latest": "2026-06-05",
+      "rows": 1027,
+      "latestClose": 102.5
     },
     {
       "symbol": "HNG",
       "ok": true,
-      "latest": "2026-05-28",
-      "rows": 1586
+      "latest": "2026-06-05",
+      "rows": 1592,
+      "latestClose": 7.1
     },
     {
       "symbol": "KSV",
       "ok": true,
-      "latest": "2026-05-28",
-      "rows": 1309
+      "latest": "2026-06-05",
+      "rows": 1315,
+      "latestClose": 160.0
     },
     {
       "symbol": "MSB",
       "ok": true,
-      "latest": "2026-05-28",
-      "rows": 1350
+      "latest": "2026-06-05",
+      "rows": 1356,
+      "latestClose": 14.6
     },
     {
       "symbol": "NVL",
       "ok": true,
-      "latest": "2026-05-28",
-      "rows": 2346
+      "latest": "2026-06-05",
+      "rows": 2352,
+      "latestClose": 13.85
     },
     {
       "symbol": "PVP",
       "ok": true,
-      "latest": "2026-05-28",
-      "rows": 1989
+      "latest": "2026-06-05",
+      "rows": 1995,
+      "latestClose": 17.55
     },
     {
       "symbol": "VIC",
       "ok": true,
-      "latest": "2026-05-28",
-      "rows": 2594
+      "latest": "2026-06-05",
+      "rows": 2600,
+      "latestClose": 205.8
     },
     {
       "symbol": "YEG",
       "ok": true,
-      "latest": "2026-05-28",
-      "rows": 1978
+      "latest": "2026-06-05",
+      "rows": 1984,
+      "latestClose": 8.97
     }
   ],
   "vnindex": {
     "symbol": "VNINDEX",
     "ok": true,
-    "latest": "2026-05-28",
-    "rows": 1597
+    "latest": "2026-06-05",
+    "rows": 1603,
+    "latestClose": 1838.42
   },
   "bctc": [
     {
       "symbol": "DXP",
       "ok": true,
       "rows": 2600,
-      "seconds": 0.88
+      "seconds": 0.67
     },
     {
       "symbol": "GEE",
       "ok": true,
       "rows": 1798,
-      "seconds": 0.73
+      "seconds": 0.56
     },
     {
       "symbol": "KSV",
       "ok": true,
       "rows": 2600,
-      "seconds": 0.47
+      "seconds": 0.44
     },
     {
       "symbol": "MSB",
       "ok": true,
       "rows": 1068,
-      "seconds": 0.8
+      "seconds": 0.38
     },
     {
       "symbol": "NVL",
       "ok": true,
       "rows": 2600,
-      "seconds": 0.51
+      "seconds": 0.35
     },
     {
       "symbol": "PVP",
       "ok": true,
       "rows": 2600,
-      "seconds": 0.87
+      "seconds": 0.76
     },
     {
       "symbol": "VIC",
       "ok": true,
       "rows": 2600,
-      "seconds": 0.3
+      "seconds": 0.89
     },
     {
       "symbol": "YEG",
       "ok": true,
       "rows": 2600,
-      "seconds": 0.26
+      "seconds": 0.34
     }
   ]
 }

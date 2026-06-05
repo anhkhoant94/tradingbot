@@ -1,25 +1,43 @@
 {
-  "updatedAt": "2026-06-04 12:31:56",
-  "targetDate": "2026-06-04",
+  "updatedAt": "2026-06-05 10:10:36",
+  "updatedAtUtc": "2026-06-05T03:10:36Z",
+  "updatedAtICT": "2026-06-05 10:10:36",
+  "targetDate": "2026-06-05",
   "symbolsTotal": 703,
-  "symbolsAttempted": 197,
-  "symbolsUpdated": 197,
+  "symbolsAttempted": 695,
+  "symbolsUpdated": 695,
   "symbolsFailed": 0,
-  "latestPriceDate": "2026-06-04",
-  "symbolsAtTargetOrNewer": 506,
+  "latestPriceDate": "2026-06-05",
+  "symbolsAtTargetOrNewer": 445,
   "vnindex": {
     "symbol": "VNINDEX",
     "ok": true,
-    "latest": "2026-06-04",
-    "rows": 1602,
-    "vnindex_2012_latest": "2026-06-04",
-    "vnindex_2012_rows": 4179
+    "latest": "2026-06-05",
+    "rows": 1603,
+    "vnindex_2012_latest": "2026-06-05",
+    "vnindex_2012_rows": 4180
   },
   "historyCache": {
     "path": ".cache\\backtest\\history_cache.pkl",
     "symbols": 703,
-    "latestPriceDate": "2026-06-04"
+    "latestPriceDate": "2026-06-05"
   },
+  "retryRounds": [
+    {
+      "round": 1,
+      "freshBefore": 442,
+      "staleBefore": 261,
+      "attempted": 261,
+      "ok": 261
+    },
+    {
+      "round": 2,
+      "freshBefore": 443,
+      "staleBefore": 260,
+      "attempted": 260,
+      "ok": 260
+    }
+  ],
   "failedSample": [],
-  "seconds": 51.79
+  "seconds": 299.81
 }

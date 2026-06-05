@@ -6,8 +6,9 @@ import math
 import os
 import subprocess
 import sys
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
@@ -28,6 +29,14 @@ FORECAST_DIR = OUT / "beat_vni30_parallel" / "r46_live_forecast"
 DEFAULT_NAV_VND = 1_000_000_000
 BOARD_LOT = 100
 LOCK_DATE = pd.Timestamp("2026-05-25")
+ICT = ZoneInfo("Asia/Ho_Chi_Minh")
+
+
+def now_stamps(prefix: str) -> dict:
+    return {
+        f"{prefix}AtUtc": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        f"{prefix}AtICT": datetime.now(ICT).strftime("%Y-%m-%d %H:%M:%S"),
+    }
 
 
 def num(value, default=0.0) -> float:
@@ -147,6 +156,7 @@ def preserve_existing_computed(existing: dict, reason: str, error: str | None = 
         return False
     existing.setdefault("meta", {})
     existing["meta"]["cloudR46Refresh"] = reason
+    existing["meta"].update(now_stamps("lastAttempt"))
     if error:
         existing["meta"]["cloudR46RefreshError"] = error[:500]
     write_payload(existing)
@@ -507,6 +517,7 @@ def fail_payload(as_of: str | None, plan_date: str | None, reason: str, message:
         "status": "NOT_COMPUTED",
         "reason": reason,
         "message": message,
+        **now_stamps("attempted"),
         "rows": [],
         "meta": meta or {},
     }
@@ -526,34 +537,61 @@ def main() -> None:
 
     full_status = read_json(OUT / "full_universe_live_update_status.json")
     existing = read_json(DASH / "r46_forecast.json")
+    if full_status:
+        total = int(num(full_status.get("symbolsTotal"), 0))
+        fresh = int(num(full_status.get("symbolsAtTargetOrNewer"), 0))
+        min_fresh = math.ceil(total * 0.65) if total else 0
+        if total and fresh < min_fresh:
+            write_payload(
+                fail_payload(
+                    as_of,
+                    plan_date,
+                    "full_universe_freshness_gate_failed",
+                    f"Full-universe live cache chi fresh {fresh}/{total} ma (<65%); khong publish forecast moi.",
+                    {
+                        "symbolsTotal": total,
+                        "symbolsAtTargetOrNewer": fresh,
+                        "minFreshSymbols": min_fresh,
+                        "targetDate": full_status.get("targetDate"),
+                        "latestPriceDate": full_status.get("latestPriceDate"),
+                        "updatedAt": full_status.get("updatedAt"),
+                        "updatedAtICT": full_status.get("updatedAtICT"),
+                    },
+                )
+            )
+            return
     if (
         full_status
         and int(num(full_status.get("symbolsAttempted"), 0)) > 0
         and int(num(full_status.get("symbolsUpdated"), 0)) == 0
         and existing.get("status") == "COMPUTED"
     ):
-        existing.setdefault("meta", {})
-        existing["meta"]["cloudFullUniverseRefresh"] = "FAILED_ALL_REQUESTS_KEEPING_EXISTING_FORECAST"
-        write_payload(existing)
+        write_payload(
+            fail_payload(
+                as_of,
+                plan_date,
+                "full_universe_refresh_failed_all_requests",
+                "Full-universe refresh khong cap nhat duoc ma nao; khong publish forecast moi.",
+                {"previousComputedAsOf": existing.get("asOf"), "previousPlanDate": existing.get("planDate")},
+            )
+        )
         return
     history_cache_date = ((full_status.get("historyCache") or {}).get("latestPriceDate") if full_status else None)
     if full_status and as_of and history_cache_date and str(history_cache_date) < str(as_of):
-        if preserve_existing_computed(
-            existing,
-            "HISTORY_CACHE_STALE_KEEPING_LAST_COMPUTED_FORECAST",
-            f"history_cache_latest={history_cache_date}; live_as_of={as_of}",
-        ):
-            return
+        write_payload(
+            fail_payload(
+                as_of,
+                plan_date,
+                "history_cache_stale",
+                f"History cache moi nhat {history_cache_date} chua bat kip live {as_of}; khong publish forecast moi.",
+                {"historyCacheLatestPriceDate": history_cache_date, "liveAsOf": as_of},
+            )
+        )
+        return
 
     try:
         targets, meta = generate_targets(plan_date, args.skip_rebuild_inputs, as_of=as_of)
     except Exception as exc:
-        if preserve_existing_computed(
-            existing,
-            "CHAIN_UNAVAILABLE_KEEPING_LAST_COMPUTED_FORECAST",
-            str(exc),
-        ):
-            return
         write_payload(
             fail_payload(
                 as_of,
@@ -563,7 +601,7 @@ def main() -> None:
                 {"error": str(exc)[:500]},
             )
         )
-        raise
+        return
 
     if not meta.get("overlapOk"):
         write_payload(
@@ -586,6 +624,7 @@ def main() -> None:
         "planDate": plan_date,
         "generatedAtSource": status.get("_source"),
         "status": "COMPUTED",
+        **now_stamps("computed"),
         "source": "output/beat_vni30_parallel/r46_live_forecast/latest_targets.parquet",
         "message": "Forecast R46 đã precompute từ full-universe live chain.",
         "rows": rows,
