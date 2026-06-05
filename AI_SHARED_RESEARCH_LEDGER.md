@@ -18,6 +18,9 @@ Validation:
 - Health endpoint returned 200 with `triggerUrlConfigured=true` and `secretConfigured=true` at `2026-06-05 13:37:52 ICT`.
 - Manual authenticated call returned downstream `{"action":"dispatched"}` at `2026-06-05 13:37:52 ICT`.
 - GitHub Actions run created from Cloudflare trigger: `26999694348`, event `workflow_dispatch`, workflow `Dashboard Forecast Refresh`, commit `21a2d1f`.
+- That first Cloudflare-triggered GitHub run failed before forecast because GitHub runner could not reach VPS for `update_dashboard_live_data.py` after 3 retries (`prices 0/10`). This is a GitHub-to-VPS live-price transient, not a Cloudflare trigger failure.
+- Follow-up workflow fix: forecast workflow now preserves the current public `dashboard_live_update_status.json` and continues to full-universe + forecast if GitHub live-price static refresh fails. Browser-visible prices are already served by the Vercel edge live API, so static live refresh should not block forecast compute.
+- Dashboard Price Refresh GitHub schedule reduced from every 5 minutes to hourly fallback (`17 2-8 * * 1-5`) because the Vercel edge live API is now the actual 5-minute user-visible price lane.
 
 Operational rule:
 - Cloudflare Worker Cron is now the primary 15-minute forecast timer. GitHub native schedule remains best-effort fallback. Vercel API `/api/trigger-forecast` remains the dispatch/debounce gate and prevents duplicate dispatches while a forecast run is active or just succeeded.

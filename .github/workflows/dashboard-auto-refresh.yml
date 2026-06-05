@@ -63,7 +63,28 @@ jobs:
               sleep 45
             fi
           done
-          exit 1
+          echo "LIVE_DATA_REFRESH_FAILED=1" >> "$GITHUB_ENV"
+          python - <<'PY'
+          import os
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
+
+          base = os.environ["VERCEL_PUBLIC_URL"].rstrip("/")
+          url = f"{base}/dashboard_live_update_status.json"
+          try:
+              with urllib.request.urlopen(url, timeout=30) as resp:
+                  raw = resp.read()
+              if raw:
+                  Path("dashboard/dashboard_live_update_status.json").write_bytes(raw)
+                  Path("output").mkdir(exist_ok=True)
+                  Path("output/dashboard_live_update_status.json").write_bytes(raw)
+                  print("Preserved public dashboard_live_update_status.json after GitHub VPS failure")
+                  raise SystemExit(0)
+          except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
+              print(f"Could not preserve public live status: {exc}")
+          raise SystemExit("Live data refresh failed and no public fallback was available")
+          PY
 
       - name: Update full-universe prices
         working-directory: ${{ github.workspace }}
