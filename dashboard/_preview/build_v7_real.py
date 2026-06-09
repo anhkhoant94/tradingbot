@@ -510,53 +510,9 @@ def enrich_trade(row):
     return out
 
 
-def execution_order_to_trade(order):
-    shares = int(as_float(order.get("shares"), as_float(order.get("orderShares"), 0)) or 0)
-    price = as_float(order.get("executionPriceK"), as_float(order.get("priceK"), as_float(order.get("currentPrice"))))
-    gross_bil = as_float(order.get("grossBil"))
-    if gross_bil is None and shares and price:
-        gross_bil = shares * price / 1_000_000
-    nav_bil = as_float(order.get("navBilAtTrade"))
-    if nav_bil is None:
-        account = execution_state.get("copyAccount") or {}
-        account_nav_m = as_float(account.get("totalMil"), as_float(account.get("navMil")))
-        nav_bil = account_nav_m / 1000 if account_nav_m else LEDGER_REBASE_NAV_BIL
-    pnl_bil = as_float(order.get("pnlBil"))
-    entry = as_float(order.get("entryPriceK"))
-    fees_bil = as_float(order.get("feesBil"), 0.0)
-    if pnl_bil is None and shares and price and entry:
-        side = str(order.get("side") or "").upper()
-        if side == "SELL" or action_is_sell(order.get("actionLabel") or order.get("action")):
-            pnl_bil = shares * (price - entry) / 1_000_000 - (fees_bil or 0)
-    return {
-        "date": order.get("date") or order.get("executedDate"),
-        "triggerDate": order.get("sourceForecast", {}).get("asOf"),
-        "symbol": order.get("symbol"),
-        "side": order.get("side") or ("SELL" if action_is_sell(order.get("actionLabel") or order.get("action")) else "BUY"),
-        "actionLabel": order.get("actionLabel") or order.get("action"),
-        "positionBeforeShares": order.get("positionBeforeShares"),
-        "positionAfterShares": order.get("positionAfterShares"),
-        "shares": shares,
-        "rawShares": shares,
-        "priceK": price,
-        "executionPriceK": price,
-        "grossBil": gross_bil,
-        "feesBil": fees_bil,
-        "entryPriceK": entry,
-        "returnPct": order.get("returnPct"),
-        "pnlBil": pnl_bil,
-        "holdDays": order.get("holdDays"),
-        "reason": order.get("reason") or "forecast_exec",
-        "navBilAtTrade": nav_bil,
-        "tradeWeightPct": gross_bil / nav_bil * 100 if gross_bil is not None and nav_bil else None,
-        "source": "copy_execution_state",
-    }
-
-
-live_execution_ledger_rows = [execution_order_to_trade(order) for order in executed_orders]
 historical_ledger_rows = [enrich_trade(row) for row in list(reversed(trades_period))]
 ledger_rows = sorted(
-    live_execution_ledger_rows + historical_ledger_rows,
+    historical_ledger_rows,
     key=lambda r: str(r.get("date") or ""),
     reverse=True,
 )
@@ -1104,7 +1060,7 @@ data_js = json.dumps(data, ensure_ascii=False)
 
 # --- Sanity asserts: bắt lỗi sớm trước khi ghi HTML ---
 assert holdings or executed_orders, "FAIL: holdings rỗng và chưa có execution state — kiểm tra analysis.js policy r46_bear_stop_mcore"
-assert len(ledger_rows) == len(trades_period) + len(live_execution_ledger_rows), "FAIL: ledger count lệch trades_period + execution_state"
+assert len(ledger_rows) == len(trades_period), "FAIL: ledger count lệch trades_period"
 assert chart_rows and len(chart_rows) > 100, "FAIL: chart_rows quá ít — kiểm tra equityCurve"
 assert data["vni"]["close"] > 0, "FAIL: VNI close không hợp lệ"
 
@@ -1222,7 +1178,7 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
 <header class="topbar"><div class="crumb"><a>Ez Trading</a><span>/</span><b id="crumb">Copy Trade</b></div><div class="spacer"></div><label class="search"><span>⌕</span><input id="globalSearch" placeholder="Tìm mã, lệnh, ghi chú..." /></label><span class="live" id="liveBadge">LIVE {live_updated_label}</span></header>
 <div class="content">
   <section class="view on" data-view="copy">
-    <div class="pageh"><div><h1>Copy Trade</h1><div class="sub">R46 Bear Stop 15bps · lịch sử từ 2021 theo {ledger_basis_label}</div></div><div><button class="btn">In PDF</button></div></div>
+    <div class="pageh"><div><h1>Copy Trade</h1><div class="sub">R46 Bear Stop 15bps · copy NAV tách riêng lịch sử model</div></div><div><button class="btn">In PDF</button></div></div>
     <div class="controls"><span class="ctrl-lbl">NAV copy</span><input class="input" id="navInput" value="1" type="text" inputmode="decimal" autocomplete="off" style="width:80px" /><span class="ctrl-lbl">tỷ</span><button class="btn primary navPreset" data-nav="1">1 tỷ</button><button class="btn navPreset" data-nav="3">3 tỷ</button><button class="btn navPreset" data-nav="5">5 tỷ</button></div>
     <div class="kpis">
       <div class="kpi"><div class="l">Vị thế đang nắm</div><div class="v" id="positionKpiValue">{len(holdings)} mã</div><div class="s" id="positionKpiSub">Quy đổi theo NAV copy</div></div>
@@ -1250,7 +1206,7 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
       <section class="sec"><div class="sech"><h2>Theo dõi thử nghiệm <span class="scaletag">{data['paperStatus']}</span></h2><span class="meta">Tài khoản giả lập 1 tỷ · bắt đầu {data['paperTrade']['startDate']}</span></div><div class="ptgrid" id="ptGrid"></div><table><thead><tr><th>Mã</th><th class="num">KL</th><th class="num">Giá vốn</th><th class="num">Giá TT</th><th class="num">P/L</th></tr></thead><tbody id="paperRows"></tbody></table></section>
     </div>
     <section class="sec"><div class="sech"><h2>Dự kiến giao dịch thứ 2 tới <span class="scaletag">{forecast_display_state}</span></h2></div><table class="forecast-table"><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá TT</th><th class="num">Target</th><th class="num">Stop</th><th>Ghi chú</th></tr></thead><tbody id="plannedRows"></tbody></table></section>
-    <section class="sec"><div class="sech"><h2>Lệnh đã khớp gần nhất <span class="scaletag">NAV 2021 = 1 tỷ</span></h2></div><table><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá</th><th class="num">Tỷ trọng NAV</th><th class="num">P/L</th><th class="num">P/L %</th><th>Lý do</th></tr></thead><tbody id="latestRows"></tbody></table></section>
+    <section class="sec"><div class="sech"><h2>Lệnh model gần nhất <span class="scaletag">NAV 2021 = 1 tỷ</span></h2></div><table><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá</th><th class="num">Tỷ trọng NAV</th><th class="num">P/L</th><th class="num">P/L %</th><th>Lý do</th></tr></thead><tbody id="latestRows"></tbody></table></section>
   </section>
   <section class="view" data-view="watch"><div class="pageh"><div><h1>Theo dõi mua</h1><div class="sub">{len(watchlist_rows)} mã theo dõi · loại {watchlist_summary['excludedHeld']} mã đang nắm</div></div></div><section class="sec"><div class="sech"><h2>Mã đáng theo dõi và có thể mua sắp tới</h2></div><div class="watchSummary" id="watchSummary"></div><div class="watchRules" id="watchRules"></div><table><thead><tr><th>Mã</th><th>Nhóm</th><th class="num">Điểm lọc</th><th class="num">Upside</th><th class="num">Target</th><th class="num">R:R</th><th class="num">TK 20D</th><th>Target tuần</th><th>Tín hiệu mua</th><th>Ghi chú</th></tr></thead><tbody id="watchRows"></tbody></table></section></section>
   <section class="view" data-view="model"><div class="pageh"><div><h1>Bộ lọc model · R46 Bear Stop 15bps</h1><div class="sub">Tóm tắt vận hành</div></div><span class="pill buy">AUDIT {policy.get('productionAudit',{}).get('status','R46')}</span></div><section class="sec"><div class="sech"><h2>Tóm tắt</h2></div><div class="secb"><div class="logic" id="logicGrid"></div></div></section></section>
