@@ -3,19 +3,27 @@
   "policy": "r46_bear_stop_mcore",
   "asOf": "2026-06-09",
   "planDate": "2026-06-15",
-  "status": "NOT_COMPUTED",
-  "reason": "full_universe_freshness_gate_failed",
-  "message": "Full-universe live cache chi fresh 430/703 ma (<65%); khong publish forecast moi.",
-  "attemptedAtUtc": "2026-06-09T02:52:06Z",
-  "attemptedAtICT": "2026-06-09 09:52:06",
+  "generatedAtSource": "dashboard/dashboard_live_update_status.json",
+  "status": "COMPUTED",
+  "computedAtUtc": "2026-06-09T03:22:14Z",
+  "computedAtICT": "2026-06-09 10:22:14",
+  "source": "output/beat_vni30_parallel/r46_live_forecast/latest_targets.parquet",
+  "message": "Forecast R46 đã precompute từ full-universe live chain.",
   "rows": [],
   "meta": {
-    "symbolsTotal": 703,
-    "symbolsAtTargetOrNewer": 430,
-    "minFreshSymbols": 457,
-    "targetDate": "2026-06-09",
-    "latestPriceDate": "2026-06-09",
-    "updatedAt": "2026-06-09 02:52:00",
-    "updatedAtICT": "2026-06-09 09:52:00"
+    "tailMatrixRows": 2760,
+    "tailMatrixDates": [
+      "2026-05-25",
+      "2026-06-01",
+      "2026-06-08",
+      "2026-06-15"
+    ],
+    "pairTailRows": 1,
+    "latestComputedDate": "2026-06-15",
+    "currentRegimeDate": "2026-06-08",
+    "currentRegime": "NARROW_BULL",
+    "overlapOk": true,
+    "overlapMaxDiff": 0.0,
+    "overlapDiffCount": 0
   }
 }
