@@ -74,6 +74,7 @@ FILES_TO_PUSH = [
     "output/screening_full_results.csv",
     "output/vnindex_daily.csv",
     "output/r46_forecast_status.json",
+    "output/r46_execution_state.json",
     "output/beat_vni30_parallel/paper_trade_v4_r46/paper_trade_log.jsonl",
     "output/beat_vni30_parallel/paper_trade_v4_r46/paper_trade_state.json",
     "output/beat_vni30_parallel/paper_trade_v4_r46/signal_week_1_20260601.json",
@@ -81,6 +82,7 @@ FILES_TO_PUSH = [
     "output/beat_vni30_parallel/paper_trade_v4_r46/PAPER_TRADE_PROTOCOL_20260530.md",
     "dashboard/data.js",
     "dashboard/r46_forecast.json",
+    "dashboard/r46_execution_state.json",
     "dashboard/dashboard_live_update_status.json",
     ".cache/universe.parquet",
 ]
