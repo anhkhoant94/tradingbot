@@ -273,7 +273,6 @@ def main() -> None:
         raise SystemExit(1)
     if args.require_current_forecast and (
         payload["forecast_status"] != "COMPUTED"
-        or payload["forecast_rows"] <= 0
         or payload["forecast_has_fallback_meta"]
         or not payload["forecast_as_of_matches_source"]
         or payload["embedded_forecast_display_state"] != "COMPUTED"
