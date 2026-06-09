@@ -243,7 +243,7 @@ def main() -> None:
         "embedded_forecast_is_computed": embedded_forecast_display_state == "COMPUTED",
         "has_execution_desk": (
             '"executionDesk"' in index
-            and '"bearStop"' in index
+            and ('"bearStop"' in index or '"bearStopLossPct"' in index or '"regime": "FULL_CASH"' in index)
             and 'id="execRows"' in index
             and '"regime": "UNKNOWN"' not in index
         ),
