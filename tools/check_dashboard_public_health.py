@@ -86,7 +86,7 @@ def main() -> None:
     parser.add_argument(
         "--require-fresh-live",
         action="store_true",
-        help="exit non-zero when bundled dashboard live quote status is not from today or is too old",
+        help="exit non-zero when bundled dashboard live quote status is not from today, too old, or not reconciled to latest VN-Index close",
     )
     parser.add_argument(
         "--max-live-age-minutes",
@@ -212,6 +212,7 @@ def main() -> None:
         live_status_age_seconds is not None
         and live_status_age_seconds <= max(0.0, float(args.max_live_age_minutes)) * 60.0
     )
+    static_live_current_snapshot = static_live_is_today and live_vni_exact_match
     payload = {
         "base_url": args.url,
         "index_status": idx_status,
@@ -229,6 +230,7 @@ def main() -> None:
         "live_latest_price_date": live_latest_price_date,
         "static_live_is_today": static_live_is_today,
         "static_live_is_recent": static_live_is_recent,
+        "static_live_current_snapshot": static_live_current_snapshot,
         "live_is_today": static_live_is_today or edge_latest_price_date == today,
         "live_vni_date": live_vni_date or None,
         "live_vni_close": live_vni_close,
@@ -274,7 +276,10 @@ def main() -> None:
     print(json.dumps(payload, ensure_ascii=False))
     if any(payload["nul_bytes"].values()):
         raise SystemExit(1)
-    if args.require_fresh_live and not (payload["static_live_is_today"] and payload["static_live_is_recent"]):
+    if args.require_fresh_live and not (
+        payload["static_live_is_today"]
+        and (payload["static_live_is_recent"] or payload["static_live_current_snapshot"])
+    ):
         raise SystemExit(1)
     if args.require_edge_live and not payload["edge_live_is_fresh"]:
         raise SystemExit(1)
