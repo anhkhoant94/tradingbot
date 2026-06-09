@@ -8,7 +8,7 @@ Fix:
 - `tools/precompute_r46_forecast.py` now applies execution state inside `current_copy_shares()` so future forecast sizing does not see stale MSB from `analysis.js`; it also has a due-forecast materializer so preserved public forecast rows can become execution state before a new forecast is written/fail-closed.
 - Both dashboard workflows now preserve public `r46_execution_state.json` before rebuild/deploy; deploy helper pushes the new state files.
 
-Local build verification after syncing public JSONs: `dashboard/index.html` embedded data has `holdings=[]`, `copyAccount.totalMil=1001.9568024`, latest trade `2026-06-08 MSB BÁN HẾT 3,800 @ 14.7`, ledger count `923`, planned forecast state `NOT_COMPUTED` for 2026-06-15 because full-universe freshness was still below gate.
+Final public verification: `dashboard/index.html` embedded data has `holdings=[]`, `copyAccount.totalMil=1001.9568024`, latest trade `2026-06-08 MSB BÁN HẾT 3,800 @ 14.7`, ledger count `923`, forecast `COMPUTED` for 2026-06-15 with `0` rows, meaning no new order and stay full cash. Public health with `--require-current-forecast --require-execution-desk` PASS after changing health logic to allow a valid computed zero-order forecast.
 
 ## 2026-06-05 Codex - Dashboard trade ledger rebased to 2021 NAV 1B
 
