@@ -86,7 +86,13 @@ def main() -> None:
     parser.add_argument(
         "--require-fresh-live",
         action="store_true",
-        help="exit non-zero when dashboard live quote status is not from today",
+        help="exit non-zero when bundled dashboard live quote status is not from today or is too old",
+    )
+    parser.add_argument(
+        "--max-live-age-minutes",
+        type=float,
+        default=30.0,
+        help="maximum age for bundled dashboard_live_update_status.json when --require-fresh-live is set",
     )
     parser.add_argument(
         "--require-vni-history",
@@ -201,6 +207,11 @@ def main() -> None:
         and edge_age_seconds is not None
         and edge_age_seconds <= 600
     )
+    static_live_is_today = live_updated_at.startswith(today) or live_latest_price_date == today
+    static_live_is_recent = (
+        live_status_age_seconds is not None
+        and live_status_age_seconds <= max(0.0, float(args.max_live_age_minutes)) * 60.0
+    )
     payload = {
         "base_url": args.url,
         "index_status": idx_status,
@@ -216,7 +227,9 @@ def main() -> None:
         "live_updated_at_utc": live_updated_at_utc or None,
         "live_status_age_seconds": round(live_status_age_seconds, 1) if live_status_age_seconds is not None else None,
         "live_latest_price_date": live_latest_price_date,
-        "live_is_today": live_updated_at.startswith(today) or live_latest_price_date == today or edge_latest_price_date == today,
+        "static_live_is_today": static_live_is_today,
+        "static_live_is_recent": static_live_is_recent,
+        "live_is_today": static_live_is_today or edge_latest_price_date == today,
         "live_vni_date": live_vni_date or None,
         "live_vni_close": live_vni_close,
         "source_vni_date": source_vni.get("date") if source_vni else None,
@@ -261,7 +274,7 @@ def main() -> None:
     print(json.dumps(payload, ensure_ascii=False))
     if any(payload["nul_bytes"].values()):
         raise SystemExit(1)
-    if args.require_fresh_live and not payload["live_is_today"]:
+    if args.require_fresh_live and not (payload["static_live_is_today"] and payload["static_live_is_recent"]):
         raise SystemExit(1)
     if args.require_edge_live and not payload["edge_live_is_fresh"]:
         raise SystemExit(1)
