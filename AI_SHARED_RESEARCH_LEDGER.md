@@ -10,6 +10,8 @@ Fix:
 
 Final public verification: `dashboard/index.html` embedded data has `holdings=[]`, `copyAccount.totalMil=1001.9568024`, latest trade `2026-06-08 MSB BÁN HẾT 3,800 @ 14.7`, ledger count `923`, forecast `COMPUTED` for 2026-06-15 with `0` rows, meaning no new order and stay full cash. Public health with `--require-current-forecast --require-execution-desk` PASS after changing health logic to allow a valid computed zero-order forecast.
 
+Follow-up paper-trade fix: public paper section initially still marked MSB 3,600 cp to market because it read only `paper_trade_state.json`. `dashboard/_preview/build_v7_real.py` now applies `r46_execution_state.json` to paper trade too. Paper lane closes MSB on 2026-06-08 at open `14.7k`, exit shares `3,600`, current shares `0`, cash `100%`, exposure `0%`, NAV `998.72686 tr`, NAV P/L `-1.27314 tr` / `-0.127314%`, position P/L `-2.358476%` after buy/sell cost convention. Public health PASS after deploy.
+
 ## 2026-06-05 Codex - Dashboard trade ledger rebased to 2021 NAV 1B
 
 User corrected the dashboard ledger basis: "Lệnh đã khớp gần nhất" and "Lịch sử giao dịch" must align with the displayed 2021-present chart/CAGR, not the full 2016 model NAV. `dashboard/_preview/build_v7_real.py` now filters displayed trade history to trades dated `>= 2021-01-01` and rebases trade notional/P&L/share quantities by `1.0 / first_2021_curve_nav` so the displayed ledger starts from NAV `1 tỷ` on `2021-01-01`.
