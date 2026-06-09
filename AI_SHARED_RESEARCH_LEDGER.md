@@ -1,3 +1,21 @@
+## 2026-06-09 Codex - Fix model ledger vs copy execution mixing
+
+User flagged that the MSB `BAN HET` row in recent/history did not match the MSB buy quantities in history. Audit confirmed the issue: `dashboard/_preview/build_v7_real.py` had mixed `r46_execution_state.json` copy-live order (`MSB` sell 3,800 cp on NAV copy 1 ty) into `tradesLatest`/`ledger`, while the surrounding historical rows were model ledger rows rebased to `NAV 2021 = 1 ty`. This made the history table internally inconsistent.
+
+Fix:
+- `tradesLatest` and `ledger` now use only `historical_ledger_rows` from the model/backtest trade history rebased to 2021 NAV; copy execution state is no longer converted into a ledger row.
+- Removed the unused `execution_order_to_trade()` helper to prevent future accidental re-mixing.
+- Copy execution state still drives copy account/full-cash state and paper-trade closure; it is just no longer displayed inside model history.
+- UI label changed from `Lenh da khop gan nhat` to `Lenh model gan nhat`; copy page subtitle now says copy NAV is separate from model history.
+
+Verification after rebuild/deploy:
+- `dashboard/index.html` embedded `tradeCount=922`, `fullTradeCount=1600`.
+- First latest model row is `2026-05-25 MSB MUA THEM 42,200 @ 14.35`, followed by model rows for VIC/PVP/GEE/DXP.
+- `copy source in ledger? False`; `MSB sell 3,800 in ledger? False`.
+- Copy account remains full cash: `totalMil=1001.9568024`, `marketMil=0`; paper trade remains closed with `currentShares=0`.
+- Vercel deploy `dpl_FAwbk756xskdvqYZjvKPb887DqgK` READY and aliased to `https://ez-trading.vercel.app`.
+- Public Edge live check PASS at `2026-06-09 18:40 ICT`: VNINDEX `1793.05`, MSB `14.5`, VIX `17.1`, VIC `193.2`, GEE `97.2`, BSR `28.05`; public forecast still `COMPUTED` asOf `2026-06-09`, planDate `2026-06-15`, rows `0`.
+
 ## 2026-06-09 Codex - Public dashboard live/forecast audit PASS after stale-static fix
 
 User asked to re-audit the public Ez Trading dashboard before public release. Audit initially found one real production issue: after a direct local Vercel deploy, public static JSON/HTML regressed to stale local artifacts (`dashboard_live_update_status` 2026-06-09 10:13 ICT, forecast 10:22 ICT), while the Vercel Edge `/api/live-status` endpoint was fresh. Root cause: direct deploy from the OneDrive workspace can overwrite runner-generated static files. Also found a browser-side edge-live gap when the copy account is full cash: `liveSymbols()` could return empty because there were no holdings/planned/execution/open-paper symbols, so UI might not call `/api/live-status`.
