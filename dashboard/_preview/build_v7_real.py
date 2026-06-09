@@ -368,9 +368,11 @@ paper_symbol = target.get("symbol", "MSB")
 paper_quote = quotes.get(paper_symbol, {})
 paper_signal_px = (target.get("prev_close_vnd_per_share") or 0) / 1000
 paper_fresh_px = paper_quote.get("close")
+paper_fresh_date = paper_quote.get("date")
 paper_shares = int(target.get("target_shares_round_lot_100") or 0)
 paper_nav_start_vnd = float(signal_w1.get("nav_virtual_vnd") or pt_state.get("nav_start_vnd") or 1_000_000_000)
 paper_buy_cost_pct = float(pt_state.get("cost_assumption_pct_per_side", {}).get("buy_cost", 0.30)) / 100.0
+paper_sell_cost_pct = float(pt_state.get("cost_assumption_pct_per_side", {}).get("sell_cost", 0.40)) / 100.0
 paper_state_pos = pt_state.get("current_position", {}) or {}
 paper_state_holding = next(
     (h for h in paper_state_pos.get("holdings", []) if str(h.get("symbol", "")).upper() == str(paper_symbol).upper()),
@@ -433,6 +435,40 @@ paper_nav_pnl_m = paper_nav_m - 1000 if paper_nav_m is not None else None
 paper_nav_pnl_pct = paper_nav_pnl_m / 1000 * 100 if paper_nav_pnl_m is not None else None
 paper_cash_pct = paper_cash_after_m / (paper_nav_start_vnd / 1e6) * 100 if paper_cash_after_m is not None else signal_w1.get("cash_pct")
 paper_exposure_pct = paper_value_m / paper_nav_m * 100 if paper_value_m is not None and paper_nav_m else signal_w1.get("exposure_pct")
+paper_closed = False
+paper_exit_order = next((
+    order for order in executed_orders
+    if str(order.get("symbol", "")).upper() == str(paper_symbol).upper()
+    and (str(order.get("side", "")).upper() == "SELL" or action_is_sell(order.get("actionLabel") or order.get("action")))
+    and str(order.get("status", "EXECUTED")).upper() in {"EXECUTED", "FILLED"}
+    and (not paper_entry_date or str(order.get("date") or "") >= str(paper_entry_date))
+), None)
+paper_exit_date = None
+paper_exit_px = None
+paper_exit_shares = None
+paper_exit_gross_m = None
+paper_exit_cost_m = None
+if paper_exit_order and paper_executed and paper_ref_cost_m is not None and paper_shares:
+    paper_exit_date = paper_exit_order.get("date") or paper_exit_order.get("executedDate")
+    paper_exit_px = as_float(paper_exit_order.get("executionPriceK"), as_float(paper_exit_order.get("priceK"), as_float(paper_fresh_px)))
+    if paper_exit_px:
+        paper_exit_shares = int(paper_shares)
+        paper_exit_gross_m = paper_exit_shares * paper_exit_px / 1000
+        paper_exit_cost_m = paper_exit_gross_m * paper_sell_cost_pct
+        paper_exit_net_m = paper_exit_gross_m - paper_exit_cost_m
+        entry_cash_m = paper_cash_after_m if paper_cash_after_m is not None else (paper_nav_start_vnd / 1e6) - paper_ref_cost_m
+        paper_cash_after_m = entry_cash_m + paper_exit_net_m
+        paper_value_m = 0.0
+        paper_position_pnl_m = paper_exit_net_m - paper_ref_cost_m
+        paper_position_pnl_pct = paper_position_pnl_m / paper_ref_cost_m * 100 if paper_ref_cost_m else None
+        paper_nav_m = paper_cash_after_m
+        paper_nav_pnl_m = paper_nav_m - (paper_nav_start_vnd / 1e6)
+        paper_nav_pnl_pct = paper_nav_pnl_m / (paper_nav_start_vnd / 1e6) * 100
+        paper_cash_pct = 100.0
+        paper_exposure_pct = 0.0
+        paper_fresh_px = paper_exit_px
+        paper_fresh_date = paper_exit_date
+        paper_closed = True
 
 trades_full = list(hist.get("trades", []))
 curve = [
@@ -686,7 +722,7 @@ if executed_orders and state_account:
 data_flags = []
 try:
     cache_p = ROOT / ".cache" / "backtest" / "history_clean" / f"{paper_symbol}.parquet"
-    if cache_p.exists():
+    if cache_p.exists() and not paper_closed:
         mc = pd.read_parquet(cache_p)
         tcol = [c for c in mc.columns if c.lower() in ("time", "date")][0]
         ccol = [c for c in mc.columns if c.lower() == "close"][0]
@@ -710,7 +746,7 @@ if upd and lpd and upd[:10] < lpd:
         f"live status updatedAt {upd} đứng TRƯỚC latestPriceDate {lpd} — cần reconcile timestamp."
     )
 
-paper_status = "ĐÃ KHỚP" if paper_executed else "KẾ HOẠCH · chưa khớp"
+paper_status = "ĐÃ BÁN" if paper_closed else ("ĐÃ KHỚP" if paper_executed else "KẾ HOẠCH · chưa khớp")
 
 chart_rows = [{
     "date": r["date"],
@@ -1024,20 +1060,27 @@ data = {
         "pnlPct": copy_pnl_pct,
     },
     "paperTrade": {
-        "source": "signal_week_1_20260601.json + dashboard_live_update_status.json",
+        "source": "signal_week_1_20260601.json + r46_execution_state.json + dashboard_live_update_status.json",
         "startDate": pt_state.get("start_date"),
         "endDate": pt_state.get("end_date"),
         "navStartMil": paper_nav_start_vnd / 1e6,
         "logAsOf": paper_log_last.get("as_of"),
         "symbol": paper_symbol,
         "shares": paper_shares,
+        "currentShares": 0 if paper_closed else paper_shares,
+        "closed": paper_closed,
+        "exitDate": paper_exit_date,
+        "exitPrice": paper_exit_px,
+        "exitShares": paper_exit_shares,
+        "exitGrossMil": paper_exit_gross_m,
+        "exitCostMil": paper_exit_cost_m,
         "signalPrice": paper_signal_px,
         "entryPrice": paper_entry_px,
         "entryDate": paper_entry_date,
         "fillReason": paper_fill.get("fill_reason") if paper_fill else None,
         "signalDate": signal_w1.get("execution_date"),
         "freshPrice": paper_fresh_px,
-        "freshDate": paper_quote.get("date"),
+        "freshDate": paper_fresh_date,
         "positionValueMil": paper_value_m,
         "entryCostMil": paper_ref_cost_m,
         "positionPnlMil": paper_position_pnl_m,
@@ -1234,21 +1277,21 @@ document.querySelectorAll('.nav').forEach(b=>b.addEventListener('click',()=>{{ d
 function roundLot(x){{ return Math.max(0, Math.floor(Number(x || 0) / 100) * 100); }}
 function renderCopyForNav(navBilRaw, syncInput=true){{ const parsed=parseNavValue(navBilRaw); if(parsed===null) return; const navBil=parsed; if(syncInput) document.getElementById('navInput').value=navLabel(navBil); document.querySelectorAll('.navPreset').forEach(b=>b.classList.toggle('primary', Number(b.dataset.nav)===navBil)); let market=0,cost=0; const posLabels=[]; const holdHtml=D.holdings.length ? D.holdings.map(h=>{{ const baseShares=Number(h.copyShares||h.modelShares||0); const shares=roundLot(baseShares*navBil); const entry=Number(h.entryPrice||0); const px=Number(h.currentPrice||0); const value=shares*px/1000; const rowCost=shares*entry/1000; const weight=value/(navBil*1000)*100; const pnl=value-rowCost; const pnlPct=rowCost>0?pnl/rowCost*100:null; market+=value; cost+=rowCost; posLabels.push(`${{esc(h.symbol)}} · ${{f(shares,0)}} cp`); return `<tr><td><strong>${{esc(h.symbol)}}</strong></td><td>${{esc(h.industry||h.sleeve||'-')}}</td><td class="num">${{f(shares,0)}}</td><td class="num">${{priceK(entry,3)}}</td><td class="num">${{priceK(px)}}</td><td class="num">${{valueTr(value)}}</td><td class="num">${{wp(weight)}}</td><td class="num ${{cls(pnl)}}">${{money(pnl)}}</td><td class="num ${{cls(pnlPct)}}">${{pc(pnlPct)}}</td></tr>`; }}).join('') : '<tr><td colspan="9">Chưa có vị thế.</td></tr>'; document.getElementById('holdRows').innerHTML=holdHtml; const exposure=navBil>0?market/(navBil*1000)*100:0; const posValue=document.getElementById('positionKpiValue'); const posSub=document.getElementById('positionKpiSub'); if(posValue) posValue.textContent=posLabels.length?posLabels.join(', '):'0 mã'; if(posSub) posSub.textContent='Giá trị '+f(market,1)+' tr · tỷ trọng '+wp(exposure,1); renderExecutionDesk(navBil); renderPlannedRows(navBil); }}
 const pt = D.paperTrade;
-function recomputePaperFromPrice(){{ const value=Number(pt.shares||0)*Number(pt.freshPrice||0)/1000; if(Number.isFinite(value)&&value>0) pt.positionValueMil=value; const cost=Number(pt.entryCostMil||0); if(cost>0){{ pt.positionPnlMil=pt.positionValueMil-cost; pt.positionPnlPct=pt.positionPnlMil/cost*100; }} const cash=Number(pt.cashMil||0); const navStart=Number(pt.navStartMil||1000); if(cash>0&&pt.positionValueMil){{ pt.navMil=cash+pt.positionValueMil; pt.navPnlMil=pt.navMil-navStart; pt.navPnlPct=navStart>0?pt.navPnlMil/navStart*100:null; pt.exposurePct=pt.positionValueMil/pt.navMil*100; pt.cashPct=navStart>0?cash/navStart*100:null; }} }}
+function recomputePaperFromPrice(){{ if(pt.closed) return; const value=Number(pt.shares||0)*Number(pt.freshPrice||0)/1000; if(Number.isFinite(value)&&value>0) pt.positionValueMil=value; const cost=Number(pt.entryCostMil||0); if(cost>0){{ pt.positionPnlMil=pt.positionValueMil-cost; pt.positionPnlPct=pt.positionPnlMil/cost*100; }} const cash=Number(pt.cashMil||0); const navStart=Number(pt.navStartMil||1000); if(cash>0&&pt.positionValueMil){{ pt.navMil=cash+pt.positionValueMil; pt.navPnlMil=pt.navMil-navStart; pt.navPnlPct=navStart>0?pt.navPnlMil/navStart*100:null; pt.exposurePct=pt.positionValueMil/pt.navMil*100; pt.cashPct=navStart>0?cash/navStart*100:null; }} }}
 function renderPaperTrade(){{ recomputePaperFromPrice(); document.getElementById('ptGrid').innerHTML = [
   ['NAV', pt.navMil===null?'-':f(pt.navMil,1)+' tr'],
   ['P/L', money(pt.navPnlMil)+' · '+pc(pt.navPnlPct,2)],
   ['Cash', f(pt.cashPct,1)+'%'],
   ['Exposure', f(pt.exposurePct,1)+'%']
-].map(x=>`<div class="ptbox"><span>${{x[0]}}</span><b>${{x[1]}}</b></div>`).join(''); document.getElementById('paperRows').innerHTML = `<tr><td><strong>${{esc(pt.symbol)}}</strong><div class="meta">${{esc(pt.entryDate||pt.signalDate)}} → ${{esc(pt.freshDate)}}</div></td><td class="num">${{f(pt.shares,0)}}</td><td class="num">${{priceK(pt.entryPrice)}}</td><td class="num">${{priceK(pt.freshPrice)}}</td><td class="num ${{cls(pt.positionPnlMil)}}">${{money(pt.positionPnlMil)}} · ${{pc(pt.positionPnlPct)}}</td></tr>`; }}
+].map(x=>`<div class="ptbox"><span>${{x[0]}}</span><b>${{x[1]}}</b></div>`).join(''); const qty=pt.closed?Number(pt.exitShares||pt.shares||0):Number(pt.shares||0); const px=pt.closed?Number(pt.exitPrice||pt.freshPrice||0):Number(pt.freshPrice||0); const dateTo=pt.closed?(pt.exitDate||pt.freshDate):(pt.freshDate||'-'); const action=pt.closed?pill('SELL'):pill('GIỮ'); document.getElementById('paperRows').innerHTML = `<tr><td><strong>${{esc(pt.symbol)}}</strong> ${{action}}<div class="meta">${{esc(pt.entryDate||pt.signalDate)}} → ${{esc(dateTo)}}</div></td><td class="num">${{f(qty,0)}}</td><td class="num">${{priceK(pt.entryPrice)}}</td><td class="num">${{priceK(px)}}</td><td class="num ${{cls(pt.positionPnlMil)}}">${{money(pt.positionPnlMil)}} · ${{pc(pt.positionPnlPct)}}</td></tr>`; }}
 renderPaperTrade();
 const planned = D.policy.plannedOrders?.rows || [];
 const execDesk = D.executionDesk?.rows || [];
 function thresholdHtml(r){{ const lines=[]; if(r.maxOpen) lines.push(`Open <= <b>${{priceK(r.maxOpen)}}</b>`); if(r.limitPrice) lines.push(`Pullback <= <b>${{priceK(r.limitPrice)}}</b>`); if(r.bearStop) lines.push(`Bear stop <b>${{priceK(r.bearStop)}}</b>`); if(r.lowPrice) lines.push(`Low mới nhất ${{priceK(r.lowPrice)}}`); if(!lines.length && r.referenceClose) lines.push(`Tham chiếu <b>${{priceK(r.referenceClose)}}</b>`); return `<div class="thresholds">${{lines.map(x=>`<span>${{x}}</span>`).join('')}}</div>`; }}
 function renderExecutionDesk(navBil=parseNavValue(document.getElementById('navInput')?.value)||1){{ const body=document.getElementById('execRows'); if(!body) return; body.innerHTML = execDesk.length ? execDesk.map(r=>{{ const shares=roundLot(Number(r.shares||0)*navBil); return `<tr><td>${{esc(r.group)}}<div class="meta">${{esc(r.date||'-')}}</div></td><td><strong>${{esc(r.symbol)}}</strong></td><td>${{pill(r.action||'-')}}</td><td class="num">${{shares?f(shares,0):'-'}}</td><td class="num">${{priceK(r.currentPrice)}}</td><td>${{thresholdHtml(r)}}</td><td>${{pill(r.status||'-')}}</td><td>${{esc(r.note||'')}}</td></tr>`; }}).join('') : '<tr><td colspan="8">Chưa có lệnh cần xử lý.</td></tr>'; }}
 function renderPlannedRows(navBil=parseNavValue(document.getElementById('navInput')?.value)||1){{ document.getElementById('plannedRows').innerHTML = planned.length ? planned.map(r=>{{ const baseShares=Number(r.orderShares||0); const shares=baseShares>0?roundLot(baseShares*navBil):null; return `<tr><td>${{esc(r.displayPlanDate||r.planDate)}}</td><td><strong>${{esc(r.symbol)}}</strong></td><td>${{pill(r.action||r.status)}}</td><td class="num">${{shares===null?'-':f(shares,0)}}</td><td class="num">${{priceK(r.currentPrice)}}</td><td class="num pos">${{priceK(r.targetPrice)}}</td><td class="num neg">${{priceK(r.stopPrice)}}</td><td>${{esc(r.note)}}</td></tr>`; }}).join('') : '<tr><td colspan="8">Kh\\u00f4ng c\\u00f3 l\\u1ec7nh d\\u1ef1 ki\\u1ebfn \\u2014 xem ghi ch\\u00fa ph\\u00eda tr\\u00ean.</td></tr>'; }}
-function liveSymbols(){{ const syms=new Set(); D.holdings.forEach(h=>h.symbol&&syms.add(h.symbol)); planned.forEach(r=>r.symbol&&syms.add(r.symbol)); execDesk.forEach(r=>r.symbol&&syms.add(r.symbol)); if(pt.symbol) syms.add(pt.symbol); return Array.from(syms).slice(0,40); }}
-function applyEdgeLiveStatus(payload){{ if(!payload||!payload.quotes) return; const updated=payload.updatedAtICT||payload.updatedAtUtc||'-'; const latest=payload.latestPriceDate||D.asOf||'-'; D.asOf=latest; D.liveUpdatedLabel=updated; const liveBadge=document.getElementById('liveBadge'); if(liveBadge) liveBadge.textContent='LIVE '+latest+' · '+updated; const liveStatus=document.getElementById('liveStatusText'); if(liveStatus) liveStatus.innerHTML='Giá live: <b>'+esc(latest)+'</b> · cập nhật '+esc(updated)+' <span class="meta">edge 5p</span>'; if(payload.vnindex&&payload.vnindex.ok){{ D.vni.date=payload.vnindex.latest||D.vni.date; D.vni.close=Number(payload.vnindex.latestClose||D.vni.close); const vc=document.getElementById('vniKpiClose'); const vd=document.getElementById('vniKpiDate'); if(vc) vc.textContent=f(D.vni.close,2); if(vd) vd.textContent=D.vni.date||'-'; }} const quotes=payload.quotes||{{}}; const applyQuote=(row)=>{{ const sym=String(row.symbol||'').toUpperCase(); const q=quotes[sym]; if(q&&q.ok&&Number(q.close)>0){{ row.currentPrice=Number(q.close); row.priceAsOf=q.date||row.priceAsOf; if(row.lowPrice!==undefined&&Number(q.low)>0) row.lowPrice=Number(q.low); }} }}; D.holdings.forEach(applyQuote); planned.forEach(applyQuote); execDesk.forEach(applyQuote); const pq=quotes[String(pt.symbol||'').toUpperCase()]; if(pq&&pq.ok&&Number(pq.close)>0){{ pt.freshPrice=Number(pq.close); pt.freshDate=pq.date||pt.freshDate; }} renderCopyForNav(document.getElementById('navInput')?.value||1,false); renderPaperTrade(); }}
+function liveSymbols(){{ const syms=new Set(); D.holdings.forEach(h=>h.symbol&&syms.add(h.symbol)); planned.forEach(r=>r.symbol&&syms.add(r.symbol)); execDesk.forEach(r=>r.symbol&&syms.add(r.symbol)); if(pt.symbol&&!pt.closed) syms.add(pt.symbol); return Array.from(syms).slice(0,40); }}
+function applyEdgeLiveStatus(payload){{ if(!payload||!payload.quotes) return; const updated=payload.updatedAtICT||payload.updatedAtUtc||'-'; const latest=payload.latestPriceDate||D.asOf||'-'; D.asOf=latest; D.liveUpdatedLabel=updated; const liveBadge=document.getElementById('liveBadge'); if(liveBadge) liveBadge.textContent='LIVE '+latest+' · '+updated; const liveStatus=document.getElementById('liveStatusText'); if(liveStatus) liveStatus.innerHTML='Giá live: <b>'+esc(latest)+'</b> · cập nhật '+esc(updated)+' <span class="meta">edge 5p</span>'; if(payload.vnindex&&payload.vnindex.ok){{ D.vni.date=payload.vnindex.latest||D.vni.date; D.vni.close=Number(payload.vnindex.latestClose||D.vni.close); const vc=document.getElementById('vniKpiClose'); const vd=document.getElementById('vniKpiDate'); if(vc) vc.textContent=f(D.vni.close,2); if(vd) vd.textContent=D.vni.date||'-'; }} const quotes=payload.quotes||{{}}; const applyQuote=(row)=>{{ const sym=String(row.symbol||'').toUpperCase(); const q=quotes[sym]; if(q&&q.ok&&Number(q.close)>0){{ row.currentPrice=Number(q.close); row.priceAsOf=q.date||row.priceAsOf; if(row.lowPrice!==undefined&&Number(q.low)>0) row.lowPrice=Number(q.low); }} }}; D.holdings.forEach(applyQuote); planned.forEach(applyQuote); execDesk.forEach(applyQuote); const pq=quotes[String(pt.symbol||'').toUpperCase()]; if(!pt.closed&&pq&&pq.ok&&Number(pq.close)>0){{ pt.freshPrice=Number(pq.close); pt.freshDate=pq.date||pt.freshDate; }} renderCopyForNav(document.getElementById('navInput')?.value||1,false); renderPaperTrade(); }}
 async function refreshEdgeLiveStatus(){{ const syms=liveSymbols(); if(!syms.length) return; try{{ const res=await fetch('/api/live-status?symbols='+encodeURIComponent(syms.join(',')), {{ cache:'no-store' }}); if(!res.ok) throw new Error('HTTP '+res.status); applyEdgeLiveStatus(await res.json()); }}catch(err){{ const liveStatus=document.getElementById('liveStatusText'); if(liveStatus) liveStatus.innerHTML += ' <span class="meta">edge lỗi</span>'; }} }}
 document.querySelectorAll('.navPreset').forEach(btn=>btn.addEventListener('click',()=>renderCopyForNav(btn.dataset.nav,true)));
 document.getElementById('navInput').addEventListener('input',e=>renderCopyForNav(e.target.value,false));
@@ -1289,4 +1332,4 @@ print(f"Data: holdings={len(holdings)}, watchlist={len(watchlist_rows)}, ledger=
 print(f"Regime: {regime_label} | paper_status: {paper_status} | flags: {len(data_flags)}")
 for fl in data_flags:
     print("  FLAG:", fl)
-print(f"Paper: {paper_symbol} {paper_shares} @ {paper_signal_px} -> {paper_fresh_px} ({paper_quote.get('date')})")
+print(f"Paper: {paper_symbol} {paper_shares} @ {paper_signal_px} -> {paper_fresh_px} ({paper_fresh_date})")
