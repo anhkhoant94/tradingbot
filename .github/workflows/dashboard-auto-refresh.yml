@@ -116,7 +116,7 @@ jobs:
       - name: Update full-universe prices
         working-directory: ${{ github.workspace }}
         run: |
-          python tools/update_full_universe_prices.py --workers 10 --retry-stale-passes 2 --retry-workers 4 --min-fresh-pct 0.65 || {
+          timeout 720s python tools/update_full_universe_prices.py --workers 10 --retry-stale-passes 2 --retry-workers 4 --min-fresh-pct 0.65 || {
             echo "FULL_UNIVERSE_REFRESH_FAILED=1" >> "$GITHUB_ENV"
             echo "Full-universe refresh failed; continuing so forecast can fail-closed and dashboard can show the latest attempt status."
           }
