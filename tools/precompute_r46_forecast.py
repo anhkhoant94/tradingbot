@@ -25,11 +25,15 @@ OUT = ROOT / "output"
 CACHE = ROOT / ".cache" / "backtest"
 POLICY_DIR = OUT / "dashboard_policies" / "r46_bear_stop_mcore"
 FORECAST_DIR = OUT / "beat_vni30_parallel" / "r46_live_forecast"
+EXEC_STATE_PATH = DASH / "r46_execution_state.json"
+OUT_EXEC_STATE_PATH = OUT / "r46_execution_state.json"
 
 DEFAULT_NAV_VND = 1_000_000_000
 BOARD_LOT = 100
 LOCK_DATE = pd.Timestamp("2026-05-25")
 ICT = ZoneInfo("Asia/Ho_Chi_Minh")
+BUY_COST_RATE = 0.003
+SELL_COST_RATE = 0.004
 
 
 def now_stamps(prefix: str) -> dict:
@@ -62,6 +66,11 @@ def read_json(path: Path) -> dict:
         return {}
 
 
+def write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
+
+
 def latest_status() -> dict:
     for path in [DASH / "dashboard_live_update_status.json", OUT / "dashboard_live_update_status.json"]:
         payload = read_json(path)
@@ -69,6 +78,77 @@ def latest_status() -> dict:
             payload["_source"] = str(path.relative_to(ROOT))
             return payload
     return {}
+
+
+def action_is_sell(action: str | None) -> bool:
+    text = str(action or "").upper()
+    return any(key in text for key in ("BÁN", "BAN", "SELL"))
+
+
+def action_is_buy(action: str | None) -> bool:
+    text = str(action or "").upper()
+    return any(key in text for key in ("MUA", "BUY"))
+
+
+def load_analysis_policy() -> dict:
+    analysis_path = DASH / "analysis.js"
+    if not analysis_path.exists():
+        return {}
+    try:
+        text = analysis_path.read_text(encoding="utf-8")
+        match = text.split("=", 1)[1].rsplit(";", 1)[0]
+        analysis = json.loads(match)
+        return next(
+            (p for p in analysis.get("strategyPolicies", []) if p.get("key") == "r46_bear_stop_mcore"),
+            {},
+        )
+    except Exception:
+        return {}
+
+
+def copy_holdings_from_analysis() -> dict[str, dict]:
+    policy = load_analysis_policy()
+    out: dict[str, dict] = {}
+    for row in policy.get("holdings", []) or []:
+        sym = str(row.get("symbol", "")).upper().strip()
+        shares = floor_lot(num(row.get("copyShares", row.get("modelShares", 0)), 0))
+        if sym and shares > 0:
+            out[sym] = {**row, "symbol": sym, "copyShares": shares}
+    return out
+
+
+def execution_state() -> dict:
+    return read_json(EXEC_STATE_PATH) or read_json(OUT_EXEC_STATE_PATH) or {"schemaVersion": 1, "orders": []}
+
+
+def executed_orders(state: dict | None = None) -> list[dict]:
+    rows = (state or execution_state()).get("orders") or []
+    out = []
+    for row in rows:
+        status = str(row.get("status") or "EXECUTED").upper()
+        if status not in {"EXECUTED", "FILLED"}:
+            continue
+        sym = str(row.get("symbol") or "").upper().strip()
+        if sym:
+            out.append({**row, "symbol": sym, "status": status})
+    return out
+
+
+def apply_execution_state_to_share_map(shares: dict[str, int], state: dict | None = None) -> dict[str, int]:
+    out = {sym: int(qty) for sym, qty in shares.items() if int(qty) > 0}
+    for row in sorted(executed_orders(state), key=lambda r: str(r.get("date") or r.get("executedDate") or "")):
+        sym = str(row.get("symbol") or "").upper()
+        qty = floor_lot(num(row.get("shares", row.get("orderShares", 0)), 0))
+        if not sym or qty <= 0:
+            continue
+        action = row.get("action") or row.get("actionLabel") or row.get("side")
+        side = str(row.get("side") or "").upper()
+        if side == "SELL" or action_is_sell(action):
+            sell_all = int(num(row.get("targetCopyShares"), -1)) == 0 or "HẾT" in str(action).upper() or "HET" in str(action).upper()
+            out[sym] = 0 if sell_all else max(0, out.get(sym, 0) - qty)
+        elif side == "BUY" or action_is_buy(action):
+            out[sym] = floor_lot(out.get(sym, 0) + qty)
+    return {sym: qty for sym, qty in out.items() if qty > 0}
 
 
 def next_monday(date_text: str | None) -> str | None:
@@ -100,31 +180,215 @@ def latest_quote(symbol: str) -> dict:
     return {"date": None, "close": 0.0}
 
 
+def price_row_on_or_after(symbol: str, start_date: str, max_rows: int = 1) -> pd.DataFrame:
+    for directory in [CACHE / "history_clean", CACHE / "history", ROOT / ".cache" / "history"]:
+        path = directory / f"{str(symbol).upper()}.parquet"
+        if not path.exists():
+            continue
+        try:
+            df = pd.read_parquet(path)
+        except Exception:
+            continue
+        if df.empty:
+            continue
+        col = "time" if "time" in df.columns else "date"
+        df = df.copy()
+        df[col] = pd.to_datetime(df[col], errors="coerce").dt.normalize()
+        df = df.dropna(subset=[col]).sort_values(col)
+        rows = df[df[col].ge(pd.Timestamp(start_date).normalize())].head(max_rows)
+        if not rows.empty:
+            return rows.rename(columns={col: "date"})
+    return pd.DataFrame()
+
+
+def write_execution_state(state: dict) -> None:
+    state.update(now_stamps("updated"))
+    write_json(EXEC_STATE_PATH, state)
+    write_json(OUT_EXEC_STATE_PATH, state)
+
+
+def estimate_start_cash_m(holdings: dict[str, dict], state: dict) -> float:
+    account = state.get("copyAccount") or {}
+    cash = num(account.get("cashMil"), float("nan"))
+    if math.isfinite(cash):
+        return cash
+    used = 0.0
+    for row in holdings.values():
+        shares = num(row.get("copyShares"), 0)
+        entry = num(row.get("entryPrice"), 0)
+        if shares > 0 and entry > 0:
+            used += shares * entry * (1.0 + BUY_COST_RATE) / 1000
+    return 1000.0 - used
+
+
+def materialize_due_forecast(existing: dict, as_of: str | None) -> dict:
+    if existing.get("status") != "COMPUTED" or not existing.get("rows") or not as_of:
+        return execution_state()
+    plan_date = str(existing.get("planDate") or "")
+    if not plan_date or plan_date > str(as_of):
+        return execution_state()
+
+    state = execution_state()
+    state.setdefault("schemaVersion", 1)
+    state.setdefault("policy", "r46_bear_stop_mcore")
+    state.setdefault("orders", [])
+    seen = {str(row.get("sourceForecastKey") or "") for row in state["orders"]}
+    holdings = copy_holdings_from_analysis()
+    cash_m = estimate_start_cash_m(holdings, state)
+    appended = False
+
+    for row in existing.get("rows") or []:
+        sym = str(row.get("symbol") or "").upper().strip()
+        action = row.get("action") or row.get("status") or ""
+        order_shares = floor_lot(num(row.get("orderShares"), 0))
+        if not sym or order_shares <= 0:
+            continue
+        source_key = "|".join([
+            str(existing.get("policy") or "r46_bear_stop_mcore"),
+            str(existing.get("asOf") or ""),
+            plan_date,
+            sym,
+            str(action),
+            str(order_shares),
+        ])
+        if source_key in seen:
+            continue
+
+        price_rows = price_row_on_or_after(sym, plan_date, max_rows=3)
+        if price_rows.empty:
+            continue
+
+        side = "SELL" if action_is_sell(action) else ("BUY" if action_is_buy(action) else "")
+        if not side:
+            continue
+
+        fill = None
+        if side == "SELL":
+            r = price_rows.iloc[0]
+            if pd.Timestamp(r["date"]).date().isoformat() != plan_date:
+                continue
+            fill = {"date": plan_date, "price": num(r.get("open"), num(r.get("close"), 0)), "reason": "forecast_sell_open"}
+        elif side == "BUY":
+            ref = num(row.get("currentPrice"), 0)
+            if ref <= 0:
+                continue
+            max_open = ref * 1.09
+            limit_px = ref * 1.015
+            first = price_rows.iloc[0]
+            first_date = pd.Timestamp(first["date"]).date().isoformat()
+            if first_date == plan_date and num(first.get("open"), 0) <= max_open:
+                fill = {"date": first_date, "price": num(first.get("open"), ref), "reason": "forecast_buy_open_gap_ok"}
+            else:
+                for _, r in price_rows.iterrows():
+                    d = pd.Timestamp(r["date"]).date().isoformat()
+                    low = num(r.get("low"), 0)
+                    open_px = num(r.get("open"), 0)
+                    if low > 0 and low <= limit_px:
+                        fill = {"date": d, "price": min(open_px or limit_px, limit_px), "reason": "forecast_buy_pullback_limit"}
+                        break
+            if fill is None and len(price_rows) >= 3:
+                state["orders"].append({
+                    "sourceForecastKey": source_key,
+                    "sourceForecast": {
+                        "asOf": existing.get("asOf"),
+                        "planDate": plan_date,
+                        "computedAtICT": existing.get("computedAtICT"),
+                    },
+                    "date": pd.Timestamp(price_rows.iloc[-1]["date"]).date().isoformat(),
+                    "symbol": sym,
+                    "side": "BUY",
+                    "actionLabel": action,
+                    "status": "SKIPPED",
+                    "shares": order_shares,
+                    "reason": "forecast_buy_no_fill_window",
+                })
+                seen.add(source_key)
+                appended = True
+            if fill is None:
+                continue
+
+        px = float(fill["price"])
+        if px <= 0:
+            continue
+
+        holding = holdings.get(sym, {})
+        before = floor_lot(num(holding.get("copyShares"), num(row.get("currentCopyShares"), 0)))
+        target_after = floor_lot(num(row.get("targetCopyShares"), 0))
+        if side == "SELL":
+            shares = before if target_after == 0 and before > 0 else min(order_shares, before or order_shares)
+            after = 0 if target_after == 0 else max(0, before - shares)
+            entry = num(holding.get("entryPrice"), num(row.get("entryPriceK"), 0))
+            gross_m = shares * px / 1000
+            fees_m = gross_m * SELL_COST_RATE
+            pnl_m = shares * (px - entry) / 1000 - fees_m if entry else None
+            cash_m += gross_m - fees_m
+            return_pct = pnl_m / (shares * entry * (1.0 + BUY_COST_RATE) / 1000) * 100 if pnl_m is not None and entry else None
+        else:
+            shares = order_shares
+            after = max(target_after, before + shares)
+            entry = px
+            gross_m = shares * px / 1000
+            fees_m = gross_m * BUY_COST_RATE
+            pnl_m = None
+            return_pct = None
+            cash_m -= gross_m + fees_m
+
+        state["orders"].append({
+            "sourceForecastKey": source_key,
+            "sourceForecast": {
+                "asOf": existing.get("asOf"),
+                "planDate": plan_date,
+                "computedAtICT": existing.get("computedAtICT"),
+            },
+            "date": fill["date"],
+            "symbol": sym,
+            "side": side,
+            "actionLabel": action,
+            "status": "EXECUTED",
+            "shares": shares,
+            "positionBeforeShares": before,
+            "positionAfterShares": after,
+            "targetCopyShares": target_after,
+            "priceK": px,
+            "executionPriceK": px,
+            "entryPriceK": entry,
+            "grossBil": gross_m / 1000,
+            "feesBil": fees_m / 1000,
+            "pnlBil": pnl_m / 1000 if pnl_m is not None else None,
+            "returnPct": return_pct,
+            "reason": fill["reason"],
+        })
+        seen.add(source_key)
+        appended = True
+
+    if appended:
+        live_shares = apply_execution_state_to_share_map({sym: int(row.get("copyShares") or 0) for sym, row in holdings.items()}, state)
+        market_m = 0.0
+        for sym, shares in live_shares.items():
+            quote = latest_quote(sym)
+            if quote.get("close"):
+                market_m += shares * float(quote["close"]) / 1000
+        total_m = cash_m + market_m
+        state["copyAccount"] = {
+            "startNavMil": 1000.0,
+            "cashMil": cash_m,
+            "marketMil": market_m,
+            "totalMil": total_m,
+            "pnlMil": total_m - 1000.0,
+            "pnlPct": (total_m - 1000.0) / 1000.0 * 100,
+        }
+        write_execution_state(state)
+    return state
+
+
 def current_copy_shares() -> dict[str, int]:
     # Copy-trade forecast must reconcile to the displayed copy holdings, not the
     # separate paper-trade lane. Otherwise "BÁN HẾT" can show a different
     # quantity from the holdings table.
-    analysis_path = DASH / "analysis.js"
-    if analysis_path.exists():
-        try:
-            text = analysis_path.read_text(encoding="utf-8")
-            match = text.split("=", 1)[1].rsplit(";", 1)[0]
-            analysis = json.loads(match)
-            policy = next(
-                (p for p in analysis.get("strategyPolicies", []) if p.get("key") == "r46_bear_stop_mcore"),
-                {},
-            )
-            out: dict[str, int] = {}
-            for row in policy.get("holdings", []) or []:
-                sym = str(row.get("symbol", "")).upper().strip()
-                shares = int(num(row.get("copyShares", row.get("modelShares", 0)), 0))
-                shares = floor_lot(shares)
-                if sym and shares > 0:
-                    out[sym] = shares
-            if out:
-                return out
-        except Exception:
-            pass
+    out = {sym: int(row.get("copyShares") or 0) for sym, row in copy_holdings_from_analysis().items()}
+    out = apply_execution_state_to_share_map(out)
+    if out:
+        return out
 
     trades_path = POLICY_DIR / "trades.parquet"
     equity_path = POLICY_DIR / "equity_curve.parquet"
@@ -138,7 +402,8 @@ def current_copy_shares() -> dict[str, int]:
         trades["symbol"].astype(str).str.upper()
     ).sum()
     scale = DEFAULT_NAV_VND / float(pd.read_parquet(equity_path)["nav"].iloc[-1])
-    return {sym: floor_lot(float(shares) * scale) for sym, shares in raw.items() if float(shares) > 0}
+    fallback = {sym: floor_lot(float(shares) * scale) for sym, shares in raw.items() if float(shares) > 0}
+    return apply_execution_state_to_share_map(fallback)
 
 
 def write_payload(payload: dict) -> None:
@@ -537,6 +802,7 @@ def main() -> None:
 
     full_status = read_json(OUT / "full_universe_live_update_status.json")
     existing = read_json(DASH / "r46_forecast.json")
+    materialize_due_forecast(existing, as_of)
     if full_status:
         total = int(num(full_status.get("symbolsTotal"), 0))
         fresh = int(num(full_status.get("symbolsAtTargetOrNewer"), 0))
