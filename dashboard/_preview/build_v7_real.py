@@ -757,15 +757,21 @@ full_updated_label = (
 # Fail-closed display + forecast age guard (áp dụng cho cả lane price-only và forecast):
 # chỉ render lệnh khi forecast COMPUTED, có rows, và còn đúng tuần kế hoạch hiện tại.
 # Forecast cũ tuần trước (planDate lệch expected) bị coi như chưa publish -> bảng trống.
-forecast_is_computed = forecast_status.get("status") == "COMPUTED" and bool(forecast_status.get("rows"))
+forecast_is_computed = forecast_status.get("status") == "COMPUTED"
 forecast_plan_date = forecast_status.get("planDate")
 forecast_is_fresh_to_live = bool(forecast_as_of and live_price_date and forecast_as_of >= live_price_date)
 forecast_is_current = forecast_is_computed and (forecast_plan_date == forecast_date) and forecast_is_fresh_to_live
 
 if forecast_is_current:
-    forecast_rows = forecast_status.get("rows", [])
+    forecast_rows = forecast_status.get("rows", []) or []
     forecast_source_label = forecast_status.get("source") or "r46_forecast.json"
-    forecast_summary = forecast_status.get("message") or "Forecast R46 precompute tu dong."
+    if forecast_rows:
+        forecast_summary = forecast_status.get("message") or "Forecast R46 precompute tự động."
+    else:
+        forecast_summary = (
+            f"Forecast R46 đã compute cho {forecast_date}; không có lệnh mới. "
+            "Giữ trạng thái hiện tại, không tự suy diễn lệnh."
+        )
     forecast_display_state = "COMPUTED"
 else:
     # Fail-closed: KHÔNG dựng lệnh tự suy diễn từ policy/watchlist. Bảng để trống.
