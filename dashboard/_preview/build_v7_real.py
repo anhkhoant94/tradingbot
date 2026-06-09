@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DASH = ROOT / "dashboard"
 PREVIEW = DASH / "_preview"
 PT_DIR = ROOT / "output" / "beat_vni30_parallel" / "paper_trade_v4_r46"
+EXEC_STATE_PATH = DASH / "r46_execution_state.json"
 LEDGER_REBASE_START_DATE = "2021-01-01"
 LEDGER_REBASE_NAV_BIL = 1.0
 
@@ -112,6 +113,30 @@ def as_float(value, default=None):
     return x if math.isfinite(x) else default
 
 
+def action_is_sell(action):
+    text = str(action or "").upper()
+    return any(key in text for key in ("BÁN", "BAN", "SELL"))
+
+
+def action_is_buy(action):
+    text = str(action or "").upper()
+    return any(key in text for key in ("MUA", "BUY"))
+
+
+def normalized_executed_orders(state):
+    rows = state.get("orders") or state.get("executions") or []
+    out = []
+    for row in rows:
+        status = str(row.get("status") or "EXECUTED").upper()
+        if status not in {"EXECUTED", "FILLED"}:
+            continue
+        sym = str(row.get("symbol") or "").upper().strip()
+        if not sym:
+            continue
+        out.append({**row, "symbol": sym, "status": status})
+    return out
+
+
 def scale_lot(value, scale):
     raw = as_float(value)
     if raw is None:
@@ -162,6 +187,71 @@ def latest_ohlc(symbol):
     }
 
 
+def recalc_holding(row):
+    shares = int(as_float(row.get("copyShares"), as_float(row.get("modelShares"), 0)) or 0)
+    entry = as_float(row.get("entryPrice"), 0) or 0
+    current = as_float(row.get("currentPrice"), 0) or 0
+    cost_m = shares * entry / 1000 if shares and entry else None
+    value_m = shares * current / 1000 if shares and current else None
+    pnl_m = value_m - cost_m if value_m is not None and cost_m is not None else None
+    pnl_pct = pnl_m / cost_m * 100 if pnl_m is not None and cost_m else None
+    row["copyShares"] = shares
+    row["modelShares"] = row.get("modelShares") or shares
+    row["valueMil"] = value_m
+    row["costMilCalc"] = cost_m
+    row["pnlMilCalc"] = pnl_m
+    row["pnlPctCalc"] = pnl_pct
+    return row
+
+
+def apply_execution_state_to_holdings(base_holdings, orders):
+    by_symbol = {str(row.get("symbol", "")).upper(): dict(row) for row in base_holdings}
+    for order in sorted(orders, key=lambda r: str(r.get("date") or r.get("executedDate") or "")):
+        sym = str(order.get("symbol") or "").upper()
+        shares = int(as_float(order.get("shares"), as_float(order.get("orderShares"), 0)) or 0)
+        if not sym or shares <= 0:
+            continue
+        action = order.get("action") or order.get("actionLabel") or order.get("side")
+        price = as_float(order.get("executionPriceK"), as_float(order.get("priceK"), as_float(order.get("currentPrice"))))
+        if action_is_sell(action) or str(order.get("side") or "").upper() == "SELL":
+            holding = by_symbol.get(sym)
+            if not holding:
+                continue
+            before = int(as_float(holding.get("copyShares"), as_float(holding.get("modelShares"), 0)) or 0)
+            sell_all = int(as_float(order.get("targetCopyShares"), -1) or -1) == 0 or "HẾT" in str(action).upper() or "HET" in str(action).upper()
+            after = 0 if sell_all else max(0, before - shares)
+            if after <= 0:
+                by_symbol.pop(sym, None)
+            else:
+                holding["copyShares"] = after
+                holding["modelShares"] = after
+                if price:
+                    holding["currentPrice"] = price
+                    holding["priceAsOf"] = order.get("date") or holding.get("priceAsOf")
+                by_symbol[sym] = recalc_holding(holding)
+        elif action_is_buy(action) or str(order.get("side") or "").upper() == "BUY":
+            if not price:
+                continue
+            holding = by_symbol.get(sym, {"symbol": sym, "status": "MUA", "industry": order.get("industry") or "-"})
+            before = int(as_float(holding.get("copyShares"), as_float(holding.get("modelShares"), 0)) or 0)
+            old_entry = as_float(holding.get("entryPrice"), price) or price
+            after = before + shares
+            target_after = int(as_float(order.get("targetCopyShares"), 0) or 0)
+            if target_after > after:
+                after = target_after
+            new_entry = ((before * old_entry) + (shares * price)) / after if after else price
+            holding.update({
+                "copyShares": after,
+                "modelShares": after,
+                "entryPrice": new_entry,
+                "entryDate": order.get("date") or holding.get("entryDate"),
+                "currentPrice": as_float(order.get("currentPrice"), price) or price,
+                "priceAsOf": order.get("priceAsOf") or order.get("date") or holding.get("priceAsOf"),
+            })
+            by_symbol[sym] = recalc_holding(holding)
+    return [row for row in by_symbol.values() if int(as_float(row.get("copyShares"), 0) or 0) > 0]
+
+
 def latest_regime(as_of):
     paths = [
         ROOT / "output" / "beat_vni30_parallel" / "r46_live_forecast" / "regime_features_weekly.parquet",
@@ -204,6 +294,8 @@ live_status = load_json_or(DASH / "dashboard_live_update_status.json", {})
 forecast_status_path = DASH / "r46_forecast.json"
 forecast_status = load_json_or(forecast_status_path, {})
 full_universe_status = load_json_or(DASH / "full_universe_live_update_status.json", load_json_or(ROOT / "output" / "full_universe_live_update_status.json", {}))
+execution_state = load_json_or(EXEC_STATE_PATH, load_json_or(ROOT / "output" / "r46_execution_state.json", {"schemaVersion": 1, "orders": []}))
+executed_orders = normalized_executed_orders(execution_state)
 policy_config = load_json_or(ROOT / "output" / "dashboard_policies" / "r46_bear_stop_mcore" / "config.json", {})
 pt_state = load_json_or(PT_DIR / "paper_trade_state.json", {
     "start_date": "2026-06-01",
@@ -267,6 +359,9 @@ for row in policy.get("holdings", []):
         "pnlMilCalc": pnl_m,
         "pnlPctCalc": pnl_pct,
     })
+
+if executed_orders:
+    holdings = apply_execution_state_to_holdings(holdings, executed_orders)
 
 target = signal_w1["targets"][0] if signal_w1.get("targets") else {}
 paper_symbol = target.get("symbol", "MSB")
@@ -379,10 +474,60 @@ def enrich_trade(row):
     return out
 
 
-trades_latest = [enrich_trade(row) for row in list(reversed(trades_period))[:8]]
-ledger_rows = [enrich_trade(row) for row in list(reversed(trades_period))]
-ledger_first_trade_date = min((str(row.get("date")) for row in trades_period if row.get("date")), default="-")
-ledger_last_trade_date = max((str(row.get("date")) for row in trades_period if row.get("date")), default="-")
+def execution_order_to_trade(order):
+    shares = int(as_float(order.get("shares"), as_float(order.get("orderShares"), 0)) or 0)
+    price = as_float(order.get("executionPriceK"), as_float(order.get("priceK"), as_float(order.get("currentPrice"))))
+    gross_bil = as_float(order.get("grossBil"))
+    if gross_bil is None and shares and price:
+        gross_bil = shares * price / 1_000_000
+    nav_bil = as_float(order.get("navBilAtTrade"))
+    if nav_bil is None:
+        account = execution_state.get("copyAccount") or {}
+        account_nav_m = as_float(account.get("totalMil"), as_float(account.get("navMil")))
+        nav_bil = account_nav_m / 1000 if account_nav_m else LEDGER_REBASE_NAV_BIL
+    pnl_bil = as_float(order.get("pnlBil"))
+    entry = as_float(order.get("entryPriceK"))
+    fees_bil = as_float(order.get("feesBil"), 0.0)
+    if pnl_bil is None and shares and price and entry:
+        side = str(order.get("side") or "").upper()
+        if side == "SELL" or action_is_sell(order.get("actionLabel") or order.get("action")):
+            pnl_bil = shares * (price - entry) / 1_000_000 - (fees_bil or 0)
+    return {
+        "date": order.get("date") or order.get("executedDate"),
+        "triggerDate": order.get("sourceForecast", {}).get("asOf"),
+        "symbol": order.get("symbol"),
+        "side": order.get("side") or ("SELL" if action_is_sell(order.get("actionLabel") or order.get("action")) else "BUY"),
+        "actionLabel": order.get("actionLabel") or order.get("action"),
+        "positionBeforeShares": order.get("positionBeforeShares"),
+        "positionAfterShares": order.get("positionAfterShares"),
+        "shares": shares,
+        "rawShares": shares,
+        "priceK": price,
+        "executionPriceK": price,
+        "grossBil": gross_bil,
+        "feesBil": fees_bil,
+        "entryPriceK": entry,
+        "returnPct": order.get("returnPct"),
+        "pnlBil": pnl_bil,
+        "holdDays": order.get("holdDays"),
+        "reason": order.get("reason") or "forecast_exec",
+        "navBilAtTrade": nav_bil,
+        "tradeWeightPct": gross_bil / nav_bil * 100 if gross_bil is not None and nav_bil else None,
+        "source": "copy_execution_state",
+    }
+
+
+live_execution_ledger_rows = [execution_order_to_trade(order) for order in executed_orders]
+historical_ledger_rows = [enrich_trade(row) for row in list(reversed(trades_period))]
+ledger_rows = sorted(
+    live_execution_ledger_rows + historical_ledger_rows,
+    key=lambda r: str(r.get("date") or ""),
+    reverse=True,
+)
+trades_latest = ledger_rows[:8]
+ledger_dates = [str(row.get("date")) for row in (ledger_rows or []) if row.get("date")]
+ledger_first_trade_date = min(ledger_dates, default="-")
+ledger_last_trade_date = max(ledger_dates, default="-")
 ledger_basis_label = f"NAV 1 tỷ từ {LEDGER_REBASE_START_DATE}"
 
 memos = analysis.get("memos", [])
@@ -528,6 +673,14 @@ copy_cash_m = max(0, copy_nav_m - copy_cost_m)
 copy_total_m = copy_cash_m + copy_market_m
 copy_pnl_m = copy_total_m - copy_nav_m
 copy_pnl_pct = copy_pnl_m / copy_nav_m * 100
+state_account = execution_state.get("copyAccount") or {}
+if executed_orders and state_account:
+    copy_nav_m = as_float(state_account.get("startNavMil"), copy_nav_m) or copy_nav_m
+    copy_cash_m = as_float(state_account.get("cashMil"), copy_cash_m) or copy_cash_m
+    copy_market_m = sum(h.get("valueMil") or 0 for h in holdings)
+    copy_total_m = copy_cash_m + copy_market_m
+    copy_pnl_m = copy_total_m - copy_nav_m
+    copy_pnl_pct = copy_pnl_m / copy_nav_m * 100 if copy_nav_m else None
 
 # --- Data integrity flags (provenance) ---
 data_flags = []
@@ -688,6 +841,10 @@ regime_text = regime_now.get("regime") or "UNKNOWN"
 if regime_text and regime_text != "UNKNOWN":
     regime_label = regime_text
 bear_stop_active = "BEAR" in regime_text
+if not holdings:
+    regime_text = "FULL_CASH"
+    regime_label = "FULL_CASH"
+    bear_stop_active = False
 
 execution_rows = []
 for h in holdings:
@@ -827,6 +984,11 @@ data = {
         "bearStopLossPct": bear_stop_loss * 100,
         "rows": execution_rows,
     },
+    "executionState": {
+        "updatedAtICT": execution_state.get("updatedAtICT"),
+        "orderCount": len(executed_orders),
+        "lastExecutedDate": max((str(row.get("date") or row.get("executedDate") or "") for row in executed_orders), default=None),
+    },
     "perf": perf,
     "holdings": holdings,
     "watchlist": watchlist_rows,
@@ -892,8 +1054,8 @@ data = {
 data_js = json.dumps(data, ensure_ascii=False)
 
 # --- Sanity asserts: bắt lỗi sớm trước khi ghi HTML ---
-assert holdings, "FAIL: holdings rỗng — kiểm tra analysis.js policy r46_bear_stop_mcore"
-assert len(ledger_rows) == len(trades_period), "FAIL: ledger count lệch trades_period"
+assert holdings or executed_orders, "FAIL: holdings rỗng và chưa có execution state — kiểm tra analysis.js policy r46_bear_stop_mcore"
+assert len(ledger_rows) == len(trades_period) + len(live_execution_ledger_rows), "FAIL: ledger count lệch trades_period + execution_state"
 assert chart_rows and len(chart_rows) > 100, "FAIL: chart_rows quá ít — kiểm tra equityCurve"
 assert data["vni"]["close"] > 0, "FAIL: VNI close không hợp lệ"
 
@@ -1039,7 +1201,7 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
       <section class="sec"><div class="sech"><h2>Theo dõi thử nghiệm <span class="scaletag">{data['paperStatus']}</span></h2><span class="meta">Tài khoản giả lập 1 tỷ · bắt đầu {data['paperTrade']['startDate']}</span></div><div class="ptgrid" id="ptGrid"></div><table><thead><tr><th>Mã</th><th class="num">KL</th><th class="num">Giá vốn</th><th class="num">Giá TT</th><th class="num">P/L</th></tr></thead><tbody id="paperRows"></tbody></table></section>
     </div>
     <section class="sec"><div class="sech"><h2>Dự kiến giao dịch thứ 2 tới <span class="scaletag">{forecast_display_state}</span></h2><span class="meta">{planned_public['summary']}</span></div><table class="forecast-table"><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá TT</th><th class="num">Target</th><th class="num">Stop</th><th>Ghi chú</th></tr></thead><tbody id="plannedRows"></tbody></table></section>
-    <section class="sec"><div class="sech"><h2>Lệnh đã khớp gần nhất <span class="scaletag">NAV 2021 = 1 tỷ</span></h2><span class="meta">8 dòng mới nhất từ history.js · KL, giá trị, tỷ trọng &amp; P/L quy đổi theo {ledger_basis_label}; không scale theo ô NAV copy</span></div><table><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá</th><th class="num">Tỷ trọng NAV</th><th class="num">P/L</th><th class="num">P/L %</th><th>Lý do</th></tr></thead><tbody id="latestRows"></tbody></table></section>
+    <section class="sec"><div class="sech"><h2>Lệnh đã khớp gần nhất <span class="scaletag">NAV 2021 = 1 tỷ</span></h2><span class="meta">8 dòng mới nhất từ history/state · KL, giá trị, tỷ trọng &amp; P/L quy đổi theo {ledger_basis_label}; không scale theo ô NAV copy</span></div><table><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá</th><th class="num">Tỷ trọng NAV</th><th class="num">P/L</th><th class="num">P/L %</th><th>Lý do</th></tr></thead><tbody id="latestRows"></tbody></table></section>
   </section>
   <section class="view" data-view="watch"><div class="pageh"><div><h1>Theo dõi mua</h1><div class="sub">{len(watchlist_rows)} mã từ dashboard online `data.js` + live shortlist · loại {watchlist_summary['excludedHeld']} mã đang nắm</div></div></div><section class="sec"><div class="sech"><h2>Mã đáng theo dõi và có thể mua sắp tới</h2><span class="meta">Không phải rule khớp lệnh live của R46</span></div><div class="watchSummary" id="watchSummary"></div><div class="watchRules" id="watchRules"></div><table><thead><tr><th>Mã</th><th>Nhóm</th><th class="num">Điểm lọc</th><th class="num">Upside</th><th class="num">Target</th><th class="num">R:R</th><th class="num">TK 20D</th><th>Target tuần</th><th>Tín hiệu mua</th><th>Ghi chú</th></tr></thead><tbody id="watchRows"></tbody></table></section></section>
   <section class="view" data-view="model"><div class="pageh"><div><h1>Bộ lọc model · R46 Bear Stop 15bps</h1><div class="sub">Tóm tắt vận hành, không công bố công thức nội bộ</div></div><span class="pill buy">AUDIT {policy.get('productionAudit',{}).get('status','R46')}</span></div><section class="sec"><div class="sech"><h2>Tóm tắt</h2><span class="meta">Public view</span></div><div class="secb"><div class="logic" id="logicGrid"></div></div></section></section>
