@@ -1,3 +1,15 @@
+## 2026-06-09 Codex - R46 live execution state materialized MSB sell
+
+User flagged public dashboard still held MSB after the 2026-06-05 forecast had planned `BÁN HẾT` for Monday 2026-06-08. Audit found this was not a no-fill issue: VPS daily MSB on 2026-06-08 had open `14.7k`, so the R46 sell-open order should have executed. Root cause was architecture: forecast rows were displayed but not persisted into a live execution state, while later forecast runs overwrote `/r46_forecast.json` to `NOT_COMPUTED` for 2026-06-15.
+
+Fix:
+- Added `dashboard/r46_execution_state.json` and `output/r46_execution_state.json` with the executed MSB sell: 3,800 cp, sell-open 2026-06-08 @ 14.7k, position after 0, copy account full cash `1,001.9568024 tr` on NAV copy 1 tỷ after model cost convention.
+- `dashboard/_preview/build_v7_real.py` now reads execution state, subtracts executed orders from holdings, allows full-cash holdings=0 as valid, prepends executed copy orders into latest/ledger history, and marks regime `FULL_CASH` when no positions remain.
+- `tools/precompute_r46_forecast.py` now applies execution state inside `current_copy_shares()` so future forecast sizing does not see stale MSB from `analysis.js`; it also has a due-forecast materializer so preserved public forecast rows can become execution state before a new forecast is written/fail-closed.
+- Both dashboard workflows now preserve public `r46_execution_state.json` before rebuild/deploy; deploy helper pushes the new state files.
+
+Local build verification after syncing public JSONs: `dashboard/index.html` embedded data has `holdings=[]`, `copyAccount.totalMil=1001.9568024`, latest trade `2026-06-08 MSB BÁN HẾT 3,800 @ 14.7`, ledger count `923`, planned forecast state `NOT_COMPUTED` for 2026-06-15 because full-universe freshness was still below gate.
+
 ## 2026-06-05 Codex - Dashboard trade ledger rebased to 2021 NAV 1B
 
 User corrected the dashboard ledger basis: "Lệnh đã khớp gần nhất" and "Lịch sử giao dịch" must align with the displayed 2021-present chart/CAGR, not the full 2016 model NAV. `dashboard/_preview/build_v7_real.py` now filters displayed trade history to trades dated `>= 2021-01-01` and rebases trade notional/P&L/share quantities by `1.0 / first_2021_curve_nav` so the displayed ledger starts from NAV `1 tỷ` on `2021-01-01`.
