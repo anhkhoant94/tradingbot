@@ -1,8 +1,8 @@
 {
-  "updatedAt": "2026-06-09 02:45:39",
-  "updatedAtUtc": "2026-06-09T02:45:39Z",
-  "updatedAtICT": "2026-06-09 09:45:39",
-  "seconds": 8.33,
+  "updatedAt": "2026-06-09 03:13:42",
+  "updatedAtUtc": "2026-06-09T03:13:42Z",
+  "updatedAtICT": "2026-06-09 10:13:42",
+  "seconds": 7.48,
   "symbols": [
     "MSB",
     "DXP",
@@ -20,7 +20,7 @@
     "BVB": {
       "ok": true,
       "date": "2026-06-09",
-      "close": 12.4,
+      "close": 12.3,
       "reason": null
     },
     "DXP": {
@@ -32,7 +32,7 @@
     "GEE": {
       "ok": true,
       "date": "2026-06-09",
-      "close": 96.0,
+      "close": 94.8,
       "reason": null
     },
     "HNG": {
@@ -50,31 +50,31 @@
     "MSB": {
       "ok": true,
       "date": "2026-06-09",
-      "close": 14.3,
+      "close": 14.25,
       "reason": null
     },
     "NVL": {
       "ok": true,
       "date": "2026-06-09",
-      "close": 13.75,
+      "close": 13.6,
       "reason": null
     },
     "PVP": {
       "ok": true,
       "date": "2026-06-09",
-      "close": 17.75,
+      "close": 17.6,
       "reason": null
     },
     "VIC": {
       "ok": true,
       "date": "2026-06-09",
-      "close": 196.7,
+      "close": 195.2,
       "reason": null
     },
     "YEG": {
       "ok": true,
       "date": "2026-06-09",
-      "close": 8.7,
+      "close": 8.67,
       "reason": null
     }
   },
@@ -84,7 +84,7 @@
       "ok": true,
       "latest": "2026-06-09",
       "rows": 1476,
-      "latestClose": 12.4
+      "latestClose": 12.3
     },
     {
       "symbol": "DXP",
@@ -98,7 +98,7 @@
       "ok": true,
       "latest": "2026-06-09",
       "rows": 1043,
-      "latestClose": 96.0
+      "latestClose": 94.8
     },
     {
       "symbol": "HNG",
@@ -119,35 +119,35 @@
       "ok": true,
       "latest": "2026-06-09",
       "rows": 1358,
-      "latestClose": 14.3
+      "latestClose": 14.25
     },
     {
       "symbol": "NVL",
       "ok": true,
       "latest": "2026-06-09",
       "rows": 1599,
-      "latestClose": 13.75
+      "latestClose": 13.6
     },
     {
       "symbol": "PVP",
       "ok": true,
       "latest": "2026-06-09",
       "rows": 1597,
-      "latestClose": 17.75
+      "latestClose": 17.6
     },
     {
       "symbol": "VIC",
       "ok": true,
       "latest": "2026-06-09",
       "rows": 1603,
-      "latestClose": 196.7
+      "latestClose": 195.2
     },
     {
       "symbol": "YEG",
       "ok": true,
       "latest": "2026-06-09",
       "rows": 1603,
-      "latestClose": 8.7
+      "latestClose": 8.67
     }
   ],
   "vnindex": {
@@ -155,56 +155,56 @@
     "ok": true,
     "latest": "2026-06-09",
     "rows": 1605,
-    "latestClose": 1798.69
+    "latestClose": 1787.82
   },
   "bctc": [
     {
       "symbol": "DXP",
       "ok": true,
       "rows": 2600,
-      "seconds": 1.86
+      "seconds": 1.72
     },
     {
       "symbol": "GEE",
       "ok": true,
       "rows": 1798,
-      "seconds": 1.78
+      "seconds": 1.62
     },
     {
       "symbol": "KSV",
       "ok": true,
       "rows": 2600,
-      "seconds": 1.54
+      "seconds": 1.39
     },
     {
       "symbol": "MSB",
       "ok": true,
       "rows": 1068,
-      "seconds": 1.68
+      "seconds": 1.49
     },
     {
       "symbol": "NVL",
       "ok": true,
       "rows": 2600,
-      "seconds": 1.32
+      "seconds": 1.65
     },
     {
       "symbol": "PVP",
       "ok": true,
       "rows": 2600,
-      "seconds": 1.86
+      "seconds": 1.72
     },
     {
       "symbol": "VIC",
       "ok": true,
       "rows": 2600,
-      "seconds": 1.7
+      "seconds": 1.88
     },
     {
       "symbol": "YEG",
       "ok": true,
       "rows": 2600,
-      "seconds": 1.55
+      "seconds": 1.68
     }
   ]
 }
