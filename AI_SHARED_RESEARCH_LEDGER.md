@@ -17,6 +17,7 @@ Cloud run verification:
 Operating note:
 - User-visible price lane is Vercel Edge `/api/live-status` with 5-minute cache and JS refresh every 5 minutes.
 - Forecast lane is cloud compute via Cloudflare timer/GitHub Actions during Vietnam trading window; full-chain run takes about 10 minutes on the latest success.
+- After a later health-tool push, a non-data workflow run `27202139132` stalled at full-universe after hours and was cancelled before build/deploy. Added `timeout 720s` to the full-universe workflow step in commit `205c4d2` with `[skip actions]` so future jobs fail/continue instead of hanging until job timeout.
 - Avoid direct local deploy unless static public assets are first synced/refreshed; prefer GitHub workflow for production.
 
 ## 2026-06-09 Codex - R46 live execution state materialized MSB sell
