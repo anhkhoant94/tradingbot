@@ -1,3 +1,24 @@
+## 2026-06-09 Codex - Public dashboard live/forecast audit PASS after stale-static fix
+
+User asked to re-audit the public Ez Trading dashboard before public release. Audit initially found one real production issue: after a direct local Vercel deploy, public static JSON/HTML regressed to stale local artifacts (`dashboard_live_update_status` 2026-06-09 10:13 ICT, forecast 10:22 ICT), while the Vercel Edge `/api/live-status` endpoint was fresh. Root cause: direct deploy from the OneDrive workspace can overwrite runner-generated static files. Also found a browser-side edge-live gap when the copy account is full cash: `liveSymbols()` could return empty because there were no holdings/planned/execution/open-paper symbols, so UI might not call `/api/live-status`.
+
+Fixes committed/pushed:
+- `dashboard/_preview/build_v7_real.py`: `liveSymbols()` now always includes watchlist symbols and falls back to `MSB`; `applyEdgeLiveStatus()` applies edge quotes to watchlist rows too; removed the empty-symbol early return.
+- `tools/check_dashboard_public_health.py`: `--require-fresh-live` now requires bundled static live JSON to be both from today and recent (`--max-live-age-minutes`, default 30), instead of passing merely because the date is today or Edge is fresh.
+
+Cloud run verification:
+- Pushed source fix to GitHub commit `9b6fe41`, then pushed health gate fix to `7d23b4b`; cancelled the older queued/in-progress runs so the final run used the stricter gate.
+- GitHub Actions `Dashboard Forecast Refresh` run `27200986198` on `7d23b4b` completed SUCCESS: live data, full-universe prices, analysis/history/data regeneration, R46 forecast precompute, forecast verification, v7 build, Vercel deploy, public freshness, and public health assets all passed.
+- Public static state after deploy: live `2026-06-09 17:49:02 ICT`, VNINDEX `1793.05`; full-universe `562/703` at target date `2026-06-09`, `symbolsFailed=0`; R46 forecast `COMPUTED`, `asOf=2026-06-09`, `planDate=2026-06-15`, `computedAtICT=2026-06-09 17:57:59`, `rows=0`; execution state remains MSB sell-open executed 2026-06-08, 3,800 cp @ 14.7k, position after 0, copy account full cash.
+- Public health command PASS with strict gates: `python tools/check_dashboard_public_health.py --require-fresh-live --require-edge-live --require-vni-history --require-current-vni --require-current-forecast --require-execution-desk`.
+- Browser DOM audit PASS: badge advanced through Edge to `LIVE 2026-06-09 18:05:56`, `liveStatusText` includes `edge 5p`, VNI `1.793,05`, forecast text shows `COMPUTED` with run `17:57:59`, position `0 ma`, planned orders table `Khong co lenh du kien`, paper trade NAV `998.7 tr`, cash `100%`, exposure `0%`, no internal-note phrases visible.
+- Cloudflare Worker health PASS: worker enabled, trigger URL/secret configured, Durable Object alarm last fired `2026-06-09 15:45:06 ICT` with downstream action `dispatched`; next alarm `2026-06-10T01:45:05Z` (08:45 ICT).
+
+Operating note:
+- User-visible price lane is Vercel Edge `/api/live-status` with 5-minute cache and JS refresh every 5 minutes.
+- Forecast lane is cloud compute via Cloudflare timer/GitHub Actions during Vietnam trading window; full-chain run takes about 10 minutes on the latest success.
+- Avoid direct local deploy unless static public assets are first synced/refreshed; prefer GitHub workflow for production.
+
 ## 2026-06-09 Codex - R46 live execution state materialized MSB sell
 
 User flagged public dashboard still held MSB after the 2026-06-05 forecast had planned `BÁN HẾT` for Monday 2026-06-08. Audit found this was not a no-fill issue: VPS daily MSB on 2026-06-08 had open `14.7k`, so the R46 sell-open order should have executed. Root cause was architecture: forecast rows were displayed but not persisted into a live execution state, while later forecast runs overwrote `/r46_forecast.json` to `NOT_COMPUTED` for 2026-06-15.
