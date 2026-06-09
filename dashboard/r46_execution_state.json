@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "policy": "r46_bear_stop_mcore",
+  "updatedAtUtc": "2026-06-09T03:00:36Z",
+  "updatedAtICT": "2026-06-09 10:00:36",
+  "orders": [
+    {
+      "sourceForecastKey": "r46_bear_stop_mcore|2026-06-05|2026-06-08|MSB|BÁN HẾT|3800",
+      "sourceForecast": {
+        "asOf": "2026-06-05",
+        "planDate": "2026-06-08",
+        "computedAtICT": "2026-06-05 16:36:07"
+      },
+      "date": "2026-06-08",
+      "symbol": "MSB",
+      "side": "SELL",
+      "actionLabel": "BÁN HẾT",
+      "status": "EXECUTED",
+      "shares": 3800,
+      "positionBeforeShares": 3800,
+      "positionAfterShares": 0,
+      "targetCopyShares": 0,
+      "priceK": 14.7,
+      "executionPriceK": 14.7,
+      "entryPriceK": 14.084,
+      "grossBil": 0.05586,
+      "feesBil": 0.00022344,
+      "pnlBil": 0.001956802400000015,
+      "returnPct": 3.645326446109018,
+      "holdDays": 14,
+      "reason": "forecast_sell_open"
+    }
+  ],
+  "copyAccount": {
+    "startNavMil": 1000.0,
+    "cashMil": 1001.9568024,
+    "marketMil": 0.0,
+    "totalMil": 1001.9568024,
+    "pnlMil": 1.956802400000015,
+    "pnlPct": 0.1956802400000015
+  }
+}
