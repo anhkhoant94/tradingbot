@@ -1,7 +1,7 @@
 {
-  "updatedAt": "2026-06-10 18:42:51",
-  "updatedAtUtc": "2026-06-10T11:42:51Z",
-  "updatedAtICT": "2026-06-10 18:42:51",
+  "updatedAt": "2026-06-10 19:08:06",
+  "updatedAtUtc": "2026-06-10T12:08:06Z",
+  "updatedAtICT": "2026-06-10 19:08:06",
   "targetDate": "2026-06-10",
   "symbolsTotal": 689,
   "candidateSymbolsTotal": 704,
@@ -150,9 +150,10 @@
     {
       "round": 1,
       "freshBefore": 553,
-      "staleBefore": 136
+      "staleBefore": 136,
+      "failedOrMissingBefore": 0
     }
   ],
   "failedSample": [],
-  "seconds": 69.94
+  "seconds": 67.08
 }
