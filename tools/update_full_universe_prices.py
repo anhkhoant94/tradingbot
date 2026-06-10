@@ -330,6 +330,7 @@ def main() -> None:
     history_cache_result = rebuild_history_cache(active_symbols)
     latest_by_symbol = latest_date_map(active_symbols)
     latest_dates = list(latest_by_symbol.values())
+    usable_dates = [d for d in latest_dates if d]
 
     ok_symbols = {str(r.get("symbol", "")).upper() for r in results if r.get("ok") and r.get("symbol")}
     failed = [
@@ -344,6 +345,10 @@ def main() -> None:
     history_latest = str(history_cache_result.get("latestPriceDate") or "")
     latest_price_date = max(latest_dates) if latest_dates else None
     same_day_ok = min_required <= 0 or symbols_at_target >= min_required
+    stale_but_usable = sum(1 for d in usable_dates if d < target.isoformat())
+    usable_symbols = len(usable_dates)
+    same_day_pct = (symbols_at_target / len(active_symbols) * 100.0) if active_symbols else 0.0
+    usable_symbols_pct = (usable_symbols / len(active_symbols) * 100.0) if active_symbols else 0.0
     refresh_clean = (
         len(attempted_symbols) > 0
         and len(ok_symbols) >= min_required
@@ -374,7 +379,11 @@ def main() -> None:
         "symbolsFailed": len(failed),
         "latestPriceDate": latest_price_date,
         "symbolsAtTargetOrNewer": symbols_at_target,
-        "staleButUsableSymbols": max(0, len(active_symbols) - symbols_at_target),
+        "sameDaySymbols": symbols_at_target,
+        "sameDaySymbolsPct": round(same_day_pct, 2),
+        "staleButUsableSymbols": stale_but_usable,
+        "usableSymbols": usable_symbols,
+        "usableSymbolsPct": round(usable_symbols_pct, 2),
         "minFreshSymbols": min_required,
         "minUsableCacheSymbols": min_cache,
         "usableForForecast": usable_for_forecast,
