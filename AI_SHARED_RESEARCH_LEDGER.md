@@ -16,6 +16,12 @@ Smoke verification:
 - Limited smoke `python tools/update_full_universe_prices.py --limit 30 --workers 4 --retry-stale-passes 0 --probe-inactive-limit 10 --inactive-days 45 --target-date 2026-06-10` PASS: `candidateSymbolsTotal=30`, `symbolsTotal=29`, `inactiveSymbolsExcluded=1` (`ARM`, last bar `2026-03-16`), `usableForForecast=true`.
 - Refreshed local universe now has 704 unique symbols, including new `AAN`; `SDA` is kept because VPS still has current bars. Local active universe after 45-day filter: 688 active, 16 inactive (sample `ARM`, `ATS`, `BCG`, `BPC`, `CJC`, `LCD`, `MCC`, `TCD`, `VE4`).
 
+Cloud verification:
+- Commit `bde33e9` triggered dashboard run `27251168054`, completed SUCCESS at `2026-06-10 10:35:04 ICT`. Duplicate Cloudflare dispatch run `27251169879` from the same 10:30 boundary was cancelled before work.
+- Public full-universe status after deploy: `updatedAtICT=2026-06-10 10:33:18`, `candidateSymbolsTotal=703`, `symbolsTotal=687`, `inactiveSymbolsExcluded=16`, `inactiveDaysThreshold=45`, `symbolsAttempted=695`, `symbolsUpdated=691`, `symbolsFailed=4`, `symbolsAtTargetOrNewer=468`, `usableForForecast=true`, `coverageMode=same_day_rows`.
+- Public inactive sample: `ARM`, `ATS`, `BCG`, `BPC`, `CJC`, `CX8`, `ECI`, `GMA`, `HCT`, `LCD` (all latest daily bar older than the 45-day threshold). Public forecast remains `COMPUTED`, `computedAtICT=2026-06-10 10:34:44`, `asOf=2026-06-10`, `planDate=2026-06-15`, `rows=0`.
+- Public health PASS: `python tools/check_dashboard_public_health.py --require-fresh-live --require-edge-live --require-vni-history --require-current-vni --require-current-forecast --require-execution-desk`.
+
 ## 2026-06-10 Codex - Fix intraday full-universe gate stuck NOT_COMPUTED
 
 User reported public dashboard showing `NOT_COMPUTED` again even though the live/forecast flow had been approved. Audit found the blocker is not UI and not a missing GitHub trigger: public `full_universe_live_update_status.json` at `2026-06-10 09:19:14 ICT` had `symbolsAttempted=703`, `symbolsUpdated=703`, `symbolsFailed=0`, `latestPriceDate=2026-06-10`, but only `symbolsAtTargetOrNewer=330`. The old forecast gate required same-day rows for at least `65%` of the universe (`457/703`) and therefore overwrote `/r46_forecast.json` with `NOT_COMPUTED` reason `full_universe_freshness_gate_failed`.
