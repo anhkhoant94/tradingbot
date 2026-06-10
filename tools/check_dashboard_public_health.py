@@ -56,6 +56,16 @@ def fetch_edge_live_status(base_url: str) -> dict | None:
         return None
 
 
+def parse_embedded_dashboard_data(index: str) -> dict:
+    match = re.search(r"const D\s*=\s*(\{.*?\});\s*function f", index, re.S)
+    if not match:
+        return {}
+    try:
+        return json.loads(match.group(1))
+    except Exception:
+        return {}
+
+
 def parse_status_age_seconds(payload: dict) -> float | None:
     raw_utc = payload.get("updatedAtUtc")
     if raw_utc:
@@ -128,6 +138,7 @@ def main() -> None:
     hist_status, history_raw = fetch_bytes(args.url, "/history.js")
     live_status, live_raw = fetch_bytes(args.url, "/dashboard_live_update_status.json")
     forecast_status, forecast_raw = fetch_bytes(args.url, "/r46_forecast.json")
+    exec_state_status, exec_state_raw = fetch_bytes(args.url, "/r46_execution_state.json")
     css = decode(css_raw)
     index = decode(idx_raw)
     analysis = decode(analysis_raw)
@@ -138,6 +149,32 @@ def main() -> None:
     as_of_match = re.search(r'"as_of"\s*:\s*"(\d{4}-\d{2}-\d{2})"', data_js)
     live_payload = json.loads(decode(live_raw))
     forecast_payload = json.loads(decode(forecast_raw))
+    exec_state_payload = json.loads(decode(exec_state_raw))
+    embedded_data = parse_embedded_dashboard_data(index)
+    expected_exec_orders = [
+        row for row in (exec_state_payload.get("orders") or [])
+        if str(row.get("status") or "EXECUTED").upper() in {"EXECUTED", "FILLED"}
+    ]
+    embedded_exec_orders = ((embedded_data.get("executionState") or {}).get("orders") or [])
+    expected_exec_keys = {
+        (
+            str(row.get("date") or row.get("executedDate") or ""),
+            str(row.get("symbol") or "").upper(),
+            int(float(row.get("shares") or row.get("orderShares") or 0)),
+            str(row.get("side") or "").upper(),
+        )
+        for row in expected_exec_orders
+    }
+    embedded_exec_keys = {
+        (
+            str(row.get("date") or ""),
+            str(row.get("symbol") or "").upper(),
+            int(float(row.get("shares") or 0)),
+            str(row.get("side") or "").upper(),
+        )
+        for row in embedded_exec_orders
+    }
+    copy_execution_matches_state = expected_exec_keys <= embedded_exec_keys
     live_updated_at = str(live_payload.get("updatedAt") or "")
     live_updated_at_ict = str(live_payload.get("updatedAtICT") or "")
     live_updated_at_utc = str(live_payload.get("updatedAtUtc") or "")
@@ -222,6 +259,7 @@ def main() -> None:
         "history_status": hist_status,
         "live_status": live_status,
         "forecast_status_http": forecast_status,
+        "execution_state_status_http": exec_state_status,
         "data_as_of": as_of_match.group(1) if as_of_match else None,
         "live_updated_at": live_updated_at,
         "live_updated_at_ict": live_updated_at_ict or None,
@@ -262,6 +300,10 @@ def main() -> None:
             and 'id="execRows"' in index
             and '"regime": "UNKNOWN"' not in index
         ),
+        "execution_state_order_count": len(expected_exec_orders),
+        "embedded_copy_execution_count": len(embedded_exec_orders),
+        "copy_execution_matches_state": copy_execution_matches_state,
+        "has_copy_execution_table": 'id="copyExecRows"' in index and 'id="copyLedgerBody"' in index,
         "vni_history_points": len(re.findall(r'"vniClose"\s*:\s*[0-9]', history)),
         "has_r46_key": "r46_bear_stop_mcore" in analysis,
         "has_r23_key": "r23_nav3b_mcore" in analysis,
@@ -288,6 +330,11 @@ def main() -> None:
     if args.require_current_vni and not payload["live_vni_check_pass"]:
         raise SystemExit(1)
     if args.require_execution_desk and not payload["has_execution_desk"]:
+        raise SystemExit(1)
+    if args.require_execution_desk and expected_exec_orders and not (
+        payload["has_copy_execution_table"]
+        and payload["copy_execution_matches_state"]
+    ):
         raise SystemExit(1)
     if args.require_current_forecast and (
         payload["forecast_status"] != "COMPUTED"

@@ -1,3 +1,19 @@
+## 2026-06-10 Codex - Restore visible copy execution history for MSB sell
+
+User reported the `BÁN HẾT MSB` history row disappeared again. Audit confirmed data was not lost: public `/r46_execution_state.json` still had the executed copy order `2026-06-08 MSB SELL/BÁN HẾT 3,800 @ 14.7k`, position after `0`, copy account full cash. The bug was presentation/data embedding: `dashboard/_preview/build_v7_real.py` embedded only `executionState.orderCount` and `lastExecutedDate`, not the actual execution orders. The previous fix correctly removed copy execution from the model ledger to avoid mixing NAV bases, but failed to add a separate visible copy-execution history.
+
+Fix:
+- `dashboard/_preview/build_v7_real.py` now derives `copy_executions` from `r46_execution_state.json` and embeds them under `D.executionState.orders`.
+- Copy tab now has a separate `Lệnh copy đã khớp` table, NAV copy 1 tỷ, showing date/symbol/action/shares/price/value/weight/P&L/status.
+- Ledger tab now has two explicit sections: `Lịch sử copy đã khớp` (copy NAV, execution state) and `Lịch sử model` (NAV 2021 = 1 tỷ). Model ledger remains clean and still does not include the 3,800-share copy sell row.
+- Build asserts now fail if any executed order is not embedded in dashboard data by `(date, symbol, shares, side)`.
+- `tools/check_dashboard_public_health.py --require-execution-desk` now fetches `/r46_execution_state.json`, parses embedded `const D`, and fails if the public page is missing copy execution tables or if embedded copy executions do not match the execution state.
+
+Local verification:
+- `python -m py_compile dashboard/_preview/build_v7_real.py tools/check_dashboard_public_health.py` PASS.
+- Local build `dashboard/_preview/check-copy-history.html` PASS and embeds one execution order: `2026-06-08 MSB SELL/BÁN HẾT 3,800`, `grossMil=55.86`, `pnlMil=1.9568024`, `tradeWeightPct=5.586`.
+- Verified model ledger is still not polluted by the copy sell: no `2026-06-08 MSB 3,800` row in `D.ledger`; copy execution appears only in `D.executionState.orders`.
+
 ## 2026-06-10 Codex - Active universe refresh for delisted/suspended/new listings
 
 User requested removing delisted/suspended/no-trade symbols from the live universe and continuously adding newly listed symbols. Audit found `.cache/universe.parquet` was a static 703-symbol HOSE/HNX list from `vnstock Listing(source="kbs")`, while current KBS listing had one new HOSE symbol `AAN` and no longer listed `SDA`. VPS price data showed `AAN` has daily bars from `2026-05-22` to `2026-06-10`, while `SDA` still has bars to `2026-06-10`; therefore the right filter is actual tradability from price history, not blindly trusting listing presence.

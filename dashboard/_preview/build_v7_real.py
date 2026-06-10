@@ -18,6 +18,7 @@ PT_DIR = ROOT / "output" / "beat_vni30_parallel" / "paper_trade_v4_r46"
 EXEC_STATE_PATH = DASH / "r46_execution_state.json"
 LEDGER_REBASE_START_DATE = "2021-01-01"
 LEDGER_REBASE_NAV_BIL = 1.0
+DEFAULT_COPY_NAV_MIL = 1000.0
 
 
 parser = argparse.ArgumentParser(description="Build the Ez Trading v7 static dashboard HTML.")
@@ -135,6 +136,40 @@ def normalized_executed_orders(state):
             continue
         out.append({**row, "symbol": sym, "status": status})
     return out
+
+
+def copy_execution_rows(state, orders):
+    account = state.get("copyAccount") or {}
+    nav_m = as_float(account.get("startNavMil"), DEFAULT_COPY_NAV_MIL) or DEFAULT_COPY_NAV_MIL
+    rows = []
+    for order in sorted(orders, key=lambda r: str(r.get("date") or r.get("executedDate") or ""), reverse=True):
+        gross_bil = as_float(order.get("grossBil"))
+        gross_m = gross_bil * 1000 if gross_bil is not None else None
+        pnl_bil = as_float(order.get("pnlBil"))
+        pnl_m = pnl_bil * 1000 if pnl_bil is not None else None
+        fees_bil = as_float(order.get("feesBil"))
+        fees_m = fees_bil * 1000 if fees_bil is not None else None
+        rows.append({
+            "date": order.get("date") or order.get("executedDate"),
+            "symbol": str(order.get("symbol") or "").upper(),
+            "side": order.get("side"),
+            "actionLabel": order.get("actionLabel") or order.get("action") or order.get("side"),
+            "status": order.get("status") or "EXECUTED",
+            "shares": int(as_float(order.get("shares"), as_float(order.get("orderShares"), 0)) or 0),
+            "positionBeforeShares": int(as_float(order.get("positionBeforeShares"), 0) or 0),
+            "positionAfterShares": int(as_float(order.get("positionAfterShares"), 0) or 0),
+            "executionPriceK": as_float(order.get("executionPriceK"), as_float(order.get("priceK"))),
+            "entryPriceK": as_float(order.get("entryPriceK")),
+            "grossMil": gross_m,
+            "feesMil": fees_m,
+            "pnlMil": pnl_m,
+            "returnPct": as_float(order.get("returnPct")),
+            "holdDays": as_float(order.get("holdDays")),
+            "tradeWeightPct": gross_m / nav_m * 100 if nav_m and gross_m is not None else None,
+            "reason": order.get("reason"),
+            "sourceForecast": order.get("sourceForecast") or {},
+        })
+    return rows
 
 
 def scale_lot(value, scale):
@@ -296,6 +331,7 @@ forecast_status = load_json_or(forecast_status_path, {})
 full_universe_status = load_json_or(DASH / "full_universe_live_update_status.json", load_json_or(ROOT / "output" / "full_universe_live_update_status.json", {}))
 execution_state = load_json_or(EXEC_STATE_PATH, load_json_or(ROOT / "output" / "r46_execution_state.json", {"schemaVersion": 1, "orders": []}))
 executed_orders = normalized_executed_orders(execution_state)
+copy_executions = copy_execution_rows(execution_state, executed_orders)
 policy_config = load_json_or(ROOT / "output" / "dashboard_policies" / "r46_bear_stop_mcore" / "config.json", {})
 pt_state = load_json_or(PT_DIR / "paper_trade_state.json", {
     "start_date": "2026-06-01",
@@ -658,7 +694,7 @@ latest_curve = curve_2021[-1] if curve_2021 else {}
 vni_cache = pd.read_parquet(ROOT / ".cache" / "backtest" / "vnindex_daily.parquet")
 vni_cache["date"] = pd.to_datetime(vni_cache["date"])
 latest_vni = vni_cache.sort_values("date").iloc[-1]
-copy_nav_m = 1000
+copy_nav_m = DEFAULT_COPY_NAV_MIL
 copy_market_m = sum(h.get("valueMil") or 0 for h in holdings)
 copy_cost_m = sum(h.get("costMilCalc") or 0 for h in holdings)
 copy_cash_m = max(0, copy_nav_m - copy_cost_m)
@@ -986,6 +1022,7 @@ data = {
         "updatedAtICT": execution_state.get("updatedAtICT"),
         "orderCount": len(executed_orders),
         "lastExecutedDate": max((str(row.get("date") or row.get("executedDate") or "") for row in executed_orders), default=None),
+        "orders": copy_executions,
     },
     "perf": perf,
     "holdings": holdings,
@@ -1060,6 +1097,16 @@ data_js = json.dumps(data, ensure_ascii=False)
 
 # --- Sanity asserts: bắt lỗi sớm trước khi ghi HTML ---
 assert holdings or executed_orders, "FAIL: holdings rỗng và chưa có execution state — kiểm tra analysis.js policy r46_bear_stop_mcore"
+assert len(data["executionState"]["orders"]) == len(executed_orders), "FAIL: copy execution orders không được nhúng đủ vào dashboard data"
+execution_keys = {
+    (str(row.get("date") or row.get("executedDate") or ""), str(row.get("symbol") or "").upper(), int(as_float(row.get("shares"), 0) or 0), str(row.get("side") or "").upper())
+    for row in executed_orders
+}
+display_execution_keys = {
+    (str(row.get("date") or ""), str(row.get("symbol") or "").upper(), int(as_float(row.get("shares"), 0) or 0), str(row.get("side") or "").upper())
+    for row in data["executionState"]["orders"]
+}
+assert execution_keys <= display_execution_keys, "FAIL: có lệnh copy đã khớp bị rơi khỏi dashboard data"
 assert len(ledger_rows) == len(trades_period), "FAIL: ledger count lệch trades_period"
 assert chart_rows and len(chart_rows) > 100, "FAIL: chart_rows quá ít — kiểm tra equityCurve"
 assert data["vni"]["close"] > 0, "FAIL: VNI close không hợp lệ"
@@ -1166,7 +1213,7 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
   <button class="nav on" data-view="copy"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path d="M4 19V5m0 14h16M8 16l3-4 3 2 4-7"/></svg>Copy Trade<span class="ct">{len(holdings)}</span></button>
   <button class="nav" data-view="watch"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/></svg>Theo dõi mua<span class="ct">{len(watchlist_rows)}</span></button>
   <button class="nav" data-view="model"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path d="M3 4h18l-7 8v6l-4 2v-8L3 4z"/></svg>Bộ lọc model</button>
-  <button class="nav" data-view="ledger"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Lịch sử<span class="ct">{len(ledger_rows)}</span></button>
+  <button class="nav" data-view="ledger"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Lịch sử<span class="ct">{len(ledger_rows) + len(copy_executions)}</span></button>
   <div class="sidefoot">
     <div class="sfrow"><span>Regime</span><b>{regime_label}</b></div>
     <div class="sfrow"><span>Cash</span><b>{fmt_num(policy.get('cashBuffer'),1)}%</b></div>
@@ -1196,6 +1243,10 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
       <table class="execution-table"><thead><tr><th>Khi</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá TT</th><th>Ngưỡng hành động</th><th>Trạng thái</th><th>Ghi chú</th></tr></thead><tbody id="execRows"></tbody></table>
     </section>
     <section class="sec">
+      <div class="sech"><h2>Lệnh copy đã khớp <span class="scaletag">NAV copy 1 tỷ</span></h2><span class="meta">{len(copy_executions)} lệnh · tách riêng lịch sử model</span></div>
+      <table><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá</th><th class="num">Giá trị</th><th class="num">Tỷ trọng NAV</th><th class="num">P/L</th><th class="num">P/L %</th><th>Trạng thái</th></tr></thead><tbody id="copyExecRows"></tbody></table>
+    </section>
+    <section class="sec">
       <div class="sech"><h2>Performance · Model R46 vs VN-Index</h2><div class="ranges" id="ranges"><button data-r="ytd">YTD</button><button data-r="3m">3M</button><button data-r="6m">6M</button><button data-r="1y">1Y</button><button class="on" data-r="all">ALL</button></div></div>
       <div class="chartTop"><div><div class="chartVal" id="chartVal">-</div><div class="chartSub" id="chartSub">Model vs VN-Index · % từ đầu kỳ</div></div><div class="meta" id="chartDates">-</div></div>
       <div class="legend"><span><i style="background:var(--green)"></i>Model R46</span><span><i style="background:var(--muted2)"></i>VN-Index</span></div>
@@ -1210,7 +1261,7 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
   </section>
   <section class="view" data-view="watch"><div class="pageh"><div><h1>Theo dõi mua</h1><div class="sub">{len(watchlist_rows)} mã theo dõi · loại {watchlist_summary['excludedHeld']} mã đang nắm</div></div></div><section class="sec"><div class="sech"><h2>Mã đáng theo dõi và có thể mua sắp tới</h2></div><div class="watchSummary" id="watchSummary"></div><div class="watchRules" id="watchRules"></div><table><thead><tr><th>Mã</th><th>Nhóm</th><th class="num">Điểm lọc</th><th class="num">Upside</th><th class="num">Target</th><th class="num">R:R</th><th class="num">TK 20D</th><th>Target tuần</th><th>Tín hiệu mua</th><th>Ghi chú</th></tr></thead><tbody id="watchRows"></tbody></table></section></section>
   <section class="view" data-view="model"><div class="pageh"><div><h1>Bộ lọc model · R46 Bear Stop 15bps</h1><div class="sub">Tóm tắt vận hành</div></div><span class="pill buy">AUDIT {policy.get('productionAudit',{}).get('status','R46')}</span></div><section class="sec"><div class="sech"><h2>Tóm tắt</h2></div><div class="secb"><div class="logic" id="logicGrid"></div></div></section></section>
-  <section class="view" data-view="ledger"><div class="pageh"><div><h1>Lịch sử giao dịch</h1><div class="sub">{len(ledger_rows)} dòng từ {ledger_first_trade_date} đến {ledger_last_trade_date} · KL, giá trị, tỷ trọng &amp; P/L quy đổi theo {ledger_basis_label}</div></div></div><section class="sec"><div class="ledgerbar"><b id="ledgerCount"></b><input id="ledgerSearch" placeholder="Tìm theo mã, lệnh, lý do..." /><div class="pager" id="pager"></div></div><div class="scroll"><table><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá</th><th class="num">Giá trị</th><th class="num">Tỷ trọng NAV</th><th class="num">P/L</th><th class="num">P/L %</th><th class="num">Nắm giữ</th><th>Lý do</th></tr></thead><tbody id="ledgerBody"></tbody></table></div></section></section>
+  <section class="view" data-view="ledger"><div class="pageh"><div><h1>Lịch sử giao dịch</h1><div class="sub">Copy execution tách riêng model ledger · model ledger quy đổi theo {ledger_basis_label}</div></div></div><section class="sec"><div class="sech"><h2>Lịch sử copy đã khớp <span class="scaletag">NAV copy 1 tỷ</span></h2><span class="meta">{len(copy_executions)} lệnh từ execution state</span></div><table><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá</th><th class="num">Giá trị</th><th class="num">Tỷ trọng NAV</th><th class="num">P/L</th><th class="num">P/L %</th><th>Trạng thái</th></tr></thead><tbody id="copyLedgerBody"></tbody></table></section><section class="sec"><div class="sech"><h2>Lịch sử model <span class="scaletag">NAV 2021 = 1 tỷ</span></h2><span class="meta">{len(ledger_rows)} dòng từ {ledger_first_trade_date} đến {ledger_last_trade_date}</span></div><div class="ledgerbar"><b id="ledgerCount"></b><input id="ledgerSearch" placeholder="Tìm theo mã, lệnh, lý do..." /><div class="pager" id="pager"></div></div><div class="scroll"><table><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá</th><th class="num">Giá trị</th><th class="num">Tỷ trọng NAV</th><th class="num">P/L</th><th class="num">P/L %</th><th class="num">Nắm giữ</th><th>Lý do</th></tr></thead><tbody id="ledgerBody"></tbody></table></div></section></section>
 </div>
 </main>
 </div>
@@ -1249,8 +1300,11 @@ function renderPaperTrade(){{ recomputePaperFromPrice(); document.getElementById
 renderPaperTrade();
 const planned = D.policy.plannedOrders?.rows || [];
 const execDesk = D.executionDesk?.rows || [];
+const copyExecutions = D.executionState?.orders || [];
 function thresholdHtml(r){{ const lines=[]; if(r.maxOpen) lines.push(`Open <= <b>${{priceK(r.maxOpen)}}</b>`); if(r.limitPrice) lines.push(`Pullback <= <b>${{priceK(r.limitPrice)}}</b>`); if(r.bearStop) lines.push(`Bear stop <b>${{priceK(r.bearStop)}}</b>`); if(r.lowPrice) lines.push(`Low mới nhất ${{priceK(r.lowPrice)}}`); if(!lines.length && r.referenceClose) lines.push(`Tham chiếu <b>${{priceK(r.referenceClose)}}</b>`); return `<div class="thresholds">${{lines.map(x=>`<span>${{x}}</span>`).join('')}}</div>`; }}
 function renderExecutionDesk(navBil=parseNavValue(document.getElementById('navInput')?.value)||1){{ const body=document.getElementById('execRows'); if(!body) return; const rows=execDesk.filter(rowMatches); body.innerHTML = rows.length ? rows.map(r=>{{ const shares=roundLot(Number(r.shares||0)*navBil); return `<tr><td>${{esc(r.group)}}<div class="meta">${{esc(r.date||'-')}}</div></td><td><strong>${{esc(r.symbol)}}</strong></td><td>${{pill(r.action||'-')}}</td><td class="num">${{shares?f(shares,0):'-'}}</td><td class="num">${{priceK(r.currentPrice)}}</td><td>${{thresholdHtml(r)}}</td><td>${{pill(r.status||'-')}}</td><td>${{esc(r.note||'')}}</td></tr>`; }}).join('') : emptyRow(8, globalQ?'Không có lệnh khớp tìm kiếm.':'Chưa có lệnh cần xử lý.'); }}
+function copyExecutionHtml(rows, cols=10){{ return rows.length ? rows.map(r=>`<tr><td>${{esc(r.date||'-')}}</td><td><strong>${{esc(r.symbol)}}</strong></td><td>${{pill(r.actionLabel||r.side)}}</td><td class="num">${{f(r.shares,0)}}</td><td class="num">${{priceK(r.executionPriceK)}}</td><td class="num">${{valueTr(r.grossMil)}}</td><td class="num">${{r.tradeWeightPct==null?'-':wp(r.tradeWeightPct,2)}}</td><td class="num ${{cls(r.pnlMil)}}">${{r.pnlMil==null?'-':money(r.pnlMil)}}</td><td class="num ${{cls(r.returnPct)}}">${{pc(r.returnPct,2)}}</td><td>${{pill(r.status||'-')}}</td></tr>`).join('') : emptyRow(cols, globalQ?'Không có lệnh copy khớp tìm kiếm.':'Chưa có lệnh copy đã khớp.'); }}
+function renderCopyExecutions(){{ const rows=copyExecutions.filter(rowMatches); const copyBody=document.getElementById('copyExecRows'); if(copyBody) copyBody.innerHTML=copyExecutionHtml(rows,10); const ledgerBody=document.getElementById('copyLedgerBody'); if(ledgerBody) ledgerBody.innerHTML=copyExecutionHtml(rows,10); }}
 function renderPlannedRows(navBil=parseNavValue(document.getElementById('navInput')?.value)||1){{ const rows=planned.filter(rowMatches); document.getElementById('plannedRows').innerHTML = rows.length ? rows.map(r=>{{ const baseShares=Number(r.orderShares||0); const shares=baseShares>0?roundLot(baseShares*navBil):null; return `<tr><td>${{esc(r.displayPlanDate||r.planDate)}}</td><td><strong>${{esc(r.symbol)}}</strong></td><td>${{pill(r.action||r.status)}}</td><td class="num">${{shares===null?'-':f(shares,0)}}</td><td class="num">${{priceK(r.currentPrice)}}</td><td class="num pos">${{priceK(r.targetPrice)}}</td><td class="num neg">${{priceK(r.stopPrice)}}</td><td>${{esc(r.note)}}</td></tr>`; }}).join('') : emptyRow(8, globalQ?'Không có dự kiến khớp tìm kiếm.':'Không có lệnh dự kiến.'); }}
 function liveSymbols(){{ const syms=new Set(); D.holdings.forEach(h=>h.symbol&&syms.add(h.symbol)); planned.forEach(r=>r.symbol&&syms.add(r.symbol)); execDesk.forEach(r=>r.symbol&&syms.add(r.symbol)); if(pt.symbol&&!pt.closed) syms.add(pt.symbol); D.watchlist.forEach(w=>w.symbol&&syms.add(w.symbol)); if(!syms.size) syms.add('MSB'); return Array.from(syms).slice(0,40); }}
 function applyEdgeLiveStatus(payload){{ if(!payload||!payload.quotes) return; const updated=payload.updatedAtICT||payload.updatedAtUtc||'-'; const latest=payload.latestPriceDate||D.asOf||'-'; D.asOf=latest; D.liveUpdatedLabel=updated; const liveBadge=document.getElementById('liveBadge'); if(liveBadge) liveBadge.textContent='LIVE '+liveBadgeLabel(latest,updated); const liveStatus=document.getElementById('liveStatusText'); if(liveStatus) liveStatus.innerHTML='Giá live: <b>'+esc(latest)+'</b> · cập nhật '+esc(updated)+' <span class="meta">edge 5p</span>'; if(payload.vnindex&&payload.vnindex.ok){{ D.vni.date=payload.vnindex.latest||D.vni.date; D.vni.close=Number(payload.vnindex.latestClose||D.vni.close); const vc=document.getElementById('vniKpiClose'); const vd=document.getElementById('vniKpiDate'); if(vc) vc.textContent=f(D.vni.close,2); if(vd) vd.textContent=D.vni.date||'-'; }} const quotes=payload.quotes||{{}}; const applyQuote=(row)=>{{ const sym=String(row.symbol||'').toUpperCase(); const q=quotes[sym]; if(q&&q.ok&&Number(q.close)>0){{ row.currentPrice=Number(q.close); row.priceAsOf=q.date||row.priceAsOf; if(row.lowPrice!==undefined&&Number(q.low)>0) row.lowPrice=Number(q.low); }} }}; D.holdings.forEach(applyQuote); planned.forEach(applyQuote); execDesk.forEach(applyQuote); D.watchlist.forEach(applyQuote); const pq=quotes[String(pt.symbol||'').toUpperCase()]; if(!pt.closed&&pq&&pq.ok&&Number(pq.close)>0){{ pt.freshPrice=Number(pq.close); pt.freshDate=pq.date||pt.freshDate; }} renderCopyForNav(document.getElementById('navInput')?.value||1,false); renderPaperTrade(); renderLatestRows(); renderWatchRows(); renderLedger(); }}
@@ -1259,6 +1313,7 @@ document.querySelectorAll('.navPreset').forEach(btn=>btn.addEventListener('click
 document.getElementById('navInput').addEventListener('input',e=>renderCopyForNav(e.target.value,false));
 document.getElementById('navInput').addEventListener('blur',e=>{{ const n=parseNavValue(e.target.value); if(n!==null) e.target.value=navLabel(n); }});
 renderCopyForNav(1);
+renderCopyExecutions();
 refreshEdgeLiveStatus(); setInterval(refreshEdgeLiveStatus, 5*60*1000);
 function renderLatestRows(){{ const rows=D.tradesLatest.filter(rowMatches); document.getElementById('latestRows').innerHTML = rows.length ? rows.map(r=>`<tr><td>${{esc(r.date)}}</td><td><strong>${{esc(r.symbol)}}</strong></td><td>${{pill(r.actionLabel||r.side)}}</td><td class="num">${{f(r.shares,0)}}</td><td class="num">${{priceK(r.executionPriceK)}}</td><td class="num">${{r.tradeWeightPct==null?'-':wp(r.tradeWeightPct,1)}}</td><td class="num ${{cls(r.pnlBil)}}">${{r.pnlBil==null?'-':money(Number(r.pnlBil)*1000)}}</td><td class="num ${{cls(r.returnPct)}}">${{pc(r.returnPct)}}</td><td>${{esc(r.reason)}}</td></tr>`).join('') : emptyRow(9); }}
 renderLatestRows();
@@ -1282,7 +1337,7 @@ function renderChart(r='all'){{ currentRange=r; document.querySelectorAll('#rang
 document.querySelectorAll('#ranges button').forEach(b=>b.addEventListener('click',()=>renderChart(b.dataset.r))); renderChart('all');
 let ledgerPage=1; const PAGE=50;
 function renderLedger(){{ const rows=D.ledger.filter(rowMatches); const pages=Math.max(1,Math.ceil(rows.length/PAGE)); if(ledgerPage>pages) ledgerPage=pages; const slice=rows.slice((ledgerPage-1)*PAGE,ledgerPage*PAGE); document.getElementById('ledgerCount').textContent=rows.length+' lệnh'; document.getElementById('ledgerBody').innerHTML=slice.length ? slice.map(r=>`<tr><td>${{esc(r.date)}}</td><td><strong>${{esc(r.symbol)}}</strong></td><td>${{pill(r.actionLabel||r.side)}}</td><td class="num">${{f(r.shares,0)}}</td><td class="num">${{priceK(r.executionPriceK)}}</td><td class="num">${{valueTr(Number(r.grossBil)*1000)}}</td><td class="num">${{r.tradeWeightPct==null?'-':wp(r.tradeWeightPct,1)}}</td><td class="num ${{cls(r.pnlBil)}}">${{r.pnlBil==null?'-':money(Number(r.pnlBil)*1000)}}</td><td class="num ${{cls(r.returnPct)}}">${{pc(r.returnPct)}}</td><td class="num">${{r.holdDays==null?'-':f(r.holdDays,0)+' ngày'}}</td><td>${{esc(r.reason)}}</td></tr>`).join('') : emptyRow(11); const start=Math.max(1,ledgerPage-2), end=Math.min(pages,ledgerPage+2); let html=`<button onclick="ledgerPage=1;renderLedger()">«</button>`; for(let p=start;p<=end;p++) html+=`<button class="${{p===ledgerPage?'on':''}}" onclick="ledgerPage=${{p}};renderLedger()">${{p}}</button>`; html+=`<button onclick="ledgerPage=${{pages}};renderLedger()">»</button>`; document.getElementById('pager').innerHTML=html; }}
-function renderForSearch(){{ renderCopyForNav(document.getElementById('navInput')?.value||1,false); renderLatestRows(); renderWatchRows(); renderLogicGrid(); renderLedger(); }}
+function renderForSearch(){{ renderCopyForNav(document.getElementById('navInput')?.value||1,false); renderCopyExecutions(); renderLatestRows(); renderWatchRows(); renderLogicGrid(); renderLedger(); }}
 function setGlobalSearch(q){{ globalQ=String(q||''); const g=document.getElementById('globalSearch'); if(g&&g.value!==globalQ) g.value=globalQ; const l=document.getElementById('ledgerSearch'); if(l&&l.value!==globalQ) l.value=globalQ; ledgerPage=1; renderForSearch(); }}
 document.getElementById('globalSearch')?.addEventListener('input',e=>setGlobalSearch(e.target.value));
 document.getElementById('ledgerSearch')?.addEventListener('input',e=>setGlobalSearch(e.target.value));
