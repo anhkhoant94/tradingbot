@@ -40,6 +40,10 @@ Follow-up workflow hardening:
 - `.github/workflows/dashboard-auto-refresh.yml` now detects `LIVE_DATA_REFRESH_FAILED=1`, runs strict public health against the already-live dashboard/edge state, sets `SKIP_DASHBOARD_DEPLOY=1`, and skips analysis/build/deploy from partial checkout data. This makes VPS-from-GitHub outages green only when public data is already fresh and internally consistent.
 - `.github/workflows/dashboard-price-refresh.yml` uses the same guarded fallback path for price-only runs instead of hard-failing when GitHub cannot reach VPS but public/edge live data is fresh.
 - Local verification: YAML parse PASS for both workflows; `python -m py_compile dashboard/_preview/build_v7_real.py generate_deep_analysis.py tools/check_dashboard_public_health.py` PASS; local v7 build PASS with full-cash `copyAccount.cashPct=100.0`, `copyAccount.exposurePct=0.0`, no `94.5` / `94,5`.
+- Final cloud verification: workflow_dispatch `27255774013` on commit `b3179dd` completed SUCCESS at `2026-06-10 12:44:51 ICT`; forecast recomputed cleanly with `asOf=2026-06-10`, `planDate=2026-06-15`, `computedAtICT=2026-06-10 12:44:32`, `rows=0`.
+- Price-only verification: workflow_dispatch `27256021361` on commit `b3179dd` completed SUCCESS at `2026-06-10 12:47:06 ICT`; public live status became `updatedAtICT=2026-06-10 12:46:39`, edge live `updatedAtICT=2026-06-10 12:47:50`.
+- Final public health PASS with strict live+edge+forecast+execution checks: `copyAccount.cashPct=100.0`, `copyAccount.exposurePct=0.0`, `policy.cashBuffer=100.0`, `policy.totalSuggestedWeight=0.0`, no embedded `94.5` / `94,5` / `94.475`, `perf.cagr=75.68384524214775`, `perf.chartEndDate=2026-06-10`, chart last date `2026-06-10`, VNINDEX `1801.26`, forecast rows `0`.
+- Local generated artifacts in `dashboard/` were synced from the final public deployment so future local helper pushes do not revive the stale `94.5%` artifact.
 
 ## 2026-06-10 Codex - Block deploy when forecast/full-universe chain fails and keep MSB copy execution visible
 
