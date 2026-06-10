@@ -5323,3 +5323,12 @@ Operational rule:
 - Do not rely on GitHub schedule alone for user-visible 5-minute live quotes. GitHub Actions remains the heavy/static lane: price artifact fallback and R46 forecast every 30 minutes. Browser-visible live price must come from the Vercel API layer or another always-available hosted endpoint.
 
 
+## 2026-06-10 Codex - Ez live/local reconciliation final pass and universe coverage semantics
+
+User asked to update local files to current online state, verify online compute, and explain why full-universe coverage was not 100%. Final state after refresh/deploy: canonical URL remains only `https://ez-trading.vercel.app`; old `trading-execution-desk-khoa.vercel.app` and `trading-execution-desk-khoa-theta.vercel.app` both return 404, and the Ez project domain list contains only `ez-trading.vercel.app`.
+
+Final public/local checkpoint: `dashboard_live_update_status.json` updatedAtICT `2026-06-10 19:16:44`, latestPriceDate `2026-06-10`, VNINDEX `1803.71`; `full_universe_live_update_status.json` updatedAtICT `2026-06-10 19:19:28`, symbolsTotal `688`, usableSymbols `688`, sameDaySymbols `552`, staleButUsableSymbols `136`, symbolsFailed `0`, usableForForecast `true`; `r46_forecast.json` status `COMPUTED`, asOf `2026-06-10`, planDate `2026-06-15`, computedAtICT `2026-06-10 19:20:54`, rows `0`; execution state still has one executed MSB SELL on `2026-06-08`; dashboard embedded state has holdings `0`, copy cash `100.0%`, chart last date `2026-06-10`.
+
+Important interpretation: `sameDaySymbols` is NOT expected to be 100%. It only counts symbols with an actual row dated the target date. Some still-listed/usable stocks have no trade today, so the vendor returns the last traded close; these are counted under `staleButUsableSymbols` and can still be used by forecast. The operational coverage KPI is `usableSymbols/symbolsTotal`, not `sameDaySymbols/symbolsTotal`. Dashboard status line now shows usable + same-day + stale-usable separately.
+
+Hardening done: `tools/update_full_universe_prices.py` now emits `sameDaySymbols`, `sameDaySymbolsPct`, `usableSymbols`, `usableSymbolsPct`, and retries failed/missing-cache symbols even after min fresh coverage is reached. `dashboard/_preview/build_v7_real.py` embeds and displays usable universe coverage. Added `tools/reconcile_dashboard_online_local.py`; both dashboard workflows now run it after public health checks. Latest reconciliation report `output/dashboard_reconciliation/reconcile_20260610_192219.md` is PASS with 0 critical and 0 warning.
