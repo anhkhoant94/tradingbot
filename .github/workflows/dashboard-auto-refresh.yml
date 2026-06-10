@@ -116,6 +116,7 @@ jobs:
           PY
 
       - name: Update full-universe prices
+        if: env.LIVE_DATA_REFRESH_FAILED != '1'
         working-directory: ${{ github.workspace }}
         run: |
           timeout 720s python tools/update_full_universe_prices.py --workers 10 --retry-stale-passes 2 --retry-workers 4 --min-fresh-pct 0.65 || {
