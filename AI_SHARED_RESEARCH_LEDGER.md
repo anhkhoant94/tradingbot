@@ -34,6 +34,13 @@ Cloud verification:
 - Public embedded dashboard: no `94.5` / `94,5` / `94.475`; `copyAccount.cashPct=100.0`, `copyAccount.exposurePct=0.0`, `holdings=[]`, `paperTrade.closed=true`, `paperTrade.currentShares=0`, `paperTrade.cashPct=100.0`, chart last date `2026-06-10`, sidebar CAGR chart source `perf.cagr=75.68384524214775`.
 - Public R46 `analysis.js`: `holdings=0`, `cashBuffer=100.0`, `totalSuggestedWeight=0.0`; no stale `94.5` in the R46 policy JSON.
 
+Follow-up workflow hardening:
+- After syncing `dashboard/index.html` to remove the stale raw-repo `94.5%` artifact, push run `27254221559` failed at `Build v7 static dashboard`: GitHub runner could not reach VPS (`prices 0/10`, `vni_ok=False`) and preserved public live status, but the builder tried to rebuild from partial checkout/cache data and asserted `chart_rows[-1].date < livePriceDate`.
+- `dashboard/_preview/build_v7_real.py` now prefers live-status VNINDEX for the static VNI KPI when live is newer than parquet cache, and `extend_curve_with_execution_state` can append required execution/target dates from live status so full-cash charts stay current instead of dying on stale VNI parquet.
+- `.github/workflows/dashboard-auto-refresh.yml` now detects `LIVE_DATA_REFRESH_FAILED=1`, runs strict public health against the already-live dashboard/edge state, sets `SKIP_DASHBOARD_DEPLOY=1`, and skips analysis/build/deploy from partial checkout data. This makes VPS-from-GitHub outages green only when public data is already fresh and internally consistent.
+- `.github/workflows/dashboard-price-refresh.yml` uses the same guarded fallback path for price-only runs instead of hard-failing when GitHub cannot reach VPS but public/edge live data is fresh.
+- Local verification: YAML parse PASS for both workflows; `python -m py_compile dashboard/_preview/build_v7_real.py generate_deep_analysis.py tools/check_dashboard_public_health.py` PASS; local v7 build PASS with full-cash `copyAccount.cashPct=100.0`, `copyAccount.exposurePct=0.0`, no `94.5` / `94,5`.
+
 ## 2026-06-10 Codex - Block deploy when forecast/full-universe chain fails and keep MSB copy execution visible
 
 User reported the visible MSB sell-all history disappeared again. Follow-up audit confirmed the public execution state still contains the real copy order `2026-06-08 MSB SELL/BAN HET 3,800 @ 14.7k`, but the dashboard must never rely on model ledger rows to show copy-live executions.
