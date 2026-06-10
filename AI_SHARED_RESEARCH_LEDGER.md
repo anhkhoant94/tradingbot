@@ -1,3 +1,13 @@
+## 2026-06-10 Claude - PX independent lane (zero R46) NEGATIVE — perfect-router ceiling 26.35%, LANE CLOSED
+
+Anh yêu cầu hướng hoàn toàn độc lập R46, chưng cất tinh hoa cũ, target ~2× hiệu quả. Verdict file: `output/px1_independent_20260610/VERDICT_PX_INDEPENDENT_LANE.md`.
+
+Đã build + đo trên Phase R strict daily-lot engine (data history_2012 refetch, 509 syms, full 2016-07→2026-06): R-1 breakout nguyên bản full-period CAGR **-8.49%** MDD -99.4% (2017 +94.7%/2020 +84.2% còn alpha, nhưng 2024 -30.6%/2025 -67.1% chết hẳn); liq3+cap33+bear-gate ~+1.2%; liquid momentum 13W top-5 -1.34% (2022 -61.6%); style-momentum router PIT -10/-11%. **Hindsight bound: router hoàn hảo (max(A,B,cash) mỗi năm) chỉ đạt CAGR 26.35%, VNI+30 4/11** — bottleneck là cả 2 sleeve cùng mất alpha 2023-2026, không phải router.
+
+Key data finding: **R-1 38.21% (2016-2020) KHÔNG reproduce trên history_2012 refetch** (2016 -19.7%, 2019 -31.8%) — khớp R1 drift bisect rebaseline verdict. Phase R numbers cũ là lịch sử, không dùng làm baseline.
+
+Do-not-rerun: breakout family full-period mọi biến thể liq/cap/gate; liquid momentum 13W standalone; style router trên 2 sleeve này. Hướng độc lập duy nhất còn mở: guided search quy mô lớn tìm sleeve mới 2021-2026 (cần anh approve budget). Frontier full-period vẫn là H6P-capped stack 54.94% (PEER_REVIEW_PENDING); segment 2021-2026 của stack ≈ 99% CAGR.
+
 ## 2026-06-10 Codex - Block deploy when forecast/full-universe chain fails and keep MSB copy execution visible
 
 User reported the visible MSB sell-all history disappeared again. Follow-up audit confirmed the public execution state still contains the real copy order `2026-06-08 MSB SELL/BAN HET 3,800 @ 14.7k`, but the dashboard must never rely on model ledger rows to show copy-live executions.
@@ -14,6 +24,13 @@ Local verification:
 - `python dashboard/_preview/build_v7_real.py --out dashboard/_preview/check-copy-history.html` PASS.
 - Local HTML embeds one copy execution `2026-06-08 MSB SELL/BAN HET 3,800`, contains `copyExecRows` and `copyLedgerBody`, and model ledger is not polluted by the copy sell.
 - Workflow YAML parsed successfully with PyYAML.
+
+Cloud verification:
+- GitHub API commit `4b5373206acaf7d17f210500396ca24c8d5b2005` triggered dashboard run `27252660771`, completed SUCCESS at `2026-06-10 11:17:44 ICT`.
+- Public full-universe status restored to current date: `updatedAtICT=2026-06-10 11:15:59`, `latestPriceDate=2026-06-10`, `symbolsUpdated=695/695`, `symbolsFailed=0`, `symbolsAtTargetOrNewer=499`, `usableForForecast=true`, `coverageMode=same_day_rows`.
+- Public forecast restored to `COMPUTED`, `asOf=2026-06-10`, `planDate=2026-06-15`, `computedAtICT=2026-06-10 11:17:24`, `rows=0`.
+- Public HTML embeds the MSB copy execution row and the copy history tables; holdings are empty, paper trade is closed (`currentShares=0`, `cashPct=100`, `exposurePct=0`), and model ledger is not polluted by `2026-06-08 MSB 3,800`.
+- Strict public health PASS: `python tools/check_dashboard_public_health.py --require-fresh-live --require-edge-live --require-vni-history --require-current-vni --require-current-forecast --require-execution-desk`.
 
 ## 2026-06-10 Claude - RESEARCH HIT: H6P-capped stack CAGR 54.94% MDD -25.76% 6/6 min edge 34.95pp (PEER_REVIEW_PENDING)
 
