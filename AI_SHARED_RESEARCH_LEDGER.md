@@ -1,3 +1,21 @@
+## 2026-06-10 Codex - Active universe refresh for delisted/suspended/new listings
+
+User requested removing delisted/suspended/no-trade symbols from the live universe and continuously adding newly listed symbols. Audit found `.cache/universe.parquet` was a static 703-symbol HOSE/HNX list from `vnstock Listing(source="kbs")`, while current KBS listing had one new HOSE symbol `AAN` and no longer listed `SDA`. VPS price data showed `AAN` has daily bars from `2026-05-22` to `2026-06-10`, while `SDA` still has bars to `2026-06-10`; therefore the right filter is actual tradability from price history, not blindly trusting listing presence.
+
+Fix:
+- `tools/update_full_universe_prices.py` now refreshes the HOSE/HNX listed universe via `vnstock` when available, writes `.cache/universe.parquet`, and then builds an active universe for forecast refresh.
+- Symbols with no cache are included as new/probe candidates so new listings can get their first VPS history pull.
+- Symbols whose latest daily bar is older than `--inactive-days` (default 45 calendar days) are excluded from the forecast batch/history cache. This removes long-suspended/delisted names from the 15-minute workflow.
+- Up to `--probe-inactive-limit` inactive symbols (default 60) are still probed each run; if a suspended name resumes trading, it can re-enter automatically.
+- Status JSON now exposes `candidateSymbolsTotal`, `inactiveSymbolsExcluded`, `inactiveSample`, `inactiveProbeAttempted`, and `universe` metadata including listing refresh result and new/missing symbols.
+- `.github/workflows/dashboard-auto-refresh.yml` now installs `vnstock`, so GitHub can refresh the listing itself instead of relying only on the checked-in cache.
+- `run_stock_screen.py` supports `--refresh-universe`, and `.github/workflows/screening-weekly.yml` passes it and commits `.cache/universe.parquet`, so weekly screening also catches new listings.
+
+Smoke verification:
+- `python -m py_compile tools/update_full_universe_prices.py run_stock_screen.py` PASS.
+- Limited smoke `python tools/update_full_universe_prices.py --limit 30 --workers 4 --retry-stale-passes 0 --probe-inactive-limit 10 --inactive-days 45 --target-date 2026-06-10` PASS: `candidateSymbolsTotal=30`, `symbolsTotal=29`, `inactiveSymbolsExcluded=1` (`ARM`, last bar `2026-03-16`), `usableForForecast=true`.
+- Refreshed local universe now has 704 unique symbols, including new `AAN`; `SDA` is kept because VPS still has current bars. Local active universe after 45-day filter: 688 active, 16 inactive (sample `ARM`, `ATS`, `BCG`, `BPC`, `CJC`, `LCD`, `MCC`, `TCD`, `VE4`).
+
 ## 2026-06-10 Codex - Fix intraday full-universe gate stuck NOT_COMPUTED
 
 User reported public dashboard showing `NOT_COMPUTED` again even though the live/forecast flow had been approved. Audit found the blocker is not UI and not a missing GitHub trigger: public `full_universe_live_update_status.json` at `2026-06-10 09:19:14 ICT` had `symbolsAttempted=703`, `symbolsUpdated=703`, `symbolsFailed=0`, `latestPriceDate=2026-06-10`, but only `symbolsAtTargetOrNewer=330`. The old forecast gate required same-day rows for at least `65%` of the universe (`457/703`) and therefore overwrote `/r46_forecast.json` with `NOT_COMPUTED` reason `full_universe_freshness_gate_failed`.

@@ -103,7 +103,8 @@ def classify(industry_name: str) -> str:
 
 def get_universe() -> pd.DataFrame:
     path = CACHE / "universe.parquet"
-    if path.exists():
+    force_refresh = "--refresh-universe" in sys.argv
+    if path.exists() and not force_refresh:
         return pd.read_parquet(path)
 
     from vnstock import Listing

@@ -84,6 +84,7 @@ jobs:
           if [ "$SAMPLE_SIZE" != "0" ]; then
             ARGS="$ARGS --limit-prelim $SAMPLE_SIZE"
           fi
+          ARGS="$ARGS --refresh-universe"
           python run_stock_screen.py $ARGS
 
       - name: Regenerate dashboard JS bundles
@@ -102,7 +103,8 @@ jobs:
                   dashboard/data.js \
                   dashboard/analysis.js \
                   dashboard/history.js \
-                  dashboard/dashboard_live_update_status.json
+                  dashboard/dashboard_live_update_status.json \
+                  .cache/universe.parquet
           if git diff --cached --quiet; then
             echo "No screening output changes to commit."
           else
