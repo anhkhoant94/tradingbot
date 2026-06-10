@@ -1,4 +1,7 @@
-﻿## 2026-06-10 Codex - Dashboard ledger separation: materialize MSB model sell, remove copy execution from history tab
+﻿## 2026-06-10 Codex - Remove stale Vercel old link/project from deploy path
+
+User flagged that the deprecated `trading-execution-desk-khoa` link was still stored. Root cause: local untracked deploy secrets file `stock_screening_secrets/stock_screening_deploy_secrets.json` still had `vercel_project=trading-execution-desk-khoa` and `vercel_public_url=https://trading-execution-desk-khoa.vercel.app`, so Codex accidentally deployed one run to the old project. Fixed local secrets to `vercel_project=ez-trading` and `vercel_public_url=https://ez-trading.vercel.app`. Vercel alias `trading-execution-desk-khoa.vercel.app` was deleted by alias UID and now returns 404 `DEPLOYMENT_NOT_FOUND`. Old Vercel project `trading-execution-desk-khoa` was deleted; Vercel API now returns `Project not found`. GitHub Actions vars verified correct: `VERCEL_PROJECT=ez-trading`, `VERCEL_PUBLIC_URL=https://ez-trading.vercel.app`. Only canonical public link is `https://ez-trading.vercel.app`.
+## 2026-06-10 Codex - Dashboard ledger separation: materialize MSB model sell, remove copy execution from history tab
 
 User clarified `Lịch sử giao dịch` must contain only the full model executed ledger under the model NAV basis, not copy-account executions. Fix in `dashboard/_preview/build_v7_real.py`: materialize executed sell orders from `r46_execution_state.json` into model ledger when source `trades.parquet/history.js` has not yet recorded the trade. Current MSB sell on 2026-06-08 is now embedded as model SELL with `modelFullShares=169300`, displayed as `81800` shares after the existing `NAV 2021 = 1 ty` ledger scale, matching the scaled MSB buys in the same table. `tradesLatest[0]` and `ledger[0]` are now MSB SELL. Removed copy execution block from the `Lịch sử giao dịch` tab; copy executions remain visible only in Copy Trade. Health check now requires `copyExecRows` only, not the removed `copyLedgerBody`.
 
@@ -5318,4 +5321,5 @@ Validation:
 
 Operational rule:
 - Do not rely on GitHub schedule alone for user-visible 5-minute live quotes. GitHub Actions remains the heavy/static lane: price artifact fallback and R46 forecast every 30 minutes. Browser-visible live price must come from the Vercel API layer or another always-available hosted endpoint.
+
 
