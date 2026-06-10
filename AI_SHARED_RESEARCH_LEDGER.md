@@ -26,6 +26,14 @@ Local verification:
 - `python dashboard/_preview/build_v7_real.py --out dashboard/_preview/check-cash-cagr.html` PASS.
 - Local HTML has no `94.5` / `94,5`; sidebar shows `Copy cash 100,0%` and `CAGR chart +75,7%` on local stale-live snapshot. Local chart extends from 2026-05-25 to 2026-06-09 because local `dashboard_live_update_status.json` is stale at 2026-06-09; production workflow refreshes live before build and health now enforces chart catches up to public live date.
 
+Cloud verification:
+- GitHub API commit `dc6379b79a4ca243b9c0fd0f8244e9402e2a7643` triggered dashboard run `27253495637`, completed SUCCESS at `2026-06-10 11:52:12 ICT`.
+- Strict public health PASS at `2026-06-10 11:53:47 ICT`: `python tools/check_dashboard_public_health.py --require-fresh-live --require-edge-live --require-vni-history --require-current-vni --require-current-forecast --require-execution-desk`.
+- Public live status: `latestPriceDate=2026-06-10`, `live_vni_close=1801.26`, `edge_live_updated_at_ict=2026-06-10 11:53:47`.
+- Public forecast: `status=COMPUTED`, `asOf=2026-06-10`, `planDate=2026-06-15`, `computedAtICT=2026-06-10 11:51:54`, `rows=0`.
+- Public embedded dashboard: no `94.5` / `94,5` / `94.475`; `copyAccount.cashPct=100.0`, `copyAccount.exposurePct=0.0`, `holdings=[]`, `paperTrade.closed=true`, `paperTrade.currentShares=0`, `paperTrade.cashPct=100.0`, chart last date `2026-06-10`, sidebar CAGR chart source `perf.cagr=75.68384524214775`.
+- Public R46 `analysis.js`: `holdings=0`, `cashBuffer=100.0`, `totalSuggestedWeight=0.0`; no stale `94.5` in the R46 policy JSON.
+
 ## 2026-06-10 Codex - Block deploy when forecast/full-universe chain fails and keep MSB copy execution visible
 
 User reported the visible MSB sell-all history disappeared again. Follow-up audit confirmed the public execution state still contains the real copy order `2026-06-08 MSB SELL/BAN HET 3,800 @ 14.7k`, but the dashboard must never rely on model ledger rows to show copy-live executions.
