@@ -172,6 +172,140 @@ def copy_execution_rows(state, orders):
     return rows
 
 
+def side_sign(side):
+    text = str(side or "").upper()
+    if "BUY" in text or "MUA" in text:
+        return 1
+    if "SELL" in text or "BÁN" in text or "BAN" in text:
+        return -1
+    return 0
+
+
+def open_positions_from_trades(records, through_date):
+    positions = {}
+    for row in sorted(records, key=lambda r: str(r.get("date") or "")):
+        d = str(row.get("date") or "")
+        if not d or d > through_date:
+            continue
+        sym = str(row.get("symbol") or "").upper().strip()
+        sign = side_sign(row.get("side") or row.get("actionLabel"))
+        shares = as_float(row.get("modelFullShares"), as_float(row.get("rawShares"), as_float(row.get("shares"), 0))) or 0
+        if not sym or sign == 0 or shares <= 0:
+            continue
+        positions[sym] = positions.get(sym, 0.0) + sign * shares
+        if abs(positions.get(sym, 0.0)) < 1e-6:
+            positions.pop(sym, None)
+    return {sym: shares for sym, shares in positions.items() if shares > 0}
+
+
+def latest_price_on_or_before(history_by_symbol, symbol, date_text):
+    hist = history_by_symbol.get(symbol)
+    if hist is None or hist.empty:
+        return None
+    rows = hist[hist["date"] <= date_text]
+    if rows.empty:
+        return None
+    return as_float(rows.iloc[-1].get("close"))
+
+
+def extend_curve_with_execution_state(curve_rows, trade_rows, exec_orders, live_status_payload, policy_cfg):
+    if not curve_rows:
+        return curve_rows, []
+    target_date = str(live_status_payload.get("latestPriceDate") or "")[:10]
+    if not target_date:
+        return curve_rows, []
+    last = curve_rows[-1]
+    last_date = str(last.get("date") or "")[:10]
+    if not last_date or target_date <= last_date:
+        return curve_rows, []
+
+    positions = open_positions_from_trades(trade_rows, last_date)
+    if not positions and not exec_orders:
+        return curve_rows, []
+
+    cash_bil = as_float(last.get("cashBil"), 0.0) or 0.0
+    sell_cost_pct = as_float(policy_cfg.get("sell_cost_pct"), 0.4) or 0.4
+    sell_cost_rate = sell_cost_pct / 100.0
+    vni_df = pd.read_parquet(ROOT / ".cache" / "backtest" / "vnindex_daily.parquet").copy()
+    vni_df["date"] = pd.to_datetime(vni_df["date"], errors="coerce")
+    vni_df = vni_df.dropna(subset=["date"]).sort_values("date")
+    vni_df["date_text"] = vni_df["date"].dt.date.astype(str)
+    vni_rows = vni_df[(vni_df["date_text"] > last_date) & (vni_df["date_text"] <= target_date)]
+    if vni_rows.empty:
+        return curve_rows, []
+
+    history_by_symbol = {sym: load_symbol_history(sym) for sym in positions}
+    exit_by_date = {}
+    for order in exec_orders:
+        sym = str(order.get("symbol") or "").upper().strip()
+        date_text = str(order.get("date") or order.get("executedDate") or "")[:10]
+        if not sym or not date_text or not action_is_sell(order.get("side") or order.get("actionLabel")):
+            continue
+        exit_by_date.setdefault(date_text, []).append(order)
+
+    extended = list(curve_rows)
+    notes = []
+    for _, vrow in vni_rows.iterrows():
+        d = str(vrow["date_text"])
+        for order in exit_by_date.get(d, []):
+            sym = str(order.get("symbol") or "").upper().strip()
+            if sym not in positions:
+                continue
+            sell_shares = positions.get(sym, 0.0)
+            before = as_float(order.get("positionBeforeShares"), 0) or 0
+            sold = as_float(order.get("shares"), 0) or 0
+            after = as_float(order.get("positionAfterShares"), 0) or 0
+            if after > 0 and before > 0 and sold > 0:
+                sell_shares = min(positions.get(sym, 0.0), positions.get(sym, 0.0) * sold / before)
+            px = as_float(order.get("executionPriceK"), as_float(order.get("priceK")))
+            if not px:
+                px = latest_price_on_or_before(history_by_symbol, sym, d)
+            if not px:
+                continue
+            gross_bil = sell_shares * px / 1_000_000
+            cash_bil += gross_bil * (1.0 - sell_cost_rate)
+            positions[sym] = max(0.0, positions.get(sym, 0.0) - sell_shares)
+            if positions[sym] <= 1e-6:
+                positions.pop(sym, None)
+            notes.append(f"{d} {sym} SELL {int(round(sell_shares))} @ {px}k")
+
+        market_bil = 0.0
+        for sym, shares in list(positions.items()):
+            px = latest_price_on_or_before(history_by_symbol, sym, d)
+            if px is None:
+                continue
+            market_bil += shares * px / 1_000_000
+        nav_bil = cash_bil + market_bil
+        extended.append({
+            "date": d,
+            "navBil": nav_bil,
+            "cashBil": cash_bil,
+            "positions": len(positions),
+            "returnPct": None,
+            "vniClose": as_float(vrow.get("close")),
+            "vniReturnPct": None,
+        })
+    return extended, notes
+
+
+def cagr_from_curve_rows(rows):
+    if len(rows) < 2:
+        return None
+    first = rows[0]
+    last = rows[-1]
+    first_nav = as_float(first.get("navBil"))
+    last_nav = as_float(last.get("navBil"))
+    try:
+        d0 = datetime.strptime(str(first.get("date"))[:10], "%Y-%m-%d").date()
+        d1 = datetime.strptime(str(last.get("date"))[:10], "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
+    years = (d1 - d0).days / 365.25
+    if not first_nav or not last_nav or first_nav <= 0 or last_nav <= 0 or years <= 0:
+        return None
+    return ((last_nav / first_nav) ** (1.0 / years) - 1.0) * 100.0
+
+
 def scale_lot(value, scale):
     raw = as_float(value)
     if raw is None:
@@ -220,6 +354,27 @@ def latest_ohlc(symbol):
         "low": as_float(row.get("low"), close),
         "close": close,
     }
+
+
+def load_symbol_history(symbol):
+    path = ROOT / ".cache" / "backtest" / "history_clean" / f"{str(symbol).upper()}.parquet"
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        df = pd.read_parquet(path)
+    except Exception:
+        return pd.DataFrame()
+    if df.empty:
+        return pd.DataFrame()
+    tcol = "time" if "time" in df.columns else "date"
+    out = df.copy()
+    out[tcol] = pd.to_datetime(out[tcol], errors="coerce")
+    out = out.dropna(subset=[tcol]).sort_values(tcol)
+    out["date"] = out[tcol].dt.date.astype(str)
+    for col in ("open", "high", "low", "close"):
+        if col in out.columns:
+            out[col] = pd.to_numeric(out[col], errors="coerce")
+    return out[[c for c in ("date", "open", "high", "low", "close") if c in out.columns]]
 
 
 def recalc_holding(row):
@@ -333,29 +488,8 @@ execution_state = load_json_or(EXEC_STATE_PATH, load_json_or(ROOT / "output" / "
 executed_orders = normalized_executed_orders(execution_state)
 copy_executions = copy_execution_rows(execution_state, executed_orders)
 policy_config = load_json_or(ROOT / "output" / "dashboard_policies" / "r46_bear_stop_mcore" / "config.json", {})
-pt_state = load_json_or(PT_DIR / "paper_trade_state.json", {
-    "start_date": "2026-06-01",
-    "end_date": "2026-06-29",
-    "weekly_checkpoint_due": {
-        "week_1": "2026-06-01",
-        "week_2": "2026-06-08",
-        "week_3": "2026-06-15",
-        "week_4": "2026-06-22",
-        "week_4_close": "2026-06-29",
-    },
-})
-signal_w1 = load_json_or(PT_DIR / "signal_week_1_20260601.json", {
-    "execution_date": "2026-06-01",
-    "nav_virtual_vnd": 1_000_000_000,
-    "cash_pct": 94.49,
-    "exposure_pct": 5.51,
-    "targets": [{
-        "symbol": "MSB",
-        "target_weight": 0.05525,
-        "target_shares_round_lot_100": 3600,
-        "prev_close_vnd_per_share": 15000,
-    }],
-})
+pt_state = load_json_or(PT_DIR / "paper_trade_state.json", {})
+signal_w1 = load_json_or(PT_DIR / "signal_week_1_20260601.json", {})
 paper_log_last = load_jsonl_last_or(PT_DIR / "paper_trade_log.jsonl", {})
 
 policy = next(p for p in analysis["strategyPolicies"] if p["key"] == "r46_bear_stop_mcore")
@@ -400,7 +534,7 @@ if executed_orders:
     holdings = apply_execution_state_to_holdings(holdings, executed_orders)
 
 target = signal_w1["targets"][0] if signal_w1.get("targets") else {}
-paper_symbol = target.get("symbol", "MSB")
+paper_symbol = target.get("symbol")
 paper_quote = quotes.get(paper_symbol, {})
 paper_signal_px = (target.get("prev_close_vnd_per_share") or 0) / 1000
 paper_fresh_px = paper_quote.get("close")
@@ -511,7 +645,9 @@ curve = [
     r for r in hist.get("equityCurve", [])
     if r.get("date") and r.get("navBil") and r.get("vniClose")
 ]
+curve, chart_extension_notes = extend_curve_with_execution_state(curve, trades_full, executed_orders, live_status, policy_config)
 curve_2021 = [r for r in curve if r["date"] >= "2021-01-01"] or curve
+chart_cagr = cagr_from_curve_rows(curve_2021)
 nav_by_date = {r["date"]: float(r["navBil"]) for r in curve if r.get("date") and r.get("navBil")}
 ledger_base_curve = [
     r for r in curve
@@ -682,7 +818,9 @@ watchlist_summary = {
 method_cards = policy.get("methodology", {}).get("cards", [])
 audit = policy.get("productionAudit", {})
 perf = {
-    "cagr": audit.get("cagr") or policy.get("historicalCagr"),
+    "cagr": chart_cagr if chart_cagr is not None else (audit.get("cagr") or policy.get("historicalCagr")),
+    "auditCagr": audit.get("cagr") or policy.get("historicalCagr"),
+    "chartEndDate": curve_2021[-1].get("date") if curve_2021 else None,
     "maxDrawdown": audit.get("maxDrawdown") or policy.get("historicalMaxDrawdown"),
     "sharpe": policy.get("historicalSharpe"),
     "minEdge": audit.get("minEdgeVsVni"),
@@ -709,9 +847,13 @@ if executed_orders and state_account:
     copy_total_m = copy_cash_m + copy_market_m
     copy_pnl_m = copy_total_m - copy_nav_m
     copy_pnl_pct = copy_pnl_m / copy_nav_m * 100 if copy_nav_m else None
+copy_cash_pct = copy_cash_m / copy_total_m * 100 if copy_total_m else None
+copy_exposure_pct = copy_market_m / copy_total_m * 100 if copy_total_m else None
 
 # --- Data integrity flags (provenance) ---
 data_flags = []
+for note in chart_extension_notes:
+    data_flags.append(f"Chart extended from execution state: {note}")
 try:
     cache_p = ROOT / ".cache" / "backtest" / "history_clean" / f"{paper_symbol}.parquet"
     if cache_p.exists() and not paper_closed:
@@ -842,9 +984,9 @@ for row in forecast_rows:
         row["orderShares"] = held_shares
 
 planned_public = {
-    "asOf": policy.get("plannedOrders", {}).get("asOf"),
+    "asOf": forecast_as_of or live_price_date,
     "planDate": forecast_date,
-    "stage": policy.get("plannedOrders", {}).get("stage"),
+    "stage": "live_window",
     "source": forecast_source_label,
     "forecastStatus": forecast_status.get("status") or "NOT_CONFIGURED",
     "forecastDisplayState": forecast_display_state,
@@ -1001,8 +1143,10 @@ data = {
     "policy": {
         "key": policy.get("key"),
         "label": policy.get("label"),
-        "cashBuffer": policy.get("cashBuffer"),
-        "totalSuggestedWeight": policy.get("totalSuggestedWeight"),
+        "cashBuffer": copy_cash_pct,
+        "copyCashPct": copy_cash_pct,
+        "copyExposurePct": copy_exposure_pct,
+        "totalSuggestedWeight": copy_exposure_pct,
         "lastUpdate": policy.get("lastUpdate"),
         "plannedOrders": planned_public,
     },
@@ -1048,7 +1192,9 @@ data = {
         "navMil": copy_nav_m,
         "marketMil": copy_market_m,
         "cashMil": copy_cash_m,
+        "cashPct": copy_cash_pct,
         "totalMil": copy_total_m,
+        "exposurePct": copy_exposure_pct,
         "pnlMil": copy_pnl_m,
         "pnlPct": copy_pnl_pct,
     },
@@ -1109,6 +1255,12 @@ display_execution_keys = {
 assert execution_keys <= display_execution_keys, "FAIL: có lệnh copy đã khớp bị rơi khỏi dashboard data"
 assert len(ledger_rows) == len(trades_period), "FAIL: ledger count lệch trades_period"
 assert chart_rows and len(chart_rows) > 100, "FAIL: chart_rows quá ít — kiểm tra equityCurve"
+if not holdings and executed_orders:
+    assert (copy_exposure_pct or 0) <= 0.01, "FAIL: copy full-cash nhưng exposurePct không bằng 0"
+    assert copy_cash_pct is not None and copy_cash_pct >= 99.9, "FAIL: copy full-cash nhưng cashPct không xấp xỉ 100%"
+if live_price_date and executed_orders:
+    assert chart_rows[-1]["date"] >= live_price_date, "FAIL: chart/CAGR chưa bắt kịp live price date sau execution state"
+assert data["perf"]["cagr"] is not None, "FAIL: CAGR chart không tính được từ equity curve"
 assert data["vni"]["close"] > 0, "FAIL: VNI close không hợp lệ"
 
 html = f"""<!doctype html>
@@ -1216,8 +1368,8 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
   <button class="nav" data-view="ledger"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Lịch sử<span class="ct">{len(ledger_rows) + len(copy_executions)}</span></button>
   <div class="sidefoot">
     <div class="sfrow"><span>Regime</span><b>{regime_label}</b></div>
-    <div class="sfrow"><span>Cash</span><b>{fmt_num(policy.get('cashBuffer'),1)}%</b></div>
-    <div class="sfrow"><span>CAGR</span><b class="pos">+{fmt_num(perf['cagr'],1)}%</b></div>
+    <div class="sfrow"><span>Copy cash</span><b>{fmt_num(copy_cash_pct,1)}%</b></div>
+    <div class="sfrow"><span>CAGR chart</span><b class="pos">+{fmt_num(perf['cagr'],1)}%</b></div>
     <button class="theme" onclick="toggleTheme()">Chuyển giao diện</button>
   </div>
 </aside>

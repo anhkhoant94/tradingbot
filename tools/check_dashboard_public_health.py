@@ -66,6 +66,13 @@ def parse_embedded_dashboard_data(index: str) -> dict:
         return {}
 
 
+def num(value, default=None):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def parse_status_age_seconds(payload: dict) -> float | None:
     raw_utc = payload.get("updatedAtUtc")
     if raw_utc:
@@ -175,6 +182,21 @@ def main() -> None:
         for row in embedded_exec_orders
     }
     copy_execution_matches_state = expected_exec_keys <= embedded_exec_keys
+    embedded_holdings = embedded_data.get("holdings") or []
+    embedded_copy_account = embedded_data.get("copyAccount") or {}
+    embedded_chart = embedded_data.get("chart") or []
+    embedded_copy_cash_pct = num(embedded_copy_account.get("cashPct"))
+    embedded_copy_exposure_pct = num(embedded_copy_account.get("exposurePct"))
+    embedded_chart_last_date = str((embedded_chart[-1] or {}).get("date") or "") if embedded_chart else ""
+    full_cash_expected = bool(expected_exec_orders and not embedded_holdings)
+    copy_full_cash_consistent = (
+        not full_cash_expected
+        or (
+            embedded_copy_cash_pct is not None
+            and embedded_copy_cash_pct >= 99.9
+            and (embedded_copy_exposure_pct or 0.0) <= 0.01
+        )
+    )
     live_updated_at = str(live_payload.get("updatedAt") or "")
     live_updated_at_ict = str(live_payload.get("updatedAtICT") or "")
     live_updated_at_utc = str(live_payload.get("updatedAtUtc") or "")
@@ -252,6 +274,11 @@ def main() -> None:
         and live_status_age_seconds <= max(0.0, float(args.max_live_age_minutes)) * 60.0
     )
     static_live_current_snapshot = static_live_is_today and live_vni_exact_match
+    chart_current_after_execution = (
+        not full_cash_expected
+        or not live_latest_price_date
+        or (embedded_chart_last_date >= live_latest_price_date)
+    )
     source_unavailable_live_ok = (
         source_vni is None
         and source_vni_error is not None
@@ -322,6 +349,13 @@ def main() -> None:
         "embedded_copy_execution_count": len(embedded_exec_orders),
         "copy_execution_matches_state": copy_execution_matches_state,
         "has_copy_execution_table": 'id="copyExecRows"' in index and 'id="copyLedgerBody"' in index,
+        "full_cash_expected": full_cash_expected,
+        "embedded_holdings_count": len(embedded_holdings),
+        "embedded_copy_cash_pct": embedded_copy_cash_pct,
+        "embedded_copy_exposure_pct": embedded_copy_exposure_pct,
+        "copy_full_cash_consistent": copy_full_cash_consistent,
+        "embedded_chart_last_date": embedded_chart_last_date or None,
+        "chart_current_after_execution": chart_current_after_execution,
         "vni_history_points": len(re.findall(r'"vniClose"\s*:\s*[0-9]', history)),
         "has_r46_key": "r46_bear_stop_mcore" in analysis,
         "has_r23_key": "r23_nav3b_mcore" in analysis,
@@ -352,6 +386,8 @@ def main() -> None:
     if args.require_execution_desk and expected_exec_orders and not (
         payload["has_copy_execution_table"]
         and payload["copy_execution_matches_state"]
+        and payload["copy_full_cash_consistent"]
+        and payload["chart_current_after_execution"]
     ):
         raise SystemExit(1)
     if args.require_current_forecast and (

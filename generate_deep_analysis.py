@@ -98,6 +98,47 @@ def normalize_exchange(value) -> str:
     return raw
 
 
+def load_execution_state() -> dict:
+    for path in (DASH / "r46_execution_state.json", OUT / "r46_execution_state.json"):
+        try:
+            if path.exists():
+                return json.loads(path.read_text(encoding="utf-8-sig"))
+        except Exception:
+            continue
+    return {"orders": []}
+
+
+def action_is_sell(value) -> bool:
+    text = str(value or "").upper()
+    return "SELL" in text or "BÁN" in text or "BAN" in text
+
+
+def apply_execution_state_to_policy_holdings(holdings: list[dict], state: dict) -> list[dict]:
+    if not holdings:
+        return holdings
+    by_symbol = {str(row.get("symbol") or "").upper(): dict(row) for row in holdings if row.get("symbol")}
+    for order in state.get("orders") or []:
+        status = str(order.get("status") or "EXECUTED").upper()
+        if status not in {"EXECUTED", "FILLED"}:
+            continue
+        sym = str(order.get("symbol") or "").upper()
+        if not sym or not action_is_sell(order.get("side") or order.get("actionLabel")):
+            continue
+        after = int(num(order.get("positionAfterShares"), 0) or 0)
+        if after <= 0:
+            by_symbol.pop(sym, None)
+            continue
+        row = by_symbol.get(sym)
+        if row:
+            row["copyShares"] = after
+            row["modelShares"] = after
+            row["currentValueMil"] = round(after * num(row.get("currentPrice"), 0) / 1000.0, 1)
+            row["modelValueMil"] = row["currentValueMil"]
+            row["suggestedWeight"] = round(row["currentValueMil"] / (DEFAULT_NAV_VND / 1_000_000) * 100.0, 2)
+            by_symbol[sym] = row
+    return list(by_symbol.values())
+
+
 def load_exchange_map() -> dict[str, str]:
     global _EXCHANGE_MAP
     if _EXCHANGE_MAP is not None:
@@ -1546,7 +1587,8 @@ def build_r46_bear_stop_policy(full_by_symbol: dict[str, pd.Series]) -> dict | N
                 "Anh chap nhan 15bps cho dashboard vi live NAV <5 ty; Claude audit PASS va plateau 4/4 PASS.",
             ],
         })
-    invested = sum(item["suggestedWeight"] for item in holdings)
+    holdings = apply_execution_state_to_policy_holdings(holdings, load_execution_state())
+    invested = sum(num(item.get("currentValueMil"), 0.0) for item in holdings) / (DEFAULT_NAV_VND / 1_000_000) * 100.0
     note = (
         "R46 Bear Stop: user-approved dashboard default for NAV <5 ty under 15bps execution. "
         "Dashboard performance is displayed from 2021 onward; 20bps stress drops VNI+30 to 5/6."
@@ -1568,7 +1610,7 @@ def build_r46_bear_stop_policy(full_by_symbol: dict[str, pd.Series]) -> dict | N
         ["1. Vũ trụ cổ phiếu (Universe)", "Sàn áp dụng: HOSE, HNX, UPCoM. Chỉ cổ phiếu thường, KHÔNG ETF, trái phiếu, margin, bán khống, phái sinh. Tiền chưa dùng để cash, lãi 0%. Mã phải có thanh khoản trung bình 20 phiên (ADV20) tối thiểu 5 tỷ đồng/ngày. Có nhánh ngoại lệ cho mã 3-5 tỷ/ngày nếu composite score ≥ 70 và (ret13 ≥ 20% hoặc ret26 ≥ 30% hoặc đang trong cụm breakout ngành). Date constraint: score chỉ được tính từ dữ liệu có trước ngày tín hiệu (no future leak)."],
         ["2. Bộ lọc điểm số (Score Gates)", "Mỗi cổ phiếu có 7 score thành phần range 0-100 (fa_rank: tài chính; mom_rank: động lượng; rs_rank: sức mạnh tương đối; high_rank: gần đỉnh 52W; flow_rank: dòng tiền; industry_score: ngành; tech_score: kỹ thuật nền). Hard gates: composite_score ≥ 70 (tổng hợp BCTC + định giá + momentum theo công thức 0.30×Quality + 0.25×Valuation + 0.20×Catalyst + 0.25×Technical), industry_score ≥ 40, industry rank ≤ top 10, hard_gate==PASS (ROE bank ≥ 12%, ROA bank ≥ 0.8%, D/E phi ngân hàng ≤ 400%, không gap data), RSI14 trong khoảng 35-78 (mở rộng tới 95 nếu mã đang breakout sát đỉnh 52W)."],
         ["3. Điều kiện MUA (Entry — family sector_cluster)", "Sau khi qua universe + score gates, candidate được chấm score sector_cluster: ưu tiên mã sát đỉnh 52W (high_rank weight 0.45), cộng điểm mạnh cho cụm ngành breakout (35 điểm khi cluster_breakout_flag=1, +6×cluster_strength_4w), cộng momentum ret4 (14×ret4). Cluster breakout active khi trong cùng ngành có ≥ 2 mã đồng thời gần đỉnh ≥ 97% và ret4 ≥ -2%. Rule one-per-industry: nếu bật, mỗi ngành chỉ giữ 1 mã có tech_score cao nhất, chống concentration."],
-        ["4. Quy mô vị thế (Position Sizing)", "Max holdings: 5 mã. Max weight per stock (M-core cap): 55% per signal date. Cap thanh khoản (R18 NAV-aware): max_weight_by_liq = (20% × ADV20) / NAV_deployment 3 tỷ; final weight = min(M-core weight, max_weight_by_liq). Trung bình exposure thực tế ~60%; cash residual cao trong tuần regime yếu. Không có riskoff exposure floor — cash buffer có thể lên 95%+ (như tuần 25/05/2026: MSB 5.525% + cash 94.475%)."],
+        ["4. Quy mô vị thế (Position Sizing)", "Max holdings: 5 mã. Max weight per stock (M-core cap): 55% per signal date. Cap thanh khoản (R18 NAV-aware): max_weight_by_liq = (20% × ADV20) / NAV_deployment 3 tỷ; final weight = min(M-core weight, max_weight_by_liq). Trung bình exposure thực tế ~60%; cash residual cao trong tuần regime yếu. Không có riskoff exposure floor; cash buffer là phần còn lại sau các mã vượt gate và sau execution state."],
         ["5. Điều kiện BÁN (Exit)", "Ba lớp: (a) Weekly rebalance: mỗi thứ 2, nếu weight hiện tại vượt target + 0.1% NAV thì bán phần dư tại giá mở cửa; (b) T+2.5 settle: mỗi lot phải giữ tối thiểu 4 phiên trước khi được bán (HOSE rule); (c) Bear regime daily stop 5%: nếu regime hôm nay = bear VÀ lot đã qua T+2.5 VÀ low_today ≤ entry × 0.95 → bán tại min(open, entry × 0.95). KHÔNG có stop trong regime bull/recovery/sideways."],
         ["6. Regime Gate (M-core Phase 1 v4)", "Classifier weekly phân loại VN-Index thành 5 trạng thái theo priority. BEAR: vni_ret_13w < -5% HOẶC (vni_ret_4w < -8% VÀ breadth_top200 < 30%). BULL_BROAD: breadth_top200 > 25% VÀ vni_ret_13w > 8% VÀ dispersion_4w < 15% VÀ vni_ret_4w > 0. BULL_NARROW: mega_cap_leadership > 8% VÀ vni_ret_13w > 3% VÀ breadth_top200 < 50% VÀ vni_ret_4w > 0. RECOVERY: breadth_recovery_2w ≥ 1 VÀ vni_ret_4w > 0 VÀ vni_ret_13w < 0. SIDEWAYS: mặc định. Daily date → weekly regime gần nhất qua backward asof (no future leak)."],
         ["7. Cash overlay (passive)", "Không có rule \"force 100% cash\" khi VNI rơi. Cash xuất hiện tự nhiên qua filter: khi regime weak, số mã qua được score gates giảm → sum target weight giảm → phần còn lại = cash. Cash yield giả định 0% (không gửi TGTK/bond — constraint của user). Model luôn cho phép giữ vị thế nếu có mã pass gate, không tự ý đứng ngoài."],

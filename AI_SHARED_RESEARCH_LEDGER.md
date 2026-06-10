@@ -8,6 +8,24 @@ Key data finding: **R-1 38.21% (2016-2020) KHÔNG reproduce trên history_2012 r
 
 Do-not-rerun: breakout family full-period mọi biến thể liq/cap/gate; liquid momentum 13W standalone; style router trên 2 sleeve này. Hướng độc lập duy nhất còn mở: guided search quy mô lớn tìm sleeve mới 2021-2026 (cần anh approve budget). Frontier full-period vẫn là H6P-capped stack 54.94% (PEER_REVIEW_PENDING); segment 2021-2026 của stack ≈ 99% CAGR.
 
+## 2026-06-10 Codex - Fix full-cash sidebar cash/CAGR and harden metric freshness
+
+User flagged the dashboard showed `FULL_CASH` but sidebar still displayed cash `94.5%`. Root cause: sidebar used stale `policy.cashBuffer` from `analysis.js` (the old 2026-05-25 MSB target weight/cash buffer), not the live copy account after `r46_execution_state.json` sold MSB on 2026-06-08.
+
+Fix:
+- `dashboard/_preview/build_v7_real.py` now computes `copyAccount.cashPct` and `copyAccount.exposurePct` from live copy account state; sidebar uses `Copy cash`, not policy target cash.
+- Embedded dashboard policy fields now expose current copy state: `cashBuffer=100.0`, `totalSuggestedWeight=0.0`, `copyCashPct=100.0`, `copyExposurePct=0.0` when holdings are empty after execution.
+- Removed stale paper fallback values from the renderer (`MSB`, cash 94.49%, exposure 5.51%, 3,600 cp). Missing paper source no longer fabricates an MSB paper position.
+- Chart/CAGR now extends the R46 equity curve from the last saved curve date using execution state and daily prices: MSB full-model position sold on 2026-06-08 @ 14.7k, then NAV stays cash-flat. Sidebar `CAGR chart` is computed from the rendered chart, not copied from audit metadata. Audit CAGR is kept separately as `perf.auditCagr` for reference.
+- `generate_deep_analysis.py` applies `r46_execution_state.json` to the R46 policy before writing `analysis.js`; source R46 holdings are now empty after the MSB sell, with `cashBuffer=100.0` and `totalSuggestedWeight=0.0`.
+- `tools/check_dashboard_public_health.py --require-execution-desk` now fails if execution state implies full cash but embedded dashboard data lacks `copyAccount.cashPct >= 99.9`, `exposurePct <= 0.01`, or if chart last date lags live `latestPriceDate`.
+
+Local verification:
+- `python -m py_compile generate_deep_analysis.py dashboard/_preview/build_v7_real.py tools/check_dashboard_public_health.py` PASS.
+- `python generate_deep_analysis.py` now writes R46 `holdings=[]`, `cashBuffer=100.0`, `totalSuggestedWeight=0.0`.
+- `python dashboard/_preview/build_v7_real.py --out dashboard/_preview/check-cash-cagr.html` PASS.
+- Local HTML has no `94.5` / `94,5`; sidebar shows `Copy cash 100,0%` and `CAGR chart +75,7%` on local stale-live snapshot. Local chart extends from 2026-05-25 to 2026-06-09 because local `dashboard_live_update_status.json` is stale at 2026-06-09; production workflow refreshes live before build and health now enforces chart catches up to public live date.
+
 ## 2026-06-10 Codex - Block deploy when forecast/full-universe chain fails and keep MSB copy execution visible
 
 User reported the visible MSB sell-all history disappeared again. Follow-up audit confirmed the public execution state still contains the real copy order `2026-06-08 MSB SELL/BAN HET 3,800 @ 14.7k`, but the dashboard must never rely on model ledger rows to show copy-live executions.
