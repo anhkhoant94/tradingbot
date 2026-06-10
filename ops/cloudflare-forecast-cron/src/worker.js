@@ -173,6 +173,19 @@ function timerObject(env) {
   return env.FORECAST_TIMER.get(id);
 }
 
+async function ensureTimerEnabled(env) {
+  const timer = timerObject(env);
+  const state = await timer.fetch("https://timer/state").then((r) => r.json()).catch(() => null);
+  if (!state || state.enabled !== true || !state.pendingAlarm) {
+    return timer.fetch("https://timer/start").then((r) => r.json()).catch((err) => ({
+      ok: false,
+      reason: String(err && err.message || err),
+      updatedAtICT: ictStamp(),
+    }));
+  }
+  return { ok: true, action: "timer_already_enabled", updatedAtICT: ictStamp(), timerState: publicTimerState(state) };
+}
+
 function publicTimerState(state) {
   if (!state) return null;
   const result = state.lastTriggerResult || {};
@@ -192,7 +205,7 @@ function publicTimerState(state) {
 
 export default {
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(triggerForecast(env, { source: "cloudflare-cron", cron: event.cron }));
+    ctx.waitUntil(ensureTimerEnabled(env));
   },
 
   async fetch(request, env) {

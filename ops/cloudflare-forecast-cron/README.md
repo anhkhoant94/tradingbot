@@ -2,7 +2,7 @@
 
 Cloudflare Worker timer for Ez Trading dashboard forecast refresh.
 
-The primary timer is a Durable Object Alarm that reschedules itself every 15 minutes during the Vietnam trading window. A Cloudflare Cron Trigger is kept as a best-effort backup:
+The primary timer is a Durable Object Alarm that reschedules itself every 15 minutes during the Vietnam trading window. A Cloudflare Cron Trigger is kept only as a heartbeat that restarts the Durable Object timer if needed; it must not dispatch forecast directly, otherwise one quarter-hour boundary can create duplicate GitHub workflow runs.
 
 ```text
 */15 2-8 * * 1-5

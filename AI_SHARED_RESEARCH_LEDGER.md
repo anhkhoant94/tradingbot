@@ -10,6 +10,13 @@ Fix:
 
 Verification before push: `python -m py_compile tools/precompute_r46_forecast.py tools/update_full_universe_prices.py` passed. Unit gate check on the public stuck case (`330/703` same-day, `703/703` updated, `0` failed, cache current) returns PASS with `coverageMode=successful_refresh_with_last_close`; all-failed and stale-cache controls still return FAIL.
 
+Cloud verification after push:
+- Commit `93adbb3` triggered Dashboard Forecast Refresh run `27249191564`, completed SUCCESS at `2026-06-10 09:44:49 ICT`. Public `/r46_forecast.json` changed from `NOT_COMPUTED` to `COMPUTED`, `computedAtICT=2026-06-10 09:44:30`, `asOf=2026-06-10`, `planDate=2026-06-15`, `rows=0`.
+- Cloudflare Durable Object timer fired at `2026-06-10 10:00:05 ICT` and created workflow_dispatch run `27250133246`, completed SUCCESS at `2026-06-10 10:11:27 ICT`. Public forecast after the automatic run: `COMPUTED`, `computedAtICT=2026-06-10 10:11:08`, `rows=0`; full-universe status `updatedAtICT=2026-06-10 10:08:24`, `symbolsUpdated=703/703`, `symbolsFailed=0`, `symbolsAtTargetOrNewer=453`, `usableForForecast=true`, `coverageMode=successful_refresh_with_last_close`.
+- Public health PASS: `python tools/check_dashboard_public_health.py --require-fresh-live --require-edge-live --require-vni-history --require-current-vni --require-current-forecast --require-execution-desk`.
+
+Follow-up ops bug fixed: the `10:00` Cloudflare boundary initially created two `workflow_dispatch` runs because both Durable Object Alarm and plain Cloudflare Cron called the trigger endpoint. Cancelled the duplicate pending run `27250133254`. `ops/cloudflare-forecast-cron/src/worker.js` now makes `scheduled()` only call `ensureTimerEnabled()`; Cloudflare Cron is a heartbeat/restart guard, while the Durable Object Alarm is the single dispatcher. Deployed Worker version `54d7e2d5-4168-4deb-8a9c-eeb1ab5f0de4`. Verification at `2026-06-10 10:15:05 ICT`: timer action `skip_recent_success`, next alarm `2026-06-10T03:30:05Z`, no new duplicate GitHub run.
+
 ## 2026-06-09 Codex - Fix model ledger vs copy execution mixing
 
 User flagged that the MSB `BAN HET` row in recent/history did not match the MSB buy quantities in history. Audit confirmed the issue: `dashboard/_preview/build_v7_real.py` had mixed `r46_execution_state.json` copy-live order (`MSB` sell 3,800 cp on NAV copy 1 ty) into `tradesLatest`/`ledger`, while the surrounding historical rows were model ledger rows rebased to `NAV 2021 = 1 ty`. This made the history table internally inconsistent.
