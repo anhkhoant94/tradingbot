@@ -123,15 +123,26 @@ jobs:
             echo "Full-universe refresh failed; preserving the last public forecast/full-universe state and blocking deploy if it is not current."
           }
 
+      - name: Use public fallback when live refresh failed
+        if: env.LIVE_DATA_REFRESH_FAILED == '1'
+        working-directory: ${{ github.workspace }}
+        run: |
+          python tools/check_dashboard_public_health.py --require-fresh-live --require-edge-live --require-vni-history --require-current-vni --require-current-forecast --require-execution-desk
+          echo "SKIP_DASHBOARD_DEPLOY=1" >> "$GITHUB_ENV"
+          echo "Live source was unavailable from GitHub; public dashboard/edge data is fresh, so this run will not rebuild from partial checkout data."
+
       - name: Regenerate dashboard analysis
+        if: env.SKIP_DASHBOARD_DEPLOY != '1'
         working-directory: ${{ github.workspace }}
         run: python generate_deep_analysis.py
 
       - name: Regenerate model history
+        if: env.SKIP_DASHBOARD_DEPLOY != '1'
         working-directory: ${{ github.workspace }}
         run: python generate_model_history.py
 
       - name: Regenerate dashboard data
+        if: env.SKIP_DASHBOARD_DEPLOY != '1'
         working-directory: ${{ github.workspace }}
         run: |
           if [ -f generate_dashboard_data.py ]; then
@@ -141,12 +152,12 @@ jobs:
           fi
 
       - name: Precompute R46 forecast
-        if: env.FULL_UNIVERSE_REFRESH_FAILED != '1'
+        if: env.SKIP_DASHBOARD_DEPLOY != '1' && env.FULL_UNIVERSE_REFRESH_FAILED != '1'
         working-directory: ${{ github.workspace }}
         run: python tools/precompute_r46_forecast.py
 
       - name: Keep preserved forecast after full-universe failure
-        if: env.FULL_UNIVERSE_REFRESH_FAILED == '1'
+        if: env.SKIP_DASHBOARD_DEPLOY != '1' && env.FULL_UNIVERSE_REFRESH_FAILED == '1'
         working-directory: ${{ github.workspace }}
         run: |
           python - <<'PY'
@@ -158,6 +169,7 @@ jobs:
           PY
 
       - name: Verify R46 forecast precompute
+        if: env.SKIP_DASHBOARD_DEPLOY != '1'
         working-directory: ${{ github.workspace }}
         run: |
           python - <<'PY'
@@ -192,6 +204,7 @@ jobs:
           PY
 
       - name: Preflight dashboard history
+        if: env.SKIP_DASHBOARD_DEPLOY != '1'
         working-directory: ${{ github.workspace }}
         run: |
           python - <<'PY'
@@ -206,13 +219,16 @@ jobs:
           PY
 
       - name: Build v7 static dashboard
+        if: env.SKIP_DASHBOARD_DEPLOY != '1'
         working-directory: ${{ github.workspace }}
         run: python dashboard/_preview/build_v7_real.py --out dashboard/index.html
 
       - name: Deploy dashboard to Vercel
+        if: env.SKIP_DASHBOARD_DEPLOY != '1'
         run: python tools/deploy_vercel_dashboard.py --dashboard-dir dashboard --target production --wait
 
       - name: Verify public dashboard freshness
+        if: env.SKIP_DASHBOARD_DEPLOY != '1'
         run: |
           python - <<'PY'
           import json
@@ -251,5 +267,6 @@ jobs:
           PY
 
       - name: Verify public dashboard assets
+        if: env.SKIP_DASHBOARD_DEPLOY != '1'
         working-directory: ${{ github.workspace }}
         run: python tools/check_dashboard_public_health.py --require-fresh-live --require-edge-live --require-vni-history --require-current-vni --require-current-forecast --require-execution-desk
