@@ -210,3 +210,8 @@ jobs:
         if: env.LIVE_DATA_REFRESH_FAILED != '1'
         working-directory: ${{ github.workspace }}
         run: python tools/check_dashboard_public_health.py --require-fresh-live --require-edge-live --require-vni-history --require-current-vni --require-current-forecast --require-execution-desk
+
+      - name: Reconcile public dashboard against generated artifacts
+        if: env.LIVE_DATA_REFRESH_FAILED != '1'
+        working-directory: ${{ github.workspace }}
+        run: python tools/reconcile_dashboard_online_local.py --base-url "$VERCEL_PUBLIC_URL"
