@@ -56,7 +56,19 @@ When checking whether live price, forecast, paper trade, or dashboard state is c
 
 Local historical R46 model artifacts may legitimately stop at `2026-05-25`; online forecast/live artifacts may be current to the market date. This difference is expected unless local has just been synced from online or recomputed.
 
-## 2026-06-10 Checkpoint
+## 2026-06-10 Final Checkpoint
+
+At the final checkpoint below, online Ez and local dashboard artifacts were synced and reconciled:
+
+- Online/local `dashboard_live_update_status.json`: `updatedAtICT=2026-06-10 19:16:44`, `latestPriceDate=2026-06-10`, VNINDEX `1803.71`.
+- Online/local `full_universe_live_update_status.json`: `updatedAtICT=2026-06-10 19:19:28`, `latestPriceDate=2026-06-10`, `usableSymbols=688/688`, `sameDaySymbols=552`, `staleButUsableSymbols=136`, `symbolsFailed=0`, `usableForForecast=true`.
+- Online/local `r46_forecast.json`: `status=COMPUTED`, `asOf=2026-06-10`, `computedAtICT=2026-06-10 19:20:54`, `planDate=2026-06-15`, `rows=0`.
+- Online/local execution state: one executed MSB SELL on `2026-06-08`; dashboard holdings empty, copy cash `100.0%`, chart through `2026-06-10`.
+- Reconciliation report: `output/dashboard_reconciliation/reconcile_20260610_192219.md`, PASS with 0 critical and 0 warning.
+
+Interpretation rule: `sameDaySymbols` is not expected to be 100%; it only means symbols with a price row dated the target date. Stocks with no trade today but valid last close are counted in `staleButUsableSymbols`. Use `usableSymbols/symbolsTotal` as the operational forecast coverage KPI.
+
+## 2026-06-10 Earlier Checkpoint
 
 At the checkpoint below, online and local were intentionally different:
 
