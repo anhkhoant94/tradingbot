@@ -1,41 +1,158 @@
 {
-  "updatedAt": "2026-06-05 03:49:34",
-  "updatedAtUtc": "2026-06-05T03:49:34Z",
-  "updatedAtICT": "2026-06-05 10:49:34",
-  "targetDate": "2026-06-05",
-  "symbolsTotal": 703,
-  "symbolsAttempted": 703,
-  "symbolsUpdated": 703,
+  "updatedAt": "2026-06-10 18:42:51",
+  "updatedAtUtc": "2026-06-10T11:42:51Z",
+  "updatedAtICT": "2026-06-10 18:42:51",
+  "targetDate": "2026-06-10",
+  "symbolsTotal": 689,
+  "candidateSymbolsTotal": 704,
+  "inactiveSymbolsExcluded": 15,
+  "inactiveDaysThreshold": 45,
+  "inactiveSample": [
+    {
+      "symbol": "ARM",
+      "last": "2026-03-16",
+      "inactiveDays": 86
+    },
+    {
+      "symbol": "ATS",
+      "last": "2026-03-06",
+      "inactiveDays": 96
+    },
+    {
+      "symbol": "BCG",
+      "last": "2026-03-06",
+      "inactiveDays": 96
+    },
+    {
+      "symbol": "CJC",
+      "last": "2026-03-06",
+      "inactiveDays": 96
+    },
+    {
+      "symbol": "CX8",
+      "last": "2026-04-13",
+      "inactiveDays": 58
+    },
+    {
+      "symbol": "ECI",
+      "last": "2026-03-27",
+      "inactiveDays": 75
+    },
+    {
+      "symbol": "GMA",
+      "last": "2026-03-06",
+      "inactiveDays": 96
+    },
+    {
+      "symbol": "HCT",
+      "last": "2026-03-30",
+      "inactiveDays": 72
+    },
+    {
+      "symbol": "LCD",
+      "last": "2026-03-06",
+      "inactiveDays": 96
+    },
+    {
+      "symbol": "MCC",
+      "last": "2026-03-06",
+      "inactiveDays": 96
+    },
+    {
+      "symbol": "SGD",
+      "last": "2026-04-14",
+      "inactiveDays": 57
+    },
+    {
+      "symbol": "TCD",
+      "last": "2026-03-06",
+      "inactiveDays": 96
+    },
+    {
+      "symbol": "TTE",
+      "last": "2026-03-19",
+      "inactiveDays": 83
+    },
+    {
+      "symbol": "VE4",
+      "last": "2026-03-06",
+      "inactiveDays": 96
+    },
+    {
+      "symbol": "VNT",
+      "last": "2026-04-17",
+      "inactiveDays": 54
+    }
+  ],
+  "inactiveProbeAttempted": 15,
+  "inactiveProbeSample": [
+    "ATS",
+    "BCG",
+    "CJC",
+    "GMA",
+    "LCD",
+    "MCC",
+    "TCD",
+    "VE4",
+    "ARM",
+    "TTE",
+    "ECI",
+    "HCT",
+    "CX8",
+    "SGD",
+    "VNT"
+  ],
+  "symbolsAttempted": 151,
+  "symbolsUpdated": 151,
   "symbolsFailed": 0,
-  "latestPriceDate": "2026-06-05",
-  "symbolsAtTargetOrNewer": 473,
+  "latestPriceDate": "2026-06-10",
+  "symbolsAtTargetOrNewer": 553,
+  "sameDaySymbols": 553,
+  "sameDaySymbolsPct": 80.26,
+  "staleButUsableSymbols": 136,
+  "usableSymbols": 689,
+  "usableSymbolsPct": 100.0,
+  "minFreshSymbols": 447,
+  "minUsableCacheSymbols": 655,
+  "usableForForecast": true,
+  "coverageMode": "same_day_rows",
   "vnindex": {
     "symbol": "VNINDEX",
     "ok": true,
-    "latest": "2026-06-05",
-    "rows": 1603,
-    "vnindex_2012_latest": "2026-06-05",
-    "vnindex_2012_rows": 4180
+    "latest": "2026-06-10",
+    "rows": 1606,
+    "vnindex_2012_latest": "2026-06-10",
+    "vnindex_2012_rows": 4183
   },
   "historyCache": {
-    "path": ".cache/backtest/history_cache.pkl",
-    "symbols": 703,
-    "latestPriceDate": "2026-06-05"
+    "path": ".cache\\backtest\\history_cache.pkl",
+    "symbols": 689,
+    "latestPriceDate": "2026-06-10"
+  },
+  "universe": {
+    "cachePath": ".cache\\universe.parquet",
+    "cachedSymbols": 704,
+    "listingRefresh": "ok",
+    "exchanges": [
+      "HNX",
+      "HOSE"
+    ],
+    "listedSymbols": 703,
+    "newListedSymbols": [],
+    "newListedCount": 0,
+    "missingCachedSymbols": [
+      "SDA"
+    ],
+    "missingCachedCount": 1,
+    "recentMissingKeptCount": 1
   },
   "retryRounds": [
     {
       "round": 1,
-      "freshBefore": 8,
-      "staleBefore": 695,
-      "attempted": 695,
-      "ok": 695
-    },
-    {
-      "round": 2,
-      "freshBefore": 473,
-      "staleBefore": 230
+      "freshBefore": 553,
+      "staleBefore": 136
     }
   ],
   "failedSample": [],
-  "seconds": 381.19
+  "seconds": 69.94
 }
