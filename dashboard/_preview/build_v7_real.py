@@ -231,7 +231,34 @@ def extend_curve_with_execution_state(curve_rows, trade_rows, exec_orders, live_
     vni_df = vni_df.dropna(subset=["date"]).sort_values("date")
     vni_df["date_text"] = vni_df["date"].dt.date.astype(str)
     vni_rows = vni_df[(vni_df["date_text"] > last_date) & (vni_df["date_text"] <= target_date)]
-    if vni_rows.empty:
+    vni_points = [
+        {"date_text": str(vrow.get("date_text") or ""), "close": as_float(vrow.get("close"))}
+        for _, vrow in vni_rows.iterrows()
+    ]
+    vni_points = [row for row in vni_points if row["date_text"] and row["close"] is not None]
+
+    live_vnindex = live_status_payload.get("vnindex") or {}
+    live_vni_date = str(live_vnindex.get("latest") or live_vnindex.get("date") or "")[:10]
+    live_vni_close = as_float(live_vnindex.get("latestClose"), as_float(live_vnindex.get("close")))
+    last_vni_close = as_float(last.get("vniClose"))
+
+    existing_vni_dates = {row["date_text"] for row in vni_points}
+    required_dates = {target_date}
+    for order in exec_orders:
+        order_date = str(order.get("date") or order.get("executedDate") or "")[:10]
+        if order_date and last_date < order_date <= target_date:
+            required_dates.add(order_date)
+    for d in sorted(required_dates):
+        if d in existing_vni_dates or not (last_date < d <= target_date):
+            continue
+        close = live_vni_close if d == live_vni_date else last_vni_close
+        if close is None:
+            continue
+        vni_points.append({"date_text": d, "close": close})
+        existing_vni_dates.add(d)
+    vni_points.sort(key=lambda row: row["date_text"])
+
+    if not vni_points:
         return curve_rows, []
 
     history_by_symbol = {sym: load_symbol_history(sym) for sym in positions}
@@ -245,7 +272,7 @@ def extend_curve_with_execution_state(curve_rows, trade_rows, exec_orders, live_
 
     extended = list(curve_rows)
     notes = []
-    for _, vrow in vni_rows.iterrows():
+    for vrow in vni_points:
         d = str(vrow["date_text"])
         for order in exit_by_date.get(d, []):
             sym = str(order.get("symbol") or "").upper().strip()
@@ -831,7 +858,15 @@ perf = {
 latest_curve = curve_2021[-1] if curve_2021 else {}
 vni_cache = pd.read_parquet(ROOT / ".cache" / "backtest" / "vnindex_daily.parquet")
 vni_cache["date"] = pd.to_datetime(vni_cache["date"])
-latest_vni = vni_cache.sort_values("date").iloc[-1]
+latest_vni_row = vni_cache.sort_values("date").iloc[-1]
+latest_vni_date = latest_vni_row["date"].strftime("%Y-%m-%d")
+latest_vni_close = float(latest_vni_row["close"])
+live_vnindex = live_status.get("vnindex") or {}
+live_vni_date = str(live_vnindex.get("latest") or live_vnindex.get("date") or "")[:10]
+live_vni_close = as_float(live_vnindex.get("latestClose"), as_float(live_vnindex.get("close")))
+if live_vni_date and live_vni_close is not None and live_vni_date >= latest_vni_date:
+    latest_vni_date = live_vni_date
+    latest_vni_close = live_vni_close
 copy_nav_m = DEFAULT_COPY_NAV_MIL
 copy_market_m = sum(h.get("valueMil") or 0 for h in holdings)
 copy_cost_m = sum(h.get("costMilCalc") or 0 for h in holdings)
@@ -1234,8 +1269,8 @@ data = {
         "checkpoints": pt_state.get("weekly_checkpoint_due", {}),
     },
     "vni": {
-        "date": latest_vni["date"].strftime("%Y-%m-%d"),
-        "close": float(latest_vni["close"]),
+        "date": latest_vni_date,
+        "close": latest_vni_close,
     },
 }
 
