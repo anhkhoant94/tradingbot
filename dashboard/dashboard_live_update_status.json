@@ -1,8 +1,8 @@
 {
-  "updatedAt": "2026-06-10 18:41:31",
-  "updatedAtUtc": "2026-06-10T11:41:31Z",
-  "updatedAtICT": "2026-06-10 18:41:31",
-  "seconds": 2.2,
+  "updatedAt": "2026-06-10 19:08:23",
+  "updatedAtUtc": "2026-06-10T12:08:23Z",
+  "updatedAtICT": "2026-06-10 19:08:23",
+  "seconds": 2.14,
   "symbols": [
     "MSB",
     "DXP",
@@ -162,49 +162,49 @@
       "symbol": "DXP",
       "ok": true,
       "rows": 2600,
-      "seconds": 0.55
+      "seconds": 0.52
     },
     {
       "symbol": "GEE",
       "ok": true,
       "rows": 1798,
-      "seconds": 0.44
+      "seconds": 0.41
     },
     {
       "symbol": "KSV",
       "ok": true,
       "rows": 2600,
-      "seconds": 0.43
+      "seconds": 0.37
     },
     {
       "symbol": "MSB",
       "ok": true,
       "rows": 1068,
-      "seconds": 0.31
+      "seconds": 0.32
     },
     {
       "symbol": "NVL",
       "ok": true,
       "rows": 2600,
-      "seconds": 0.46
+      "seconds": 0.45
     },
     {
       "symbol": "PVP",
       "ok": true,
       "rows": 2600,
-      "seconds": 0.62
+      "seconds": 0.47
     },
     {
       "symbol": "VIC",
       "ok": true,
       "rows": 2600,
-      "seconds": 0.48
+      "seconds": 0.35
     },
     {
       "symbol": "YEG",
       "ok": true,
       "rows": 2600,
-      "seconds": 0.45
+      "seconds": 0.38
     }
   ]
 }
