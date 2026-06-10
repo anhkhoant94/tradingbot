@@ -1077,8 +1077,13 @@ forecast_attempt_label = (
     or forecast_status.get("attemptedAtUtc")
 )
 forecast_timing_label = forecast_computed_label if forecast_status.get("status") == "COMPUTED" else (forecast_attempt_label or forecast_computed_label)
-full_fresh = int(as_float(full_universe_status.get("symbolsAtTargetOrNewer"), 0) or 0)
+full_same_day = int(as_float(full_universe_status.get("sameDaySymbols", full_universe_status.get("symbolsAtTargetOrNewer")), 0) or 0)
 full_total = int(as_float(full_universe_status.get("symbolsTotal"), 0) or 0)
+full_stale_usable = int(as_float(full_universe_status.get("staleButUsableSymbols"), 0) or 0)
+full_usable = int(as_float(full_universe_status.get("usableSymbols"), 0) or 0)
+if not full_usable and full_total:
+    full_usable = min(full_total, full_same_day + full_stale_usable)
+full_usable_pct = (full_usable / full_total * 100.0) if full_total else 0.0
 full_updated_label = (
     full_universe_status.get("updatedAtICT")
     or full_universe_status.get("updatedAt")
@@ -1296,8 +1301,14 @@ data = {
         "updatedAt": full_universe_status.get("updatedAt"),
         "updatedAtICT": full_universe_status.get("updatedAtICT"),
         "updatedLabel": full_updated_label,
-        "symbolsAtTargetOrNewer": full_fresh,
+        "symbolsAtTargetOrNewer": full_same_day,
+        "sameDaySymbols": full_same_day,
+        "staleButUsableSymbols": full_stale_usable,
+        "usableSymbols": full_usable,
+        "usableSymbolsPct": full_usable_pct,
         "symbolsTotal": full_total,
+        "coverageMode": full_universe_status.get("coverageMode"),
+        "usableForForecast": full_universe_status.get("usableForForecast"),
     },
     "regimeLabel": regime_label,
     "paperStatus": paper_status,
@@ -1605,7 +1616,7 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
     <div class="statusline">
       <span id="liveStatusText">Giá live: <b>{live_price_date or '-'}</b> · cập nhật {live_updated_label}</span>
       <span id="forecastStatusText">Forecast: <b>{forecast_display_state}</b> · dữ liệu {forecast_as_of or '-'} · lần chạy {forecast_timing_label}</span>
-      <span id="universeStatusText">Universe: <b>{full_fresh}/{full_total}</b> mã · cập nhật {full_updated_label}</span>
+      <span id="universeStatusText">Universe: <b>{full_usable}/{full_total}</b> usable · same-day {full_same_day} · stale usable {full_stale_usable} · cập nhật {full_updated_label}</span>
     </div>
     <section class="sec">
       <div class="sech"><h2>Lệnh cần làm · Execution Desk</h2></div>
