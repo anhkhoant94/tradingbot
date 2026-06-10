@@ -61,7 +61,7 @@ jobs:
           from pathlib import Path
 
           base = os.environ["VERCEL_PUBLIC_URL"].rstrip("/")
-          for name in ["r46_forecast.json", "r46_execution_state.json"]:
+          for name in ["r46_forecast.json", "r46_execution_state.json", "full_universe_live_update_status.json"]:
               url = f"{base}/{name}"
               try:
                   with urllib.request.urlopen(url, timeout=30) as resp:
@@ -73,6 +73,8 @@ jobs:
                           Path("output/r46_forecast_status.json").write_bytes(raw)
                       elif name == "r46_execution_state.json":
                           Path("output/r46_execution_state.json").write_bytes(raw)
+                      elif name == "full_universe_live_update_status.json":
+                          Path("output/full_universe_live_update_status.json").write_bytes(raw)
                       print(f"Preserved public {name}")
               except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
                   print(f"Could not preserve {name}: {exc}")
@@ -118,7 +120,7 @@ jobs:
         run: |
           timeout 720s python tools/update_full_universe_prices.py --workers 10 --retry-stale-passes 2 --retry-workers 4 --min-fresh-pct 0.65 || {
             echo "FULL_UNIVERSE_REFRESH_FAILED=1" >> "$GITHUB_ENV"
-            echo "Full-universe refresh failed; continuing so forecast can fail-closed and dashboard can show the latest attempt status."
+            echo "Full-universe refresh failed; preserving the last public forecast/full-universe state and blocking deploy if it is not current."
           }
 
       - name: Regenerate dashboard analysis
@@ -139,8 +141,21 @@ jobs:
           fi
 
       - name: Precompute R46 forecast
+        if: env.FULL_UNIVERSE_REFRESH_FAILED != '1'
         working-directory: ${{ github.workspace }}
         run: python tools/precompute_r46_forecast.py
+
+      - name: Keep preserved forecast after full-universe failure
+        if: env.FULL_UNIVERSE_REFRESH_FAILED == '1'
+        working-directory: ${{ github.workspace }}
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path("dashboard/r46_forecast.json").read_text(encoding="utf-8-sig"))
+          print(f"Skipped R46 recompute because full-universe refresh failed; preserved status={payload.get('status')} asOf={payload.get('asOf')} planDate={payload.get('planDate')}")
+          PY
 
       - name: Verify R46 forecast precompute
         working-directory: ${{ github.workspace }}
@@ -173,7 +188,7 @@ jobs:
                   raise SystemExit(f"R46 forecast asOf {as_of} is stale vs full-universe latest {fresh_floor}")
               print(f"R46 forecast computed cleanly: asOf={as_of} planDate={payload.get('planDate')} freshFloor={fresh_floor} rows={len(payload.get('rows') or [])}")
           else:
-              print(f"R46 forecast fail-closed: status={payload.get('status')} reason={payload.get('reason')}")
+              raise SystemExit(f"R46 forecast is not computed; refusing to deploy: status={payload.get('status')} reason={payload.get('reason')}")
           PY
 
       - name: Preflight dashboard history

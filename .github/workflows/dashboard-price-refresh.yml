@@ -48,7 +48,7 @@ jobs:
           from pathlib import Path
 
           base = os.environ["VERCEL_PUBLIC_URL"].rstrip("/")
-          for name in ["r46_forecast.json", "full_universe_live_update_status.json"]:
+          for name in ["r46_forecast.json", "r46_execution_state.json", "full_universe_live_update_status.json"]:
               url = f"{base}/{name}"
               try:
                   with urllib.request.urlopen(url, timeout=30) as resp:
@@ -58,6 +58,9 @@ jobs:
                       if name == "r46_forecast.json":
                           Path("output").mkdir(exist_ok=True)
                           Path("output/r46_forecast_status.json").write_bytes(raw)
+                      elif name == "r46_execution_state.json":
+                          Path("output").mkdir(exist_ok=True)
+                          Path("output/r46_execution_state.json").write_bytes(raw)
                       elif name == "full_universe_live_update_status.json":
                           Path("output").mkdir(exist_ok=True)
                           Path("output/full_universe_live_update_status.json").write_bytes(raw)
@@ -112,7 +115,7 @@ jobs:
                   raise SystemExit(f"price-only refresh refuses fallback forecast: {bad}")
               print(f"Preserved R46 forecast: asOf={payload.get('asOf')} planDate={payload.get('planDate')} rows={len(payload.get('rows') or [])}")
           else:
-              print(f"Preserved R46 forecast is fail-closed: status={payload.get('status')} reason={payload.get('reason')}")
+              raise SystemExit(f"Preserved R46 forecast is fail-closed; refusing to deploy: status={payload.get('status')} reason={payload.get('reason')}")
           PY
 
       - name: Preflight dashboard history

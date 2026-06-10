@@ -188,7 +188,13 @@ def main() -> None:
         live_vni_close = float(live_vni_close)
     except (TypeError, ValueError):
         live_vni_close = None
-    source_vni = fetch_vps_vnindex_latest() if (args.require_current_vni or args.require_current_forecast) else None
+    source_vni = None
+    source_vni_error = None
+    if args.require_current_vni or args.require_current_forecast:
+        try:
+            source_vni = fetch_vps_vnindex_latest()
+        except Exception as exc:  # VPS reference can timeout; do not hide dashboard health facts.
+            source_vni_error = str(exc)[:200]
     edge_payload = fetch_edge_live_status(args.url)
     edge_age_seconds = parse_status_age_seconds(edge_payload or {}) if edge_payload else None
     edge_latest_price_date = str((edge_payload or {}).get("latestPriceDate") or "")
@@ -208,12 +214,10 @@ def main() -> None:
     forecast_as_of = str(forecast_payload.get("asOf") or "")
     forecast_as_of_matches_source = source_vni is None or forecast_as_of == source_vni.get("date")
     live_vni_exact_match = (
-        source_vni is None
-        or (
-            live_vni_date == source_vni.get("date")
-            and live_vni_close is not None
-            and abs(live_vni_close - float(source_vni.get("close"))) <= 0.01
-        )
+        source_vni is not None
+        and live_vni_date == source_vni.get("date")
+        and live_vni_close is not None
+        and abs(live_vni_close - float(source_vni.get("close"))) <= 0.01
     )
     live_vni_recent_snapshot = (
         source_vni is not None
@@ -223,12 +227,10 @@ def main() -> None:
         and live_status_age_seconds <= 1200
     )
     edge_vni_exact_match = (
-        source_vni is None
-        or (
-            edge_vni_date == source_vni.get("date")
-            and edge_vni_close is not None
-            and abs(edge_vni_close - float(source_vni.get("close"))) <= 0.01
-        )
+        source_vni is not None
+        and edge_vni_date == source_vni.get("date")
+        and edge_vni_close is not None
+        and abs(edge_vni_close - float(source_vni.get("close"))) <= 0.01
     )
     edge_vni_recent_snapshot = (
         source_vni is not None
@@ -250,6 +252,21 @@ def main() -> None:
         and live_status_age_seconds <= max(0.0, float(args.max_live_age_minutes)) * 60.0
     )
     static_live_current_snapshot = static_live_is_today and live_vni_exact_match
+    source_unavailable_live_ok = (
+        source_vni is None
+        and source_vni_error is not None
+        and (
+            edge_live_ok
+            or (static_live_is_today and static_live_is_recent)
+        )
+    )
+    live_vni_check_pass = (
+        source_unavailable_live_ok
+        or live_vni_exact_match
+        or live_vni_recent_snapshot
+        or edge_vni_exact_match
+        or edge_vni_recent_snapshot
+    )
     payload = {
         "base_url": args.url,
         "index_status": idx_status,
@@ -274,6 +291,7 @@ def main() -> None:
         "live_vni_close": live_vni_close,
         "source_vni_date": source_vni.get("date") if source_vni else None,
         "source_vni_close": source_vni.get("close") if source_vni else None,
+        "source_vni_error": source_vni_error,
         "live_vni_matches_source": live_vni_exact_match,
         "live_vni_recent_snapshot": live_vni_recent_snapshot,
         "edge_live_status": (edge_payload or {}).get("_http_status"),
@@ -285,7 +303,7 @@ def main() -> None:
         "edge_vni_close": edge_vni_close,
         "edge_vni_matches_source": edge_vni_exact_match,
         "edge_vni_recent_snapshot": edge_vni_recent_snapshot,
-        "live_vni_check_pass": live_vni_exact_match or live_vni_recent_snapshot or edge_vni_exact_match or edge_vni_recent_snapshot,
+        "live_vni_check_pass": live_vni_check_pass,
         "forecast_status": forecast_payload.get("status"),
         "forecast_as_of": forecast_as_of or None,
         "forecast_plan_date": forecast_payload.get("planDate"),

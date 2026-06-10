@@ -1,3 +1,33 @@
+## 2026-06-10 Codex - Block deploy when forecast/full-universe chain fails and keep MSB copy execution visible
+
+User reported the visible MSB sell-all history disappeared again. Follow-up audit confirmed the public execution state still contains the real copy order `2026-06-08 MSB SELL/BAN HET 3,800 @ 14.7k`, but the dashboard must never rely on model ledger rows to show copy-live executions.
+
+Additional hardening:
+- `dashboard/_preview/build_v7_real.py` embeds executed copy orders under `D.executionState.orders`, renders them in separate Copy and Ledger sections, and asserts every executed order is present in dashboard data before writing HTML.
+- `tools/check_dashboard_public_health.py --require-execution-desk` now fetches public `/r46_execution_state.json`, parses embedded dashboard data, and fails if public HTML is missing copy execution tables or if embedded copy execution rows do not match execution state.
+- Health check now catches VPS VNINDEX timeout as `source_vni_error`; a transient reference-source timeout no longer masks dashboard state.
+- `.github/workflows/dashboard-auto-refresh.yml` now preserves public `full_universe_live_update_status.json` together with forecast/execution state. If full-universe refresh fails, R46 precompute is skipped and deploy is blocked unless the preserved forecast is still `COMPUTED`.
+- `.github/workflows/dashboard-price-refresh.yml` now blocks deploy if the preserved forecast is fail-closed. Price-only refresh can no longer publish a dashboard with `NOT_COMPUTED` forecast.
+
+Local verification:
+- `python -m py_compile dashboard/_preview/build_v7_real.py tools/check_dashboard_public_health.py` PASS.
+- `python dashboard/_preview/build_v7_real.py --out dashboard/_preview/check-copy-history.html` PASS.
+- Local HTML embeds one copy execution `2026-06-08 MSB SELL/BAN HET 3,800`, contains `copyExecRows` and `copyLedgerBody`, and model ledger is not polluted by the copy sell.
+- Workflow YAML parsed successfully with PyYAML.
+
+## 2026-06-10 Claude - RESEARCH HIT: H6P-capped stack CAGR 54.94% MDD -25.76% 6/6 min edge 34.95pp (PEER_REVIEW_PENDING)
+
+Lane: thực hiện đúng next-step của executable audit H6 (2026-06-04) — áp H6P scale ở position-weight level vào ENGINE R46 THẬT (`simulate_regime_stop`), stack thêm trên sideways liq5ty best cell. Handoff đầy đủ: `output/beat_vni30_parallel/CLAUDE_H6P_STACK_HIT_HANDOFF_FOR_CODEX_20260610.md`.
+
+Candidate `cliff_hv30`: R46 pinned (4 MD5 untouched) + sideways vni13gt4_gross85 + liq5ty + H6P-capped scale (`vol_scale = clip(0.90/realized_vol20(R46 ec), 1, 3.0)` × breadth50 ramp 0.38-0.50 → 0.20-1.0; cap 0.55/symbol; gross ≤ 1.0). **CAGR 54.94% / MaxDD -25.76% / Sharpe 1.78 / recent 6/6 / min edge 34.95pp / all-years 7/11 (giữ 2018) / 0 T+2.5.** Pareto trội hơn cả R46 (46.75/-27.61) lẫn sideways best (50.94/-28.67) ở MỌI chiều chính.
+
+Stress: cost 18/20bps PASS (hv2/hv2.5/hv3 đều ≥31.8pp min edge @20bps); plateau hv 1.75-3.5 PASS, cliff hv4.0; tv 0.8/1.0 PASS; reproduce bit-exact cross-process; remove-top1 (BSR) FAIL min edge 8.56pp — concentration risk kế thừa nguyên sideways lane, là điểm audit chính.
+
+Do-not-rerun:
+- Do NOT rerun trend-guarded boost variants (tg_hv*) — zero boost ngoài uptrend làm TỆ HƠN (3-5/6), verified.
+- Do NOT rerun hv ≥ 4 unguarded — cliff verified (5/6, min edge 29.7pp); hv7 gốc fail 2026 25.8pp.
+- Do NOT promote dashboard/paper-trade — cần Codex independent audit (PIT path qua R46 ec signal + daily-lot check + concentration) và anh approve. Scripts: `backtest/r46_h6p_{weight_overlay_smoke,trend_guard_sweep,hv2_stress,cliff_removetop}_20260610.py`.
+
 ## 2026-06-10 Codex - Restore visible copy execution history for MSB sell
 
 User reported the `BÁN HẾT MSB` history row disappeared again. Audit confirmed data was not lost: public `/r46_execution_state.json` still had the executed copy order `2026-06-08 MSB SELL/BÁN HẾT 3,800 @ 14.7k`, position after `0`, copy account full cash. The bug was presentation/data embedding: `dashboard/_preview/build_v7_real.py` embedded only `executionState.orderCount` and `lastExecutedDate`, not the actual execution orders. The previous fix correctly removed copy execution from the model ledger to avoid mixing NAV bases, but failed to add a separate visible copy-execution history.
