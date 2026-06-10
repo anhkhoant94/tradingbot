@@ -1,3 +1,15 @@
+## 2026-06-10 Codex - Fix intraday full-universe gate stuck NOT_COMPUTED
+
+User reported public dashboard showing `NOT_COMPUTED` again even though the live/forecast flow had been approved. Audit found the blocker is not UI and not a missing GitHub trigger: public `full_universe_live_update_status.json` at `2026-06-10 09:19:14 ICT` had `symbolsAttempted=703`, `symbolsUpdated=703`, `symbolsFailed=0`, `latestPriceDate=2026-06-10`, but only `symbolsAtTargetOrNewer=330`. The old forecast gate required same-day rows for at least `65%` of the universe (`457/703`) and therefore overwrote `/r46_forecast.json` with `NOT_COMPUTED` reason `full_universe_freshness_gate_failed`.
+
+Root cause: for intraday forecast, many stocks may not have printed today yet; their latest valid market quote is still the previous close. Treating those names as stale makes the forecast lane fail even after a clean full-universe refresh.
+
+Fix:
+- `tools/precompute_r46_forecast.py` now uses a `full_universe_usable()` gate. It still passes the original same-day-row gate when available, but also allows `successful_refresh_with_last_close` when the history cache is broad/current, the refresh attempted enough symbols, enough requests succeeded, and failed symbols are low. It still fails if requests all fail or cache dates are stale.
+- `tools/update_full_universe_prices.py` now writes `usableForForecast`, `coverageMode`, `staleButUsableSymbols`, `minFreshSymbols`, and `minUsableCacheSymbols`; it no longer exits non-zero merely because many valid no-trade-today symbols use last close.
+
+Verification before push: `python -m py_compile tools/precompute_r46_forecast.py tools/update_full_universe_prices.py` passed. Unit gate check on the public stuck case (`330/703` same-day, `703/703` updated, `0` failed, cache current) returns PASS with `coverageMode=successful_refresh_with_last_close`; all-failed and stale-cache controls still return FAIL.
+
 ## 2026-06-09 Codex - Fix model ledger vs copy execution mixing
 
 User flagged that the MSB `BAN HET` row in recent/history did not match the MSB buy quantities in history. Audit confirmed the issue: `dashboard/_preview/build_v7_real.py` had mixed `r46_execution_state.json` copy-live order (`MSB` sell 3,800 cp on NAV copy 1 ty) into `tradesLatest`/`ledger`, while the surrounding historical rows were model ledger rows rebased to `NAV 2021 = 1 ty`. This made the history table internally inconsistent.

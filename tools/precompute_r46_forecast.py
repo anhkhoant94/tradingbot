@@ -788,6 +788,64 @@ def fail_payload(as_of: str | None, plan_date: str | None, reason: str, message:
     }
 
 
+def full_universe_usable(full_status: dict, as_of: str | None) -> tuple[bool, dict]:
+    total = int(num(full_status.get("symbolsTotal"), 0))
+    fresh = int(num(full_status.get("symbolsAtTargetOrNewer"), 0))
+    attempted = int(num(full_status.get("symbolsAttempted"), 0))
+    updated = int(num(full_status.get("symbolsUpdated"), 0))
+    failed = int(num(full_status.get("symbolsFailed"), 0))
+    target_date = str(full_status.get("targetDate") or "")
+    latest_date = str(full_status.get("latestPriceDate") or "")
+    history = full_status.get("historyCache") or {}
+    history_symbols = int(num(history.get("symbols"), 0))
+    history_latest = str(history.get("latestPriceDate") or "")
+    min_same_day = math.ceil(total * 0.65) if total else 0
+    min_cache = math.ceil(total * 0.95) if total else 0
+    stale_but_usable = max(0, total - fresh)
+    anchor = str(as_of or target_date or latest_date)
+
+    meta = {
+        "symbolsTotal": total,
+        "symbolsAtTargetOrNewer": fresh,
+        "staleButUsableSymbols": stale_but_usable,
+        "minFreshSymbols": min_same_day,
+        "minUsableCacheSymbols": min_cache,
+        "symbolsAttempted": attempted,
+        "symbolsUpdated": updated,
+        "symbolsFailed": failed,
+        "targetDate": target_date,
+        "latestPriceDate": latest_date,
+        "historyCacheSymbols": history_symbols,
+        "historyCacheLatestPriceDate": history_latest,
+        "updatedAt": full_status.get("updatedAt"),
+        "updatedAtICT": full_status.get("updatedAtICT"),
+    }
+    if not total:
+        meta["coverageMode"] = "missing_universe_status"
+        return False, meta
+    if min_same_day <= 0 or fresh >= min_same_day:
+        meta["coverageMode"] = "same_day_rows"
+        meta["usableForForecast"] = True
+        return True, meta
+
+    cache_current = bool(latest_date and (not anchor or latest_date >= anchor))
+    history_current = bool(history_latest and (not anchor or history_latest >= anchor))
+    cache_broad = history_symbols >= min_cache
+    refresh_clean = attempted > 0 and updated >= min_same_day and failed <= max(5, math.floor(attempted * 0.05))
+    if cache_current and history_current and cache_broad and refresh_clean:
+        meta["coverageMode"] = "successful_refresh_with_last_close"
+        meta["usableForForecast"] = True
+        return True, meta
+
+    meta["coverageMode"] = "insufficient_usable_quotes"
+    meta["usableForForecast"] = False
+    meta["cacheCurrent"] = cache_current
+    meta["historyCurrent"] = history_current
+    meta["cacheBroad"] = cache_broad
+    meta["refreshClean"] = refresh_clean
+    return False, meta
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--skip-rebuild-inputs", action="store_true")
@@ -804,25 +862,15 @@ def main() -> None:
     existing = read_json(DASH / "r46_forecast.json")
     materialize_due_forecast(existing, as_of)
     if full_status:
-        total = int(num(full_status.get("symbolsTotal"), 0))
-        fresh = int(num(full_status.get("symbolsAtTargetOrNewer"), 0))
-        min_fresh = math.ceil(total * 0.65) if total else 0
-        if total and fresh < min_fresh:
+        usable, coverage_meta = full_universe_usable(full_status, as_of)
+        if not usable:
             write_payload(
                 fail_payload(
                     as_of,
                     plan_date,
                     "full_universe_freshness_gate_failed",
-                    f"Full-universe live cache chi fresh {fresh}/{total} ma (<65%); khong publish forecast moi.",
-                    {
-                        "symbolsTotal": total,
-                        "symbolsAtTargetOrNewer": fresh,
-                        "minFreshSymbols": min_fresh,
-                        "targetDate": full_status.get("targetDate"),
-                        "latestPriceDate": full_status.get("latestPriceDate"),
-                        "updatedAt": full_status.get("updatedAt"),
-                        "updatedAtICT": full_status.get("updatedAtICT"),
-                    },
+                    "Full-universe live cache chua du usable quotes; khong publish forecast moi.",
+                    coverage_meta,
                 )
             )
             return

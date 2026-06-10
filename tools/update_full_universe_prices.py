@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import pickle
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -216,6 +217,25 @@ def main() -> None:
         for r in results
         if not r.get("ok") and str(r.get("symbol", "")).upper() not in ok_symbols
     ]
+    symbols_at_target = sum(1 for d in latest_dates if d >= target.isoformat())
+    min_cache = math.ceil(len(symbols) * 0.95) if symbols else 0
+    history_symbols = int(history_cache_result.get("symbols") or 0)
+    history_latest = str(history_cache_result.get("latestPriceDate") or "")
+    latest_price_date = max(latest_dates) if latest_dates else None
+    same_day_ok = min_required <= 0 or symbols_at_target >= min_required
+    refresh_clean = (
+        len(attempted_symbols) > 0
+        and len(ok_symbols) >= min_required
+        and len(failed) <= max(5, math.floor(len(attempted_symbols) * 0.05))
+    )
+    cache_usable = (
+        history_symbols >= min_cache
+        and bool(latest_price_date and latest_price_date >= target.isoformat())
+        and bool(history_latest and history_latest >= target.isoformat())
+        and refresh_clean
+    )
+    usable_for_forecast = bool(same_day_ok or cache_usable)
+    coverage_mode = "same_day_rows" if same_day_ok else ("successful_refresh_with_last_close" if cache_usable else "insufficient_usable_quotes")
     payload = {
         "updatedAt": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
         "updatedAtUtc": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
@@ -225,8 +245,13 @@ def main() -> None:
         "symbolsAttempted": len(attempted_symbols),
         "symbolsUpdated": len(ok_symbols),
         "symbolsFailed": len(failed),
-        "latestPriceDate": max(latest_dates) if latest_dates else None,
-        "symbolsAtTargetOrNewer": sum(1 for d in latest_dates if d >= target.isoformat()),
+        "latestPriceDate": latest_price_date,
+        "symbolsAtTargetOrNewer": symbols_at_target,
+        "staleButUsableSymbols": max(0, len(symbols) - symbols_at_target),
+        "minFreshSymbols": min_required,
+        "minUsableCacheSymbols": min_cache,
+        "usableForForecast": usable_for_forecast,
+        "coverageMode": coverage_mode,
         "vnindex": vni_result,
         "historyCache": history_cache_result,
         "retryRounds": retry_rounds,
@@ -239,8 +264,8 @@ def main() -> None:
     STATUS_PATH.write_text(text + "\n", encoding="utf-8")
     DASH_STATUS_PATH.write_text(text + "\n", encoding="utf-8")
     print(text)
-    if min_required > 0 and payload["symbolsAtTargetOrNewer"] < min_required:
-        raise SystemExit("full universe price refresh did not reach enough symbols")
+    if min_required > 0 and not usable_for_forecast:
+        raise SystemExit("full universe price refresh did not reach enough usable quotes")
 
 
 if __name__ == "__main__":
