@@ -315,14 +315,32 @@ def main() -> None:
         latest_now = latest_date_map(active_pre)
         stale = [sym for sym in active_pre if latest_now.get(sym, "") < target.isoformat()]
         fresh_count = len(active_pre) - len(stale)
+        failed_attempts = {
+            str(r.get("symbol", "")).upper()
+            for r in results
+            if not r.get("ok") and r.get("symbol")
+        }
+        missing_cache = {sym for sym in active_pre if not latest_now.get(sym)}
+        retry_targets = [
+            sym for sym in stale
+            if sym in failed_attempts or sym in missing_cache
+        ]
         min_required_pre = max(0, int(len(active_pre) * float(args.min_fresh_pct)))
-        retry_rounds.append({"round": round_no + 1, "freshBefore": fresh_count, "staleBefore": len(stale)})
-        if min_required_pre <= 0 or fresh_count >= min_required_pre or not stale:
+        retry_rounds.append({
+            "round": round_no + 1,
+            "freshBefore": fresh_count,
+            "staleBefore": len(stale),
+            "failedOrMissingBefore": len(retry_targets),
+        })
+        if min_required_pre <= 0 or not stale:
             break
-        retry_results = run_price_updates(stale, args.retry_workers)
+        if fresh_count >= min_required_pre and not retry_targets:
+            break
+        retry_symbols = retry_targets if fresh_count >= min_required_pre else stale
+        retry_results = run_price_updates(retry_symbols, args.retry_workers)
         results.extend(retry_results)
-        attempted_symbols.update(stale)
-        retry_rounds[-1]["attempted"] = len(stale)
+        attempted_symbols.update(retry_symbols)
+        retry_rounds[-1]["attempted"] = len(retry_symbols)
         retry_rounds[-1]["ok"] = sum(1 for r in retry_results if r.get("ok"))
 
     vni_result = update_vnindex_2012()
