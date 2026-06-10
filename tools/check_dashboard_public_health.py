@@ -348,7 +348,7 @@ def main() -> None:
         "execution_state_order_count": len(expected_exec_orders),
         "embedded_copy_execution_count": len(embedded_exec_orders),
         "copy_execution_matches_state": copy_execution_matches_state,
-        "has_copy_execution_table": 'id="copyExecRows"' in index and 'id="copyLedgerBody"' in index,
+        "has_copy_execution_table": 'id="copyExecRows"' in index,
         "full_cash_expected": full_cash_expected,
         "embedded_holdings_count": len(embedded_holdings),
         "embedded_copy_cash_pct": embedded_copy_cash_pct,

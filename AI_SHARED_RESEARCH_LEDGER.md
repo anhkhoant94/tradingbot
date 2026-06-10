@@ -1,12 +1,33 @@
-## 2026-06-10 Claude - PX independent lane (zero R46) NEGATIVE — perfect-router ceiling 26.35%, LANE CLOSED
+﻿## 2026-06-10 Codex - Dashboard ledger separation: materialize MSB model sell, remove copy execution from history tab
 
-Anh yêu cầu hướng hoàn toàn độc lập R46, chưng cất tinh hoa cũ, target ~2× hiệu quả. Verdict file: `output/px1_independent_20260610/VERDICT_PX_INDEPENDENT_LANE.md`.
+User clarified `Lịch sử giao dịch` must contain only the full model executed ledger under the model NAV basis, not copy-account executions. Fix in `dashboard/_preview/build_v7_real.py`: materialize executed sell orders from `r46_execution_state.json` into model ledger when source `trades.parquet/history.js` has not yet recorded the trade. Current MSB sell on 2026-06-08 is now embedded as model SELL with `modelFullShares=169300`, displayed as `81800` shares after the existing `NAV 2021 = 1 ty` ledger scale, matching the scaled MSB buys in the same table. `tradesLatest[0]` and `ledger[0]` are now MSB SELL. Removed copy execution block from the `Lịch sử giao dịch` tab; copy executions remain visible only in Copy Trade. Health check now requires `copyExecRows` only, not the removed `copyLedgerBody`.
 
-Đã build + đo trên Phase R strict daily-lot engine (data history_2012 refetch, 509 syms, full 2016-07→2026-06): R-1 breakout nguyên bản full-period CAGR **-8.49%** MDD -99.4% (2017 +94.7%/2020 +84.2% còn alpha, nhưng 2024 -30.6%/2025 -67.1% chết hẳn); liq3+cap33+bear-gate ~+1.2%; liquid momentum 13W top-5 -1.34% (2022 -61.6%); style-momentum router PIT -10/-11%. **Hindsight bound: router hoàn hảo (max(A,B,cash) mỗi năm) chỉ đạt CAGR 26.35%, VNI+30 4/11** — bottleneck là cả 2 sleeve cùng mất alpha 2023-2026, không phải router.
+Verification: `python -m py_compile dashboard/_preview/build_v7_real.py tools/check_dashboard_public_health.py` PASS; local build writes `dashboard/index.html` with `ledger=923`; assertions PASS that MSB SELL is first in both latest/model ledger and `copyLedgerBody` / `Lịch sử copy đã khớp` are absent.
+## 2026-06-10 Codex - H6P-capped R46 stack production audit: RESEARCH HIT, PRODUCTION BLOCKED
 
-Key data finding: **R-1 38.21% (2016-2020) KHÔNG reproduce trên history_2012 refetch** (2016 -19.7%, 2019 -31.8%) — khớp R1 drift bisect rebaseline verdict. Phase R numbers cũ là lịch sử, không dùng làm baseline.
+User asked Codex to audit Claude's new H6P-capped stack (`cliff_hv30`) for production. Verdict file: `output/beat_vni30_parallel/codex_h6p_production_audit_20260610/VERDICT.md`; audit script: `backtest/codex_h6p_production_audit_20260610.py`.
 
-Do-not-rerun: breakout family full-period mọi biến thể liq/cap/gate; liquid momentum 13W standalone; style router trên 2 sleeve này. Hướng độc lập duy nhất còn mở: guided search quy mô lớn tìm sleeve mới 2021-2026 (cần anh approve budget). Frontier full-period vẫn là H6P-capped stack 54.94% (PEER_REVIEW_PENDING); segment 2021-2026 của stack ≈ 99% CAGR.
+Independent rebuild confirms the headline is real: `cliff_hv30` at 15bps gives CAGR `54.944557%`, MaxDD `-25.764135%`, Sharpe `1.781318`, recent VNI+30 `6/6`, min recent edge `34.947508pp`, all-years VNI+30 `7/11`, T+2.5 violations `0`. R46 base rebuild matches locked baseline exactly (`46.751375%`, `-27.605692%`, recent `6/6`), 4/4 pinned MD5 pass, and the R46 equity curve used for H6P vol scaling matches fresh R46 rerun exactly (`max_nav_diff_vnd=0`, `max_ret_diff=0`, scale diff `0`).
+
+Stress: hv3 remains above gate through 20bps extra slippage (`18bps` CAGR `53.608757%`, min edge `34.511995pp`; `20bps` CAGR `52.791176%`, min edge `34.213218pp`). At 25bps/30bps, CAGR gate vs sideways best fails even though recent `6/6` survives.
+
+Production blockers:
+- Remove-top-contributor stress fails badly on the actual hv3 candidate: remove BSR -> recent VNI+30 `5/6`, min edge `10.481078pp`; remove top2/top3 -> recent `4/6`, top3 min edge `-3.209806pp`.
+- Capacity/participation is not production-safe at compounded NAV: max order participation 514.66% ADV20 (DXP buy 2026-05-04, trade 37.61 ty vs ADV20 7.31 ty); 330 trades >10% ADV20, 190 >20%, 144 >30%. Copy NAV 1 ty may be smaller, but production needs explicit AUM/participation cap.
+- Concentration drifts beyond target cap: target max `55%`, realized single-name max `62.50%` (ANV 2018-11-23), p95 top-name `57.07%`.
+- No live forecast/paper-trade/dashboard chain exists for H6P; Ez dashboard remains R46-only.
+
+Decision: **BLOCK_PRODUCTION / KEEP_RESEARCH_ONLY**. Do not migrate to dashboard or replace R46 paper-trade. Next acceptable work is a narrow mitigation smoke: cap/participation/concentration guard that preserves recent `6/6`, then a parallel paper-trade lane only after live forecast generator reproduces historical target chain.
+
+## 2026-06-10 Claude - PX independent lane (zero R46) NEGATIVE â€” perfect-router ceiling 26.35%, LANE CLOSED
+
+Anh yÃªu cáº§u hÆ°á»›ng hoÃ n toÃ n Ä‘á»™c láº­p R46, chÆ°ng cáº¥t tinh hoa cÅ©, target ~2Ã— hiá»‡u quáº£. Verdict file: `output/px1_independent_20260610/VERDICT_PX_INDEPENDENT_LANE.md`.
+
+ÄÃ£ build + Ä‘o trÃªn Phase R strict daily-lot engine (data history_2012 refetch, 509 syms, full 2016-07â†’2026-06): R-1 breakout nguyÃªn báº£n full-period CAGR **-8.49%** MDD -99.4% (2017 +94.7%/2020 +84.2% cÃ²n alpha, nhÆ°ng 2024 -30.6%/2025 -67.1% cháº¿t háº³n); liq3+cap33+bear-gate ~+1.2%; liquid momentum 13W top-5 -1.34% (2022 -61.6%); style-momentum router PIT -10/-11%. **Hindsight bound: router hoÃ n háº£o (max(A,B,cash) má»—i nÄƒm) chá»‰ Ä‘áº¡t CAGR 26.35%, VNI+30 4/11** â€” bottleneck lÃ  cáº£ 2 sleeve cÃ¹ng máº¥t alpha 2023-2026, khÃ´ng pháº£i router.
+
+Key data finding: **R-1 38.21% (2016-2020) KHÃ”NG reproduce trÃªn history_2012 refetch** (2016 -19.7%, 2019 -31.8%) â€” khá»›p R1 drift bisect rebaseline verdict. Phase R numbers cÅ© lÃ  lá»‹ch sá»­, khÃ´ng dÃ¹ng lÃ m baseline.
+
+Do-not-rerun: breakout family full-period má»i biáº¿n thá»ƒ liq/cap/gate; liquid momentum 13W standalone; style router trÃªn 2 sleeve nÃ y. HÆ°á»›ng Ä‘á»™c láº­p duy nháº¥t cÃ²n má»Ÿ: guided search quy mÃ´ lá»›n tÃ¬m sleeve má»›i 2021-2026 (cáº§n anh approve budget). Frontier full-period váº«n lÃ  H6P-capped stack 54.94% (PEER_REVIEW_PENDING); segment 2021-2026 cá»§a stack â‰ˆ 99% CAGR.
 
 ## 2026-06-10 Codex - Fix full-cash sidebar cash/CAGR and harden metric freshness
 
@@ -71,31 +92,31 @@ Cloud verification:
 
 ## 2026-06-10 Claude - RESEARCH HIT: H6P-capped stack CAGR 54.94% MDD -25.76% 6/6 min edge 34.95pp (PEER_REVIEW_PENDING)
 
-Lane: thực hiện đúng next-step của executable audit H6 (2026-06-04) — áp H6P scale ở position-weight level vào ENGINE R46 THẬT (`simulate_regime_stop`), stack thêm trên sideways liq5ty best cell. Handoff đầy đủ: `output/beat_vni30_parallel/CLAUDE_H6P_STACK_HIT_HANDOFF_FOR_CODEX_20260610.md`.
+Lane: thá»±c hiá»‡n Ä‘Ãºng next-step cá»§a executable audit H6 (2026-06-04) â€” Ã¡p H6P scale á»Ÿ position-weight level vÃ o ENGINE R46 THáº¬T (`simulate_regime_stop`), stack thÃªm trÃªn sideways liq5ty best cell. Handoff Ä‘áº§y Ä‘á»§: `output/beat_vni30_parallel/CLAUDE_H6P_STACK_HIT_HANDOFF_FOR_CODEX_20260610.md`.
 
-Candidate `cliff_hv30`: R46 pinned (4 MD5 untouched) + sideways vni13gt4_gross85 + liq5ty + H6P-capped scale (`vol_scale = clip(0.90/realized_vol20(R46 ec), 1, 3.0)` × breadth50 ramp 0.38-0.50 → 0.20-1.0; cap 0.55/symbol; gross ≤ 1.0). **CAGR 54.94% / MaxDD -25.76% / Sharpe 1.78 / recent 6/6 / min edge 34.95pp / all-years 7/11 (giữ 2018) / 0 T+2.5.** Pareto trội hơn cả R46 (46.75/-27.61) lẫn sideways best (50.94/-28.67) ở MỌI chiều chính.
+Candidate `cliff_hv30`: R46 pinned (4 MD5 untouched) + sideways vni13gt4_gross85 + liq5ty + H6P-capped scale (`vol_scale = clip(0.90/realized_vol20(R46 ec), 1, 3.0)` Ã— breadth50 ramp 0.38-0.50 â†’ 0.20-1.0; cap 0.55/symbol; gross â‰¤ 1.0). **CAGR 54.94% / MaxDD -25.76% / Sharpe 1.78 / recent 6/6 / min edge 34.95pp / all-years 7/11 (giá»¯ 2018) / 0 T+2.5.** Pareto trá»™i hÆ¡n cáº£ R46 (46.75/-27.61) láº«n sideways best (50.94/-28.67) á»Ÿ Má»ŒI chiá»u chÃ­nh.
 
-Stress: cost 18/20bps PASS (hv2/hv2.5/hv3 đều ≥31.8pp min edge @20bps); plateau hv 1.75-3.5 PASS, cliff hv4.0; tv 0.8/1.0 PASS; reproduce bit-exact cross-process; remove-top1 (BSR) FAIL min edge 8.56pp — concentration risk kế thừa nguyên sideways lane, là điểm audit chính.
+Stress: cost 18/20bps PASS (hv2/hv2.5/hv3 Ä‘á»u â‰¥31.8pp min edge @20bps); plateau hv 1.75-3.5 PASS, cliff hv4.0; tv 0.8/1.0 PASS; reproduce bit-exact cross-process; remove-top1 (BSR) FAIL min edge 8.56pp â€” concentration risk káº¿ thá»«a nguyÃªn sideways lane, lÃ  Ä‘iá»ƒm audit chÃ­nh.
 
 Do-not-rerun:
-- Do NOT rerun trend-guarded boost variants (tg_hv*) — zero boost ngoài uptrend làm TỆ HƠN (3-5/6), verified.
-- Do NOT rerun hv ≥ 4 unguarded — cliff verified (5/6, min edge 29.7pp); hv7 gốc fail 2026 25.8pp.
-- Do NOT promote dashboard/paper-trade — cần Codex independent audit (PIT path qua R46 ec signal + daily-lot check + concentration) và anh approve. Scripts: `backtest/r46_h6p_{weight_overlay_smoke,trend_guard_sweep,hv2_stress,cliff_removetop}_20260610.py`.
+- Do NOT rerun trend-guarded boost variants (tg_hv*) â€” zero boost ngoÃ i uptrend lÃ m Tá»† HÆ N (3-5/6), verified.
+- Do NOT rerun hv â‰¥ 4 unguarded â€” cliff verified (5/6, min edge 29.7pp); hv7 gá»‘c fail 2026 25.8pp.
+- Do NOT promote dashboard/paper-trade â€” cáº§n Codex independent audit (PIT path qua R46 ec signal + daily-lot check + concentration) vÃ  anh approve. Scripts: `backtest/r46_h6p_{weight_overlay_smoke,trend_guard_sweep,hv2_stress,cliff_removetop}_20260610.py`.
 
 ## 2026-06-10 Codex - Restore visible copy execution history for MSB sell
 
-User reported the `BÁN HẾT MSB` history row disappeared again. Audit confirmed data was not lost: public `/r46_execution_state.json` still had the executed copy order `2026-06-08 MSB SELL/BÁN HẾT 3,800 @ 14.7k`, position after `0`, copy account full cash. The bug was presentation/data embedding: `dashboard/_preview/build_v7_real.py` embedded only `executionState.orderCount` and `lastExecutedDate`, not the actual execution orders. The previous fix correctly removed copy execution from the model ledger to avoid mixing NAV bases, but failed to add a separate visible copy-execution history.
+User reported the `BÃN Háº¾T MSB` history row disappeared again. Audit confirmed data was not lost: public `/r46_execution_state.json` still had the executed copy order `2026-06-08 MSB SELL/BÃN Háº¾T 3,800 @ 14.7k`, position after `0`, copy account full cash. The bug was presentation/data embedding: `dashboard/_preview/build_v7_real.py` embedded only `executionState.orderCount` and `lastExecutedDate`, not the actual execution orders. The previous fix correctly removed copy execution from the model ledger to avoid mixing NAV bases, but failed to add a separate visible copy-execution history.
 
 Fix:
 - `dashboard/_preview/build_v7_real.py` now derives `copy_executions` from `r46_execution_state.json` and embeds them under `D.executionState.orders`.
-- Copy tab now has a separate `Lệnh copy đã khớp` table, NAV copy 1 tỷ, showing date/symbol/action/shares/price/value/weight/P&L/status.
-- Ledger tab now has two explicit sections: `Lịch sử copy đã khớp` (copy NAV, execution state) and `Lịch sử model` (NAV 2021 = 1 tỷ). Model ledger remains clean and still does not include the 3,800-share copy sell row.
+- Copy tab now has a separate `Lá»‡nh copy Ä‘Ã£ khá»›p` table, NAV copy 1 tá»·, showing date/symbol/action/shares/price/value/weight/P&L/status.
+- Ledger tab now has two explicit sections: `Lá»‹ch sá»­ copy Ä‘Ã£ khá»›p` (copy NAV, execution state) and `Lá»‹ch sá»­ model` (NAV 2021 = 1 tá»·). Model ledger remains clean and still does not include the 3,800-share copy sell row.
 - Build asserts now fail if any executed order is not embedded in dashboard data by `(date, symbol, shares, side)`.
 - `tools/check_dashboard_public_health.py --require-execution-desk` now fetches `/r46_execution_state.json`, parses embedded `const D`, and fails if the public page is missing copy execution tables or if embedded copy executions do not match the execution state.
 
 Local verification:
 - `python -m py_compile dashboard/_preview/build_v7_real.py tools/check_dashboard_public_health.py` PASS.
-- Local build `dashboard/_preview/check-copy-history.html` PASS and embeds one execution order: `2026-06-08 MSB SELL/BÁN HẾT 3,800`, `grossMil=55.86`, `pnlMil=1.9568024`, `tradeWeightPct=5.586`.
+- Local build `dashboard/_preview/check-copy-history.html` PASS and embeds one execution order: `2026-06-08 MSB SELL/BÃN Háº¾T 3,800`, `grossMil=55.86`, `pnlMil=1.9568024`, `tradeWeightPct=5.586`.
 - Verified model ledger is still not polluted by the copy sell: no `2026-06-08 MSB 3,800` row in `D.ledger`; copy execution appears only in `D.executionState.orders`.
 
 ## 2026-06-10 Codex - Active universe refresh for delisted/suspended/new listings
@@ -183,32 +204,32 @@ Operating note:
 
 ## 2026-06-09 Codex - R46 live execution state materialized MSB sell
 
-User flagged public dashboard still held MSB after the 2026-06-05 forecast had planned `BÁN HẾT` for Monday 2026-06-08. Audit found this was not a no-fill issue: VPS daily MSB on 2026-06-08 had open `14.7k`, so the R46 sell-open order should have executed. Root cause was architecture: forecast rows were displayed but not persisted into a live execution state, while later forecast runs overwrote `/r46_forecast.json` to `NOT_COMPUTED` for 2026-06-15.
+User flagged public dashboard still held MSB after the 2026-06-05 forecast had planned `BÃN Háº¾T` for Monday 2026-06-08. Audit found this was not a no-fill issue: VPS daily MSB on 2026-06-08 had open `14.7k`, so the R46 sell-open order should have executed. Root cause was architecture: forecast rows were displayed but not persisted into a live execution state, while later forecast runs overwrote `/r46_forecast.json` to `NOT_COMPUTED` for 2026-06-15.
 
 Fix:
-- Added `dashboard/r46_execution_state.json` and `output/r46_execution_state.json` with the executed MSB sell: 3,800 cp, sell-open 2026-06-08 @ 14.7k, position after 0, copy account full cash `1,001.9568024 tr` on NAV copy 1 tỷ after model cost convention.
+- Added `dashboard/r46_execution_state.json` and `output/r46_execution_state.json` with the executed MSB sell: 3,800 cp, sell-open 2026-06-08 @ 14.7k, position after 0, copy account full cash `1,001.9568024 tr` on NAV copy 1 tá»· after model cost convention.
 - `dashboard/_preview/build_v7_real.py` now reads execution state, subtracts executed orders from holdings, allows full-cash holdings=0 as valid, prepends executed copy orders into latest/ledger history, and marks regime `FULL_CASH` when no positions remain.
 - `tools/precompute_r46_forecast.py` now applies execution state inside `current_copy_shares()` so future forecast sizing does not see stale MSB from `analysis.js`; it also has a due-forecast materializer so preserved public forecast rows can become execution state before a new forecast is written/fail-closed.
 - Both dashboard workflows now preserve public `r46_execution_state.json` before rebuild/deploy; deploy helper pushes the new state files.
 
-Final public verification: `dashboard/index.html` embedded data has `holdings=[]`, `copyAccount.totalMil=1001.9568024`, latest trade `2026-06-08 MSB BÁN HẾT 3,800 @ 14.7`, ledger count `923`, forecast `COMPUTED` for 2026-06-15 with `0` rows, meaning no new order and stay full cash. Public health with `--require-current-forecast --require-execution-desk` PASS after changing health logic to allow a valid computed zero-order forecast.
+Final public verification: `dashboard/index.html` embedded data has `holdings=[]`, `copyAccount.totalMil=1001.9568024`, latest trade `2026-06-08 MSB BÃN Háº¾T 3,800 @ 14.7`, ledger count `923`, forecast `COMPUTED` for 2026-06-15 with `0` rows, meaning no new order and stay full cash. Public health with `--require-current-forecast --require-execution-desk` PASS after changing health logic to allow a valid computed zero-order forecast.
 
 Follow-up paper-trade fix: public paper section initially still marked MSB 3,600 cp to market because it read only `paper_trade_state.json`. `dashboard/_preview/build_v7_real.py` now applies `r46_execution_state.json` to paper trade too. Paper lane closes MSB on 2026-06-08 at open `14.7k`, exit shares `3,600`, current shares `0`, cash `100%`, exposure `0%`, NAV `998.72686 tr`, NAV P/L `-1.27314 tr` / `-0.127314%`, position P/L `-2.358476%` after buy/sell cost convention. Public health PASS after deploy.
 
 ## 2026-06-05 Codex - Dashboard trade ledger rebased to 2021 NAV 1B
 
-User corrected the dashboard ledger basis: "Lệnh đã khớp gần nhất" and "Lịch sử giao dịch" must align with the displayed 2021-present chart/CAGR, not the full 2016 model NAV. `dashboard/_preview/build_v7_real.py` now filters displayed trade history to trades dated `>= 2021-01-01` and rebases trade notional/P&L/share quantities by `1.0 / first_2021_curve_nav` so the displayed ledger starts from NAV `1 tỷ` on `2021-01-01`.
+User corrected the dashboard ledger basis: "Lá»‡nh Ä‘Ã£ khá»›p gáº§n nháº¥t" and "Lá»‹ch sá»­ giao dá»‹ch" must align with the displayed 2021-present chart/CAGR, not the full 2016 model NAV. `dashboard/_preview/build_v7_real.py` now filters displayed trade history to trades dated `>= 2021-01-01` and rebases trade notional/P&L/share quantities by `1.0 / first_2021_curve_nav` so the displayed ledger starts from NAV `1 tá»·` on `2021-01-01`.
 
 Local verification after rebuild:
 - Full source trade history remains `1600` rows, but displayed ledger is now `922` rows from `2021-01-04` to `2026-05-25`.
-- Rebase anchor: first 2021 equity curve row `2021-01-04`, original NAV `2.0691368228650115` tỷ, display scale `0.48329331774945605`.
-- Latest displayed model NAV basis is `21.299476167942284` tỷ on `2026-05-25`, not the full-history `44.07153044682513` tỷ.
-- UI copy no longer mentions `NAV model (~44 tỷ)`, `full history`, or `1600 dòng` in the displayed trade sections; labels say `NAV 2021 = 1 tỷ` / `NAV 1 tỷ từ 2021-01-01`.
+- Rebase anchor: first 2021 equity curve row `2021-01-04`, original NAV `2.0691368228650115` tá»·, display scale `0.48329331774945605`.
+- Latest displayed model NAV basis is `21.299476167942284` tá»· on `2026-05-25`, not the full-history `44.07153044682513` tá»·.
+- UI copy no longer mentions `NAV model (~44 tá»·)`, `full history`, or `1600 dÃ²ng` in the displayed trade sections; labels say `NAV 2021 = 1 tá»·` / `NAV 1 tá»· tá»« 2021-01-01`.
 - Static public data was synced before rebuild: live `2026-06-05 16:27:24`, full-universe `551/703` at `2026-06-05 16:33:24`, forecast `COMPUTED` at `2026-06-05 16:36:07`.
 - GitHub API commit pushed: `1487235fdec28688797d4e947148af5e00f8ca68`.
 - Vercel direct deploy `dpl_92KAVBNxXqeUrU2j6HYESQf1qsmp` READY and aliased to `https://ez-trading.vercel.app`.
 - Public verification after deploy: `tools/check_dashboard_public_health.py --require-fresh-live --require-edge-live --require-vni-history --require-current-vni --require-current-forecast --require-execution-desk` PASS; public `index.html` contains `tradeCount=922`, `fullTradeCount=1600`, and `ledgerBasis.startDate=2021-01-01`.
-- GitHub workflow run `27008716779` on commit `1487235` also completed SUCCESS after the direct deploy. Final public state after the cloud run: live `2026-06-05 17:06:56`, edge live `2026-06-05 17:18:24`, forecast `COMPUTED` at `2026-06-05 17:16:02`, `tradeCount=922`, `fullTradeCount=1600`, latest displayed MSB trade `42,200` shares, gross `0.605` tỷ, NAV basis `21.299` tỷ.
+- GitHub workflow run `27008716779` on commit `1487235` also completed SUCCESS after the direct deploy. Final public state after the cloud run: live `2026-06-05 17:06:56`, edge live `2026-06-05 17:18:24`, forecast `COMPUTED` at `2026-06-05 17:16:02`, `tradeCount=922`, `fullTradeCount=1600`, latest displayed MSB trade `42,200` shares, gross `0.605` tá»·, NAV basis `21.299` tá»·.
 
 ## 2026-06-05 Codex - Fixes after Claude audit of live dashboard automation
 
@@ -293,7 +314,7 @@ Validation:
 Operational rule:
 - To get truly reliable 15-minute forecast without a local PC, use one of: (1) upgrade Vercel to Pro and re-enable the `vercel.json` cron `*/15 2-8 * * 1-5`, or (2) point an external cron service such as cron-job.org/UptimeRobot/Cloudflare Worker Cron at `/api/trigger-forecast` with `Authorization: Bearer <CRON_SECRET>`. Until then, GitHub's own 15-minute schedule is only a best-effort fallback.
 
-## 2026-06-05 Codex — Dashboard exposes live/forecast timestamps and fail-closed forecast attempt
+## 2026-06-05 Codex â€” Dashboard exposes live/forecast timestamps and fail-closed forecast attempt
 
 User asked why public dashboard did not visibly update live prices/forecast and requested last compute time on the dashboard. Root cause: price refresh can update live prices, but forecast lane can fail before a dashboard deploy; old UI did not expose last live/full-universe/forecast timestamps. Also, a stale computed forecast could look valid if only `planDate` matched the next Monday.
 
@@ -307,53 +328,53 @@ Follow-up run `26993737352` on commit `b616b37` failed at `Update live data` bec
 
 Validation: manual dispatch `26993973032` on commit `2acd2f7` completed SUCCESS end-to-end. Steps passed: live update, full-universe update, R46 forecast precompute, forecast verification, build v7 static dashboard, Vercel deploy, public freshness check, and public asset health check. This is the current green workflow baseline.
 
-Follow-up UX/ops decision from user: remove visible `asOf` wording from dashboard and prioritize stable self-operation over aggressive forecast cadence. `dashboard/_preview/build_v7_real.py` now labels forecast recency as `dữ liệu <date>` instead of `asOf <date>` in the KPI/status strip. `.github/workflows/dashboard-auto-refresh.yml` forecast cron changed from every 15 minutes to every 30 minutes because green cloud forecast runs take roughly 9-10 minutes end-to-end (live price, full-universe 703 symbols, forecast, build, deploy, health). The dashboard still self-computes on GitHub; 30-minute cadence is the stable production baseline while price-only refresh remains every 5 minutes.
+Follow-up UX/ops decision from user: remove visible `asOf` wording from dashboard and prioritize stable self-operation over aggressive forecast cadence. `dashboard/_preview/build_v7_real.py` now labels forecast recency as `dá»¯ liá»‡u <date>` instead of `asOf <date>` in the KPI/status strip. `.github/workflows/dashboard-auto-refresh.yml` forecast cron changed from every 15 minutes to every 30 minutes because green cloud forecast runs take roughly 9-10 minutes end-to-end (live price, full-universe 703 symbols, forecast, build, deploy, health). The dashboard still self-computes on GitHub; 30-minute cadence is the stable production baseline while price-only refresh remains every 5 minutes.
 
-Validation after push commit `41e10d2`: GitHub run `26994538845` completed SUCCESS end-to-end under the new 30-minute forecast config. Public status after deploy: live update `2026-06-05 11:01:40 ICT`, full-universe `487/703` fresh at `11:08:03 ICT`, forecast `COMPUTED` asOf `2026-06-05` planDate `2026-06-08` computed `11:10:45 ICT`, forecast rows=1. Public health PASS and visible dashboard text shows `Forecast: COMPUTED · dữ liệu 2026-06-05 · lần chạy 2026-06-05 11:10:45` with no visible `asOf` wording.
+Validation after push commit `41e10d2`: GitHub run `26994538845` completed SUCCESS end-to-end under the new 30-minute forecast config. Public status after deploy: live update `2026-06-05 11:01:40 ICT`, full-universe `487/703` fresh at `11:08:03 ICT`, forecast `COMPUTED` asOf `2026-06-05` planDate `2026-06-08` computed `11:10:45 ICT`, forecast rows=1. Public health PASS and visible dashboard text shows `Forecast: COMPUTED Â· dá»¯ liá»‡u 2026-06-05 Â· láº§n cháº¡y 2026-06-05 11:10:45` with no visible `asOf` wording.
 
-## 2026-06-05 Codex — NAV input accepts decimals
+## 2026-06-05 Codex â€” NAV input accepts decimals
 
 User reported Copy Trade NAV input could not accept decimal values such as `0.8`. Root cause: `renderCopyForNav()` rewrote `navInput.value` on every `input` event, so intermediate typing states like `0` or `0.` were immediately normalized before the user could finish typing. Fix: `dashboard/_preview/build_v7_real.py` changes the input to `type="text"` with `inputmode="decimal"`, adds `parseNavValue()` supporting `0.8`, `.8`, and `0,8`, and stops syncing the input value while typing. Browser verification on production: typing `0.8` updates MSB display to `3,000` shares and value `44 tr` without resetting the field.
 
-## 2026-06-04 Codex — Trade tables add NAV weight + P/L % and zero-price formatting
+## 2026-06-04 Codex â€” Trade tables add NAV weight + P/L % and zero-price formatting
 
-User asked to add weight and P/L percentage to historical/latest trade displays, and to render missing/zero prices as `-` instead of `-k`. Fix: `dashboard/_preview/build_v7_real.py` now adds `Tỷ trọng NAV` and `P/L %` to `Lệnh đã khớp gần nhất`; adds `P/L %` to `Lịch sử giao dịch`; and routes all displayed price fields through `priceK()` so null/NaN/0 prints `-`. Production deploy `dpl_DgH3ci2h6SzKxrUA1hnu6cA2xxrP` verified: public health PASS, latest trade rows show NAV weights (e.g. MSB `2,8%`, VIC `32,1%`) and P/L % (e.g. VIC `-4,5%`), no visible `-k`.
+User asked to add weight and P/L percentage to historical/latest trade displays, and to render missing/zero prices as `-` instead of `-k`. Fix: `dashboard/_preview/build_v7_real.py` now adds `Tá»· trá»ng NAV` and `P/L %` to `Lá»‡nh Ä‘Ã£ khá»›p gáº§n nháº¥t`; adds `P/L %` to `Lá»‹ch sá»­ giao dá»‹ch`; and routes all displayed price fields through `priceK()` so null/NaN/0 prints `-`. Production deploy `dpl_DgH3ci2h6SzKxrUA1hnu6cA2xxrP` verified: public health PASS, latest trade rows show NAV weights (e.g. MSB `2,8%`, VIC `32,1%`) and P/L % (e.g. VIC `-4,5%`), no visible `-k`.
 
-## 2026-06-04 Codex — Copy Trade KPI cleanup + empty live-status deploy guard
+## 2026-06-04 Codex â€” Copy Trade KPI cleanup + empty live-status deploy guard
 
-User asked to remove meaningless top KPIs (`Copy NAV hiện tại`, `Paper NAV ước tính`) and remove `Paper Trade` wording from the Copy Trade title area. Fix: `dashboard/_preview/build_v7_real.py` now uses top KPI row = displayed position, actionable orders, VN-Index, audit model; paper section is renamed `Theo dõi thử nghiệm`; sidebar regime now uses execution/forecast regime (`NARROW_BULL`) instead of stale `Chờ phân loại`.
+User asked to remove meaningless top KPIs (`Copy NAV hiá»‡n táº¡i`, `Paper NAV Æ°á»›c tÃ­nh`) and remove `Paper Trade` wording from the Copy Trade title area. Fix: `dashboard/_preview/build_v7_real.py` now uses top KPI row = displayed position, actionable orders, VN-Index, audit model; paper section is renamed `Theo dÃµi thá»­ nghiá»‡m`; sidebar regime now uses execution/forecast regime (`NARROW_BULL`) instead of stale `Chá» phÃ¢n loáº¡i`.
 
-Production deploy: direct Vercel deployment `dpl_7ExZDXBsZtvgmpCvxSHhinx5pHt4` to `https://ez-trading.vercel.app`. Public verification PASS: old labels absent, new labels present, sidebar `Regime=NARROW_BULL`, VNI `2026-06-04 close=1831.55` matches VPS source, forecast `COMPUTED` asOf `2026-06-04` planDate `2026-06-08`, planned MSB `BÁN HẾT 3,800`, execution desk present.
+Production deploy: direct Vercel deployment `dpl_7ExZDXBsZtvgmpCvxSHhinx5pHt4` to `https://ez-trading.vercel.app`. Public verification PASS: old labels absent, new labels present, sidebar `Regime=NARROW_BULL`, VNI `2026-06-04 close=1831.55` matches VPS source, forecast `COMPUTED` asOf `2026-06-04` planDate `2026-06-08`, planned MSB `BÃN Háº¾T 3,800`, execution desk present.
 
 Incident fixed: a GitHub price refresh run had deployed an empty `dashboard_live_update_status.json` when VPS timed out for all quotes. `update_dashboard_live_data.py` now fail-closes before writing/deploying if valid quotes are below 65%, `latestPriceDate` is missing, or VNINDEX lacks `latestClose`. Do-not: never deploy a fresh `updatedAt` payload with null quotes/VNINDEX; fail the workflow and preserve the last good public dashboard instead.
 
-## 2026-06-04 Claude — Executable audit of Mavis H6 overlay (H6P/H6n) — +17,81pp là return-space artifact
+## 2026-06-04 Claude â€” Executable audit of Mavis H6 overlay (H6P/H6n) â€” +17,81pp lÃ  return-space artifact
 
 Verdict file: `output/r46_plus_overlay_20260604/CLAUDE_EXECUTABLE_AUDIT_H6.md`. Script: `backtest/overlay_20260604/overlay_executable_sim.py`.
 
-Mavis H6 series = return-space re-leverage của R46 (`ret_scaled = ret × scaled_exp/orig_exp`), KHÔNG qua daily-lot. Boost ratio đuôi tới 75,8×; 9,4% số ngày ép 100% NAV vào 1 mã (R46 pos_count=1), nhóm này đóng góp ÂM log-return. Em build position-level daily-lot sim (cap 0,55 + lô 100 + 15% ADV liquidity + 15/15/10bps cost + strict T-1/T + honest MTM), chạy cả R46/H6P/H6n cùng engine.
+Mavis H6 series = return-space re-leverage cá»§a R46 (`ret_scaled = ret Ã— scaled_exp/orig_exp`), KHÃ”NG qua daily-lot. Boost ratio Ä‘uÃ´i tá»›i 75,8Ã—; 9,4% sá»‘ ngÃ y Ã©p 100% NAV vÃ o 1 mÃ£ (R46 pos_count=1), nhÃ³m nÃ y Ä‘Ã³ng gÃ³p Ã‚M log-return. Em build position-level daily-lot sim (cap 0,55 + lÃ´ 100 + 15% ADV liquidity + 15/15/10bps cost + strict T-1/T + honest MTM), cháº¡y cáº£ R46/H6P/H6n cÃ¹ng engine.
 
-Kết quả executable (cùng engine; base tái dựng R46 = 32,33% vì mất alpha intra-week, chỉ đọc DELTA):
+Káº¿t quáº£ executable (cÃ¹ng engine; base tÃ¡i dá»±ng R46 = 32,33% vÃ¬ máº¥t alpha intra-week, chá»‰ Ä‘á»c DELTA):
 - R46-sim CAGR 32,33% / MDD -32,99% / Sharpe 1,25
-- H6P-sim CAGR 35,87% / MDD -30,18% / Sharpe 1,32 → lift +3,54pp CAGR + MDD tốt hơn + Sharpe cao hơn (Pareto thật nhưng nhỏ)
-- H6n-sim CAGR 35,10% / MDD -33,12% → bị H6P dominate, DD brake vô dụng exec space
+- H6P-sim CAGR 35,87% / MDD -30,18% / Sharpe 1,32 â†’ lift +3,54pp CAGR + MDD tá»‘t hÆ¡n + Sharpe cao hÆ¡n (Pareto tháº­t nhÆ°ng nhá»)
+- H6n-sim CAGR 35,10% / MDD -33,12% â†’ bá»‹ H6P dominate, DD brake vÃ´ dá»¥ng exec space
 
-Kết luận: 64,56%/+17,81pp KHÔNG executable; lift thật ~+3,5pp. H6P > H6n. Sensitivity cap 0,99+no-liq → 41,25% nhưng MDD -32,96% (mất lợi thế MDD), vẫn xa 64,56%. Gate 6/6 chưa chấm được vì base sim mất alpha R46 production. Do-not: đừng promote paper-trade với kỳ vọng +17,8pp. Next: Codex áp H6P scale ở position-weight vào ENGINE R46 THẬT (không return-space) rồi đo lại gate 6/6 + cost.
+Káº¿t luáº­n: 64,56%/+17,81pp KHÃ”NG executable; lift tháº­t ~+3,5pp. H6P > H6n. Sensitivity cap 0,99+no-liq â†’ 41,25% nhÆ°ng MDD -32,96% (máº¥t lá»£i tháº¿ MDD), váº«n xa 64,56%. Gate 6/6 chÆ°a cháº¥m Ä‘Æ°á»£c vÃ¬ base sim máº¥t alpha R46 production. Do-not: Ä‘á»«ng promote paper-trade vá»›i ká»³ vá»ng +17,8pp. Next: Codex Ã¡p H6P scale á»Ÿ position-weight vÃ o ENGINE R46 THáº¬T (khÃ´ng return-space) rá»“i Ä‘o láº¡i gate 6/6 + cost.
 
-## 2026-06-04 Claude — Dashboard 2-lane audit + 3 fixes (fail-closed/freshness)
+## 2026-06-04 Claude â€” Dashboard 2-lane audit + 3 fixes (fail-closed/freshness)
 
-Handoff đầy đủ: `output/beat_vni30_parallel/overnight_collab/claude_to_codex/dashboard_failclosed_freshness_audit_fix_20260604_0745.md`
+Handoff Ä‘áº§y Ä‘á»§: `output/beat_vni30_parallel/overnight_collab/claude_to_codex/dashboard_failclosed_freshness_audit_fix_20260604_0745.md`
 
-Audit độc lập 2-lane GitHub Actions (price 5' / forecast 15'). Xương sống PASS: realtime-only đúng, preserve forecast đúng, 65% gate enforce (`update_full_universe_prices.py:238`), overlap gate `max_diff<=1e-9`, fail-closed cloud-meta đúng. Đã sửa 3 lỗ hổng:
-- FIX1: bỏ literal `asOf < "2026-06-04"` trong `dashboard-auto-refresh.yml`, đổi sang anchor động theo `full_universe_live_update_status.json.latestPriceDate` (timezone-proof).
-- FIX2: `build_v7_real.py` khi forecast không hợp lệ → `forecast_rows=[]` (bảng trống), KHÔNG dựng lệnh self-derived từ policy/watchlist.
-- FIX3: forecast age check tại renderer (phủ cả 2 lane): chỉ render khi `planDate==next_monday(live latestPriceDate)`; forecast tuần trước → state STALE, bảng trống. Phơi `forecastDisplayState`/`forecastPlanDate` ra JSON.
+Audit Ä‘á»™c láº­p 2-lane GitHub Actions (price 5' / forecast 15'). XÆ°Æ¡ng sá»‘ng PASS: realtime-only Ä‘Ãºng, preserve forecast Ä‘Ãºng, 65% gate enforce (`update_full_universe_prices.py:238`), overlap gate `max_diff<=1e-9`, fail-closed cloud-meta Ä‘Ãºng. ÄÃ£ sá»­a 3 lá»— há»•ng:
+- FIX1: bá» literal `asOf < "2026-06-04"` trong `dashboard-auto-refresh.yml`, Ä‘á»•i sang anchor Ä‘á»™ng theo `full_universe_live_update_status.json.latestPriceDate` (timezone-proof).
+- FIX2: `build_v7_real.py` khi forecast khÃ´ng há»£p lá»‡ â†’ `forecast_rows=[]` (báº£ng trá»‘ng), KHÃ”NG dá»±ng lá»‡nh self-derived tá»« policy/watchlist.
+- FIX3: forecast age check táº¡i renderer (phá»§ cáº£ 2 lane): chá»‰ render khi `planDate==next_monday(live latestPriceDate)`; forecast tuáº§n trÆ°á»›c â†’ state STALE, báº£ng trá»‘ng. PhÆ¡i `forecastDisplayState`/`forecastPlanDate` ra JSON.
 
-Verify: py_compile + yaml.safe_load OK; unit test 3 nhánh (COMPUTED/STALE/NOT_COMPUTED) đúng. CHƯA build_v7 end-to-end (sandbox thiếu pyarrow) — Codex cần chạy build thật + browser-verify trước khi đóng.
+Verify: py_compile + yaml.safe_load OK; unit test 3 nhÃ¡nh (COMPUTED/STALE/NOT_COMPUTED) Ä‘Ãºng. CHÆ¯A build_v7 end-to-end (sandbox thiáº¿u pyarrow) â€” Codex cáº§n cháº¡y build tháº­t + browser-verify trÆ°á»›c khi Ä‘Ã³ng.
 
-Do-not: đừng quay lại fallback hiển thị lệnh self-derived khi forecast NOT_COMPUTED/STALE; đừng hard-code lại ngày trong gate.
+Do-not: Ä‘á»«ng quay láº¡i fallback hiá»ƒn thá»‹ lá»‡nh self-derived khi forecast NOT_COMPUTED/STALE; Ä‘á»«ng hard-code láº¡i ngÃ y trong gate.
 
-## 2026-06-04 Codex — Dashboard fail-closed verification + public health PASS
+## 2026-06-04 Codex â€” Dashboard fail-closed verification + public health PASS
 
 Codex verified Claude's 3 dashboard freshness fixes and added monitoring enforcement before closing:
 - `tools/check_dashboard_public_health.py` now checks public `/r46_forecast.json`, embedded `forecastDisplayState`, `forecastPlanDate`, row count, and fallback meta.
@@ -364,7 +385,7 @@ Codex verified Claude's 3 dashboard freshness fixes and added monitoring enforce
 
 Operational rule: price-only lane may update every 5 minutes, but it must preserve the last clean forecast; forecast lane recomputes every 15 minutes and must fail closed if R46 forecast cannot be computed from fresh full-universe data. Do not display planned orders from stale forecast or self-derived policy fallback.
 
-## 2026-06-04 Codex — VNINDEX live close stale incident fixed
+## 2026-06-04 Codex â€” VNINDEX live close stale incident fixed
 
 User reported public dashboard still showed stale VN-Index after VPS daily source had already printed `2026-06-04 close=1831.55`. Root cause: price lane had not been running by schedule after the earlier manual dispatch, and `dashboard_live_update_status.json.vnindex` only exposed `latest`/`rows` without `latestClose`, so the public health check could pass on date freshness while the displayed close remained stale/null.
 
@@ -377,23 +398,23 @@ Fix commit: `4b404b0f6c8ec90deadf0c5b1557de8146b17f46`.
 
 Emergency run: canceled long forecast run `26941704183` so price lane could deploy quickly. Price run `26941728690` completed success. Public verification PASS: `dashboard_live_update_status.json` updatedAt `2026-06-04 09:11:23`, VNINDEX latest `2026-06-04`, latestClose `1831.55`, checker source close `1831.55`, forecast still COMPUTED rows=1. Do-not: never treat `latestPriceDate == today` alone as proof the VNI number is current; require close-level comparison.
 
-## 2026-06-04 Codex — R46 Execution Desk added for copy-trade feasibility
+## 2026-06-04 Codex â€” R46 Execution Desk added for copy-trade feasibility
 
 User flagged that R46 cannot be copied faithfully if the dashboard only shows Monday forecast and hides intra-week entry/stop mechanics. Confirmed from R46 config/source/trades: entry has gap/pullback window (`entry_gap_threshold=9%`, `entry_limit_buffer=1.5%`, `entry_pullback_days=2` with price-limit guard), sells respect `entry_min_sell_sessions=4`, and bear-regime stop is real (`daily_stop_loss=5%` only when regime=BEAR). Ledger has 18 `regime_stop_bear`, 7 `expired_no_pullback`, 7 `pullback_limit`; therefore dashboard needed an execution desk, not only planned orders.
 
 Fix commits:
-- `27b1d6d52474318cb5f4e1cc5c0d2a2f5d4ac276`: added `executionDesk` to `build_v7_real.py`, rendered "Lệnh cần làm · Execution Desk" above the chart, and added `--require-execution-desk` health gate.
+- `27b1d6d52474318cb5f4e1cc5c0d2a2f5d4ac276`: added `executionDesk` to `build_v7_real.py`, rendered "Lá»‡nh cáº§n lÃ m Â· Execution Desk" above the chart, and added `--require-execution-desk` health gate.
 - `b9a167623f18acdfcee48ff73d4ba3d9dae43d11`: persisted `currentRegime`/`currentRegimeDate` in `r46_forecast.json.meta`, added build fallback from forecast meta, and made health gate fail if execution desk regime is UNKNOWN.
 
-Public verification PASS after full forecast run `26945413263`: `https://ez-trading.vercel.app` has liveUpdatedAt `2026-06-04 10:12:59`, VNI close `1831.55`, forecast COMPUTED planDate `2026-06-08`, executionDesk present, regime `NARROW_BULL` date `2026-06-01`, bearStopActive=false. Current rows: Today MSB `GIỮ` / `STOP TẮT`, bear stop reference `13.3798k`; next Monday MSB `BÁN HẾT` / `BÁN MỞ CỬA`, 3,600 shares at currentPrice `14.55k`.
+Public verification PASS after full forecast run `26945413263`: `https://ez-trading.vercel.app` has liveUpdatedAt `2026-06-04 10:12:59`, VNI close `1831.55`, forecast COMPUTED planDate `2026-06-08`, executionDesk present, regime `NARROW_BULL` date `2026-06-01`, bearStopActive=false. Current rows: Today MSB `GIá»®` / `STOP Táº®T`, bear stop reference `13.3798k`; next Monday MSB `BÃN Háº¾T` / `BÃN Má»ž Cá»¬A`, 3,600 shares at currentPrice `14.55k`.
 
 Operational rule: never publish copy-trade dashboard without execution desk. A valid desk must show today action, stop active/off, bear stop threshold for current lots, forecast action for next Monday, and non-UNKNOWN current regime. Price-only 5-min lane may preserve forecast, but forecast meta must carry regime so stop state remains faithful between full forecast runs.
 
-## 2026-06-04 Codex — Sell-all quantity aligned to displayed copy holdings
+## 2026-06-04 Codex â€” Sell-all quantity aligned to displayed copy holdings
 
-User caught a copy-trade mismatch: public holdings showed MSB `3,800` shares, while planned `BÁN HẾT` showed `3,600` because `precompute_r46_forecast.py.current_copy_shares()` incorrectly preferred paper-trade state over displayed copy holdings. Fix commit `31b141a4c9b26a6d114375056a6d0c785517732f`: forecast now reads R46 holdings from `dashboard/analysis.js` first; build renderer also force-aligns any `BÁN HẾT` row to current displayed holding shares as a safety fallback. Price deploy run `26948962731` PASS. Public verification: liveUpdatedAt `2026-06-04 11:30:16`, holdings MSB `3,800`, planned MSB `BÁN HẾT` currentCopyShares/orderShares `3,800`, execution desk next Monday `BÁN HẾT 3,800`.
+User caught a copy-trade mismatch: public holdings showed MSB `3,800` shares, while planned `BÃN Háº¾T` showed `3,600` because `precompute_r46_forecast.py.current_copy_shares()` incorrectly preferred paper-trade state over displayed copy holdings. Fix commit `31b141a4c9b26a6d114375056a6d0c785517732f`: forecast now reads R46 holdings from `dashboard/analysis.js` first; build renderer also force-aligns any `BÃN Háº¾T` row to current displayed holding shares as a safety fallback. Price deploy run `26948962731` PASS. Public verification: liveUpdatedAt `2026-06-04 11:30:16`, holdings MSB `3,800`, planned MSB `BÃN Háº¾T` currentCopyShares/orderShares `3,800`, execution desk next Monday `BÃN Háº¾T 3,800`.
 
-## 2026-06-02 Codex — R1 Drift Bisect Verdict
+## 2026-06-02 Codex â€” R1 Drift Bisect Verdict
 
 Artifacts:
 - `output/r1_rule_ext/CODEX_R1_DRIFT_BISECT_VERDICT_20260602.md`
@@ -420,7 +441,7 @@ Do-not-rerun update:
 - Do not treat `cpython-310.pyc` as sufficient evidence of Python-version root cause.
 - If no snapshot is restored, start Option B formal rebaseline from current R-1/V5 fresh-stack numbers.
 
-## 2026-05-30 LATE-5 Claude — PHASE R RETAIL MOMENTUM HIT — V5 R1+R46 LOCKED CAGR 56.97% (research only)
+## 2026-05-30 LATE-5 Claude â€” PHASE R RETAIL MOMENTUM HIT â€” V5 R1+R46 LOCKED CAGR 56.97% (research only)
 
 Files:
 - `output/phase_r_retail/PHASE_R_RETAIL_MOMENTUM_RESULT_20260530.md`
@@ -437,7 +458,7 @@ Files:
 - `backtest/phase_r_lane4_wyckoff_20260530.py`
 - `backtest/phase_r_v5_composite_20260530.py`
 
-Status: **Hypothesis của anh đúng — 2017 là retail speculation frenzy.** Lane R-1 (vol-Z ≥ +2 + 52W breakout, top-5, trailing 20%, min-liq 0.5 tỷ, universe 509 syms full) đạt CAGR 38.21% 2016-2020 (PASS gate ≥30%). 2017 strat +101.96% vs VNI +46.46% (edge +55.5pp); sample picks 2017: KKC, DPR, SRF, DXG, PTB, HAR — chính xác đợt penny/mid-cap retail breakout mà quality score chặn. 4 lane results:
+Status: **Hypothesis cá»§a anh Ä‘Ãºng â€” 2017 lÃ  retail speculation frenzy.** Lane R-1 (vol-Z â‰¥ +2 + 52W breakout, top-5, trailing 20%, min-liq 0.5 tá»·, universe 509 syms full) Ä‘áº¡t CAGR 38.21% 2016-2020 (PASS gate â‰¥30%). 2017 strat +101.96% vs VNI +46.46% (edge +55.5pp); sample picks 2017: KKC, DPR, SRF, DXG, PTB, HAR â€” chÃ­nh xÃ¡c Ä‘á»£t penny/mid-cap retail breakout mÃ  quality score cháº·n. 4 lane results:
 
 | Lane | CAGR 2016-2020 | Gate |
 |---|---|---|
@@ -450,36 +471,36 @@ Status: **Hypothesis của anh đúng — 2017 là retail speculation frenzy.** 
 - CAGR full 2016-2026 = **56.97%** (vs V4 R46 alone 46.75%, +10.22pp)
 - MDD -40.01% (vs V4 -27.61%, -12.40pp)
 - Sharpe 1.54 (vs V4 1.64)
-- Final NAV 1 tỷ → 104.47 tỷ (vs ~50 tỷ V4, 2.1x)
-- Edges ≥+30pp: 8/11 years
-- Edges ≥+20pp: 10/11 (chỉ 2016 fail -15.7pp vì R-1 cash đầu năm)
+- Final NAV 1 tá»· â†’ 104.47 tá»· (vs ~50 tá»· V4, 2.1x)
+- Edges â‰¥+30pp: 8/11 years
+- Edges â‰¥+20pp: 10/11 (chá»‰ 2016 fail -15.7pp vÃ¬ R-1 cash Ä‘áº§u nÄƒm)
 - Pass30 absolute: 9/11 years (fail 2016, 2018)
 
-**Insight quan trọng:** Phase R thay đổi infeasibility verdict LATE-4. Sub-rule 2016-2020 CAGR ≥ 42.83% được CHO LÀ KHÔNG ĐẠT (best là 17.12% R46). Lane R-1 đạt 38.21% — vẫn dưới 42.83% nhưng đủ để nâng composite gần 57% (vs target STRICT 60%). Gap chỉ -3.03pp, không còn -15.86pp. STRICT INFEASIBILITY phải được REVISE.
+**Insight quan trá»ng:** Phase R thay Ä‘á»•i infeasibility verdict LATE-4. Sub-rule 2016-2020 CAGR â‰¥ 42.83% Ä‘Æ°á»£c CHO LÃ€ KHÃ”NG Äáº T (best lÃ  17.12% R46). Lane R-1 Ä‘áº¡t 38.21% â€” váº«n dÆ°á»›i 42.83% nhÆ°ng Ä‘á»§ Ä‘á»ƒ nÃ¢ng composite gáº§n 57% (vs target STRICT 60%). Gap chá»‰ -3.03pp, khÃ´ng cÃ²n -15.86pp. STRICT INFEASIBILITY pháº£i Ä‘Æ°á»£c REVISE.
 
 **Constraints check (universal-clean):**
-- Pure stock only, no ETF/bond/margin/short ✓
-- Strict T-1/T: signal Friday close, execute Monday open T+1 ✓
-- shift(1) trên vol_mean/std, high_52, close_4w_ago ✓
-- KHÔNG dùng score files, external label, hindsight ✓
-- Honest MTM daily close ✓
-- Costs 15bps buy + 25bps sell (matches R46 cost_pair(0)) ✓
-- T+2.5 min hold 4 sessions ✓
+- Pure stock only, no ETF/bond/margin/short âœ“
+- Strict T-1/T: signal Friday close, execute Monday open T+1 âœ“
+- shift(1) trÃªn vol_mean/std, high_52, close_4w_ago âœ“
+- KHÃ”NG dÃ¹ng score files, external label, hindsight âœ“
+- Honest MTM daily close âœ“
+- Costs 15bps buy + 25bps sell (matches R46 cost_pair(0)) âœ“
+- T+2.5 min hold 4 sessions âœ“
 
 Do-not-rerun:
-- Do NOT rerun R-2 ensemble với cùng 3 policies — verified CAGR full 23.61%, MDD -80.5%, fail by large margin do 2022 -65.67%.
-- Do NOT rerun R-3 Donchian 20W trên 2016-2020 — verified 20.20% CAGR, 2017 edge -32.4pp (Donchian quá rộng).
-- Do NOT rerun R-4 Wyckoff-lite với top-3 — verified 24.95% CAGR, 2020 edge -8.9pp.
-- Do NOT promote V5 lên dashboard chưa qua stress + Codex audit + paper-trade.
+- Do NOT rerun R-2 ensemble vá»›i cÃ¹ng 3 policies â€” verified CAGR full 23.61%, MDD -80.5%, fail by large margin do 2022 -65.67%.
+- Do NOT rerun R-3 Donchian 20W trÃªn 2016-2020 â€” verified 20.20% CAGR, 2017 edge -32.4pp (Donchian quÃ¡ rá»™ng).
+- Do NOT rerun R-4 Wyckoff-lite vá»›i top-3 â€” verified 24.95% CAGR, 2020 edge -8.9pp.
+- Do NOT promote V5 lÃªn dashboard chÆ°a qua stress + Codex audit + paper-trade.
 
 Next concrete steps (anh approve):
 1. Codex audit reproduce V5 composite (drift check md5 R46 pinned).
-2. Stress R-1: slippage 25-30bps/side, min-liq 1-2 tỷ floor, remove top-3 contributors per year.
-3. Build regime-router thay cho cutover cứng 2020-12-31 (R-1 mode trong retail frenzy era; R46 mode trong quality regime).
+2. Stress R-1: slippage 25-30bps/side, min-liq 1-2 tá»· floor, remove top-3 contributors per year.
+3. Build regime-router thay cho cutover cá»©ng 2020-12-31 (R-1 mode trong retail frenzy era; R46 mode trong quality regime).
 4. Cash overlay R-1 cho 2016 (fix gap edge -15.7pp).
-5. Paper-trade 4 tuần V5 vs V4 song song trước switch.
+5. Paper-trade 4 tuáº§n V5 vs V4 song song trÆ°á»›c switch.
 
-## 2026-05-30 LATE-4 Claude — V5 STRICT TARGET INFEASIBILITY CONFIRMED + CLAUDE.md universe corrected
+## 2026-05-30 LATE-4 Claude â€” V5 STRICT TARGET INFEASIBILITY CONFIRMED + CLAUDE.md universe corrected
 
 Files:
 - `output/v5_composite/STRUCTURAL_INFEASIBILITY_FINAL.md`
@@ -491,9 +512,9 @@ Files:
 - `backtest/D_multifactor_stack_2016_2026.py`
 - `backtest/D2_momentum_surfer_2016_2020.py`
 
-Status: **Anh strict target V5 (CAGR≥60% full 10Y + all edges≥+20pp + ≥4 edges≥+30pp universal-clean pure-stock) STRUCTURALLY INFEASIBLE.**
+Status: **Anh strict target V5 (CAGRâ‰¥60% full 10Y + all edgesâ‰¥+20pp + â‰¥4 edgesâ‰¥+30pp universal-clean pure-stock) STRUCTURALLY INFEASIBLE.**
 
-Universe correction in CLAUDE.md: 509 syms ≥ 2016-02 in `.cache/backtest/history_2012/` (not 232 — that was older snapshot from history_clean/). 705 total parquets in history_2012/.
+Universe correction in CLAUDE.md: 509 syms â‰¥ 2016-02 in `.cache/backtest/history_2012/` (not 232 â€” that was older snapshot from history_clean/). 705 total parquets in history_2012/.
 
 4 universal-clean sub-rules tested for 2016-2020 ceiling probe:
 - R46 (best existing): 2016-2020 CAGR = **17.12%**
@@ -502,22 +523,22 @@ Universe correction in CLAUDE.md: 509 syms ≥ 2016-02 in `.cache/backtest/histo
 - D2 Pure momentum surfer top-5: CAGR **-8.5%**, MaxDD -50%
 
 Composite V5 best (R46 throughout) = **44.14% CAGR full**, gap to target -15.86pp.
-To hit 60% need sub-rule 2016-2020 CAGR ≥ **42.83%** (multiplier 5.94x over 5Y) — empirically unreachable in universal-clean rule space because VNI geometric mean 2016-2020 = 13.61% and rule-based alpha ceiling ~25-30% under best-case overfit.
+To hit 60% need sub-rule 2016-2020 CAGR â‰¥ **42.83%** (multiplier 5.94x over 5Y) â€” empirically unreachable in universal-clean rule space because VNI geometric mean 2016-2020 = 13.61% and rule-based alpha ceiling ~25-30% under best-case overfit.
 
 Recommended threshold revision (anh choice):
-1. Lower full-period CAGR threshold to **45%** → R46 PASSES (46.75%) → MODEL_V4 production ready.
-2. Maintain 60% target on **2021-2026 only** → R46 PASSES (76.47%).
-3. Maintain 60% full → require leverage/ETF/year-tag → violates pure-stock + universal-clean.
-4. Accept R46 ceiling, redirect next phase to MaxDD reduction (-27.6% → -20%) via large-cap overlay.
+1. Lower full-period CAGR threshold to **45%** â†’ R46 PASSES (46.75%) â†’ MODEL_V4 production ready.
+2. Maintain 60% target on **2021-2026 only** â†’ R46 PASSES (76.47%).
+3. Maintain 60% full â†’ require leverage/ETF/year-tag â†’ violates pure-stock + universal-clean.
+4. Accept R46 ceiling, redirect next phase to MaxDD reduction (-27.6% â†’ -20%) via large-cap overlay.
 
 Do-not-rerun:
-- Do NOT rerun pure quality-only sub-rule cho 2016-2020 era — verified -4.6% CAGR, fail toàn bộ.
-- Do NOT rerun pure momentum-only top-5 cho 2016-2020 era — verified -8.5% CAGR.
-- Do NOT rerun 4-factor stack equal-weight cho full 2016-2026 — verified 7.17% CAGR full.
-- Do NOT search for composite V5 (sub-rule + R46) without first beating 42.83% CAGR 2016-2020 floor — math proves below this floor composite cannot hit 60%.
+- Do NOT rerun pure quality-only sub-rule cho 2016-2020 era â€” verified -4.6% CAGR, fail toÃ n bá»™.
+- Do NOT rerun pure momentum-only top-5 cho 2016-2020 era â€” verified -8.5% CAGR.
+- Do NOT rerun 4-factor stack equal-weight cho full 2016-2026 â€” verified 7.17% CAGR full.
+- Do NOT search for composite V5 (sub-rule + R46) without first beating 42.83% CAGR 2016-2020 floor â€” math proves below this floor composite cannot hit 60%.
 
-Next concrete step: anh chọn 1 trong 4 option threshold. Default đề xuất Option 1 (45% threshold) — R46 LOCKED V4 ready production gate (paper-trade 4 tuần 2026-06-01 → 2026-06-29 đã kickoff).
-## 2026-05-30 LATE-3 Claude — MODEL_V4 LOCKED (R46_bear_stop_mcore) + paper-trade kickoff
+Next concrete step: anh chá»n 1 trong 4 option threshold. Default Ä‘á» xuáº¥t Option 1 (45% threshold) â€” R46 LOCKED V4 ready production gate (paper-trade 4 tuáº§n 2026-06-01 â†’ 2026-06-29 Ä‘Ã£ kickoff).
+## 2026-05-30 LATE-3 Claude â€” MODEL_V4 LOCKED (R46_bear_stop_mcore) + paper-trade kickoff
 
 Files:
 - `output/beat_vni30_parallel/claude_model_success_20260530/MODEL_V4_R46_LOCKED_20260530.md`
@@ -527,27 +548,27 @@ Files:
 - `output/beat_vni30_parallel/paper_trade_v4_r46/weekly_checkpoint.py`
 - `output/beat_vni30_parallel/paper_trade_v4_r46/PAPER_TRADE_PROTOCOL_20260530.md`
 
-Status: **MODEL_V4 LOCKED = R46_bear_stop_mcore.** Anh giao toàn quyền sau khi Phase G3 cả 3 lane fail cải thiện trong universal-clean rule space. Lock metrics segment 2021-2026: CAGR 76.47% (anh quote ~78%), MDD -25.62%, Sharpe 2.19, pass30 6/6, min_edge +32.77pp. Full-period 2016-2026 caveat: CAGR 46.75%, MDD -27.61%, Sharpe 1.64 — trial era khác hẳn target window.
+Status: **MODEL_V4 LOCKED = R46_bear_stop_mcore.** Anh giao toÃ n quyá»n sau khi Phase G3 cáº£ 3 lane fail cáº£i thiá»‡n trong universal-clean rule space. Lock metrics segment 2021-2026: CAGR 76.47% (anh quote ~78%), MDD -25.62%, Sharpe 2.19, pass30 6/6, min_edge +32.77pp. Full-period 2016-2026 caveat: CAGR 46.75%, MDD -27.61%, Sharpe 1.64 â€” trial era khÃ¡c háº³n target window.
 
-Recipe 5-param signature: entry_gap_threshold 0.09, entry_limit_buffer 0.015, entry_pullback_days 2, entry_min_sell_sessions 4, bear_regime_stop 0.05 (chỉ active khi Phase1 v4 regime == bear). Targets từ M-core convex sleeve weekly, execution flexible Monday open / pullback / skip. Cost embedded 30bps buy + 40bps sell + 15bps slippage/side. 1,821 trades, 0 T+2.5 violations.
+Recipe 5-param signature: entry_gap_threshold 0.09, entry_limit_buffer 0.015, entry_pullback_days 2, entry_min_sell_sessions 4, bear_regime_stop 0.05 (chá»‰ active khi Phase1 v4 regime == bear). Targets tá»« M-core convex sleeve weekly, execution flexible Monday open / pullback / skip. Cost embedded 30bps buy + 40bps sell + 15bps slippage/side. 1,821 trades, 0 T+2.5 violations.
 
-Universal-clean verified: 0 match grep use_external_h11/selector_label/weekly_selector_labels trên 4 engine file pinned. Pinned md5 (drift check trong reproduce script): r46_regime_conditional_stop_smoke_20260528.py=da26e26..., r23_flexible_exec_smoke_20260528.py=7809d07..., beat_vni30_daily_execution_sim.py=a970366..., baseline_liquid_leadership_overlay_20260527.py=3c0cad6.... Reproduce script chạy PASS toàn bộ metric trong tolerance 0.5pp/0.1 Sharpe.
+Universal-clean verified: 0 match grep use_external_h11/selector_label/weekly_selector_labels trÃªn 4 engine file pinned. Pinned md5 (drift check trong reproduce script): r46_regime_conditional_stop_smoke_20260528.py=da26e26..., r23_flexible_exec_smoke_20260528.py=7809d07..., beat_vni30_daily_execution_sim.py=a970366..., baseline_liquid_leadership_overlay_20260527.py=3c0cad6.... Reproduce script cháº¡y PASS toÃ n bá»™ metric trong tolerance 0.5pp/0.1 Sharpe.
 
-Production checklist 3 gate: (a) paper-trade 4 tuần 2026-06-01 → 2026-06-29 (đã kickoff), (b) Codex audit khi resume — stress 25bps/side + min-liq 5 tỷ + remove-symbol, (c) dashboard promote chỉ khi (a)+(b) pass và anh approve. Dashboard wording vẫn candidate preview, KHÔNG promote.
+Production checklist 3 gate: (a) paper-trade 4 tuáº§n 2026-06-01 â†’ 2026-06-29 (Ä‘Ã£ kickoff), (b) Codex audit khi resume â€” stress 25bps/side + min-liq 5 tá»· + remove-symbol, (c) dashboard promote chá»‰ khi (a)+(b) pass vÃ  anh approve. Dashboard wording váº«n candidate preview, KHÃ”NG promote.
 
-Paper-trade week 1 signal 2026-06-01: 1 mã MSB weight 5.525% (theo R46 holdings.parquet signal date 2026-05-25). NAV ảo 1 tỷ, cash floor lớn (94.5% cash, exposure thấp do M-core targets thưa cuối tháng 5). Min liquidity floor 2 tỷ/ngày applied trên paper-trade execution check. Weekly checkpoint script đặt tại `weekly_checkpoint.py`, mỗi Monday log NAV vs VNI vào `paper_trade_log.jsonl`.
+Paper-trade week 1 signal 2026-06-01: 1 mÃ£ MSB weight 5.525% (theo R46 holdings.parquet signal date 2026-05-25). NAV áº£o 1 tá»·, cash floor lá»›n (94.5% cash, exposure tháº¥p do M-core targets thÆ°a cuá»‘i thÃ¡ng 5). Min liquidity floor 2 tá»·/ngÃ y applied trÃªn paper-trade execution check. Weekly checkpoint script Ä‘áº·t táº¡i `weekly_checkpoint.py`, má»—i Monday log NAV vs VNI vÃ o `paper_trade_log.jsonl`.
 
 Do-not-rerun:
-- Do NOT modify R46 engine file md5 đã pin trước khi paper-trade kết thúc.
-- Do NOT promote dashboard mà chưa pass cả 3 gate.
-- Do NOT chạy thêm phase G4 trước khi paper-trade week 1 checkpoint 2026-06-08.
-- Do NOT thay đổi M-core targets giữa chừng paper-trade window.
+- Do NOT modify R46 engine file md5 Ä‘Ã£ pin trÆ°á»›c khi paper-trade káº¿t thÃºc.
+- Do NOT promote dashboard mÃ  chÆ°a pass cáº£ 3 gate.
+- Do NOT cháº¡y thÃªm phase G4 trÆ°á»›c khi paper-trade week 1 checkpoint 2026-06-08.
+- Do NOT thay Ä‘á»•i M-core targets giá»¯a chá»«ng paper-trade window.
 
-Next concrete step: **2026-06-08 (Monday)** chạy `weekly_checkpoint.py` để generate signal week 2 + log NAV ảo + edge vs VNI week 1. Sau 4 tuần (2026-06-29), tổng hợp paper-trade report và gửi Codex audit request gate (b).
+Next concrete step: **2026-06-08 (Monday)** cháº¡y `weekly_checkpoint.py` Ä‘á»ƒ generate signal week 2 + log NAV áº£o + edge vs VNI week 1. Sau 4 tuáº§n (2026-06-29), tá»•ng há»£p paper-trade report vÃ  gá»­i Codex audit request gate (b).
 
-Note 2026-05-30: Full-period 2016-2026 honest CAGR 46.75% (gap -13.25pp vs target 60%). Top universal-clean full period ~24% CAGR. Gap = survivorship 232 sym + VCI volume bias + classifier post-COVID. V4 vẫn production cho 2021-2026 gate. Detail: MODEL_V4_R46_LOCKED_20260530.md section Full-period reality check.
+Note 2026-05-30: Full-period 2016-2026 honest CAGR 46.75% (gap -13.25pp vs target 60%). Top universal-clean full period ~24% CAGR. Gap = survivorship 232 sym + VCI volume bias + classifier post-COVID. V4 váº«n production cho 2021-2026 gate. Detail: MODEL_V4_R46_LOCKED_20260530.md section Full-period reality check.
 
-## 2026-05-30 LATE-2 Claude — Phase G3 EXHAUSTED, R46 FINAL PRODUCTION
+## 2026-05-30 LATE-2 Claude â€” Phase G3 EXHAUSTED, R46 FINAL PRODUCTION
 
 Files:
 - `output/beat_vni30_parallel/g3_verdict_20260530/R46_FINAL_PRODUCTION_20260530.md`
@@ -555,41 +576,41 @@ Files:
 - `output/beat_vni30_parallel/g3b_r3_signal_20260530/G3B_R3_SIGNAL_RESULT_20260530.md`
 - `output/beat_vni30_parallel/g3c_r4_foreign_trade_20260530/G3C_R4_FOREIGN_TRADE_RESULT_20260530.md`
 
-Status: **R46_BEAR_STOP_MCORE FINAL PRODUCTION CANDIDATE.** Phase G3 ran 3 parallel lanes (blend R46+V1, R3 volume×momentum, R4 foreign trade) — none broke CAGR 60% gate while keeping 6/6 ≥+30pp + min_edge ≥+20pp.
+Status: **R46_BEAR_STOP_MCORE FINAL PRODUCTION CANDIDATE.** Phase G3 ran 3 parallel lanes (blend R46+V1, R3 volumeÃ—momentum, R4 foreign trade) â€” none broke CAGR 60% gate while keeping 6/6 â‰¥+30pp + min_edge â‰¥+20pp.
 
 Key findings:
-- **G3a Blend R46+V1**: full-period Pearson corr 0.62, rolling 13W median 0.63 — moderate, NOT low. Best blend 70/30 R46+V1 gives Sharpe 2.05 (vs R46 1.94) and MDD -19.21% (vs -20.63%) but breaks gate: pass30 6/6→4/6, min_edge +34.21pp→+17.22pp because V1's 2023 -13.5pp pulls R46's +34pp below +30 gate. REJECT blend.
-- **G3b R3 (z_vol_13W × max(mom_4W,0))**: standalone CAGR -11.9%, MDD -80.7%, pass30 1/6. R46+R3 80/20 stack: CAGR 56.05% (vs R46 76.32% weekly), pass30 3/6, min_edge +9.18pp. Every weight worse than R46 alone. REJECT R3.
+- **G3a Blend R46+V1**: full-period Pearson corr 0.62, rolling 13W median 0.63 â€” moderate, NOT low. Best blend 70/30 R46+V1 gives Sharpe 2.05 (vs R46 1.94) and MDD -19.21% (vs -20.63%) but breaks gate: pass30 6/6â†’4/6, min_edge +34.21ppâ†’+17.22pp because V1's 2023 -13.5pp pulls R46's +34pp below +30 gate. REJECT blend.
+- **G3b R3 (z_vol_13W Ã— max(mom_4W,0))**: standalone CAGR -11.9%, MDD -80.7%, pass30 1/6. R46+R3 80/20 stack: CAGR 56.05% (vs R46 76.32% weekly), pass30 3/6, min_edge +9.18pp. Every weight worse than R46 alone. REJECT R3.
 - **G3c R4 foreign trade**: vnstock 4.0.4 Trading.foreign_trade / prop_trade / insider_deal / order_stats / side_stats / trading_stats all NotImplementedError on VCI + KBS. Only price_board(today) works. INFEASIBLE; recommend skip + background cron harvest for Q4-2026 revisit.
 
-R46 final metrics (verified 30/05 against equity_curve.parquet 2466 daily rows 2016-07-11 → 2026-05-25): CAGR full 46.75%, recent 2021-2026 ~78%, MDD -27.61%, 6/6 ≥+30pp recent, min_edge +32.77pp (2026 YTD), 1821 trades, 0 T+ violations. Universal-clean confirmed.
+R46 final metrics (verified 30/05 against equity_curve.parquet 2466 daily rows 2016-07-11 â†’ 2026-05-25): CAGR full 46.75%, recent 2021-2026 ~78%, MDD -27.61%, 6/6 â‰¥+30pp recent, min_edge +32.77pp (2026 YTD), 1821 trades, 0 T+ violations. Universal-clean confirmed.
 
-**CAGR 60% gate clarification needed from anh**: if full-period basis, R46 misses gap 13pp and Phase G3 cannot close it within universal-clean rule space. If recent 2021-2026 basis, R46 already PASS at ~78% — promote MODEL_V4.
+**CAGR 60% gate clarification needed from anh**: if full-period basis, R46 misses gap 13pp and Phase G3 cannot close it within universal-clean rule space. If recent 2021-2026 basis, R46 already PASS at ~78% â€” promote MODEL_V4.
 
 Do-not-rerun:
 - Do NOT blend R46 with V1/R23/any rank_mix family (corr 0.62, exhausted).
-- Do NOT stack R3 (z_vol × momentum) into R46 at any weight — procyclical pump-chaser proven on 2022/2025/2026.
-- Do NOT probe vnstock.Trading.foreign_trade in subsequent sessions — 4.0.4 NotImplementedError verified VCI+KBS all kwargs combos.
-- Do NOT promote any new dashboard candidate without (a) Codex independent audit + (b) 4-week paper-trade 2026-06-01 → 2026-06-29.
+- Do NOT stack R3 (z_vol Ã— momentum) into R46 at any weight â€” procyclical pump-chaser proven on 2022/2025/2026.
+- Do NOT probe vnstock.Trading.foreign_trade in subsequent sessions â€” 4.0.4 NotImplementedError verified VCI+KBS all kwargs combos.
+- Do NOT promote any new dashboard candidate without (a) Codex independent audit + (b) 4-week paper-trade 2026-06-01 â†’ 2026-06-29.
 
 Next: paper-trade R46 4 weeks from 2026-06-01. Phase G4 conditional on anh decision after week 4 (large-cap overlay for 2017-style rally vs VietStock foreign trade scrape vs lock R46 as final).
 
-## 2026-05-30 LATE Claude — V2_LITE_C LOCKED (≡ V1 by recipe) + NLD + regime-gated scan
+## 2026-05-30 LATE Claude â€” V2_LITE_C LOCKED (â‰¡ V1 by recipe) + NLD + regime-gated scan
 
 Files:
 - `output/beat_vni30_parallel/claude_model_success_20260530/MODEL_V2_LITE_C_LOCKED_20260530.md`
 - `output/beat_vni30_parallel/claude_model_success_20260530/NLD_REGIME_LABELS_20260530.md`
 - `output/beat_vni30_parallel/claude_model_success_20260530/REGIME_GATED_RULE_RESULT_20260530.md`
 
-Status: **V2_LITE_C LOCKED with caveat (PRODUCTION_CANDIDATE_WITH_CAVEAT).** Same artifact as V1 (`codex_lane_a2_seed2/best_stock_only`). Strict V2 gate (all ≥+20pp + 4 ≥+30pp + CAGR ≥60%) re-confirmed INFEASIBLE on 5,700 universal-clean configs in `STRICT_TARGET_INFEASIBLE_ANALYSIS_20260530.md`. V2_LITE_C is best-effort ceiling: pass30 3/6, pass_vni30 4/6, CAGR 55.00%, MDD -19.03%, 2023 edge -13.51pp, 2026 edge -4.31pp.
+Status: **V2_LITE_C LOCKED with caveat (PRODUCTION_CANDIDATE_WITH_CAVEAT).** Same artifact as V1 (`codex_lane_a2_seed2/best_stock_only`). Strict V2 gate (all â‰¥+20pp + 4 â‰¥+30pp + CAGR â‰¥60%) re-confirmed INFEASIBLE on 5,700 universal-clean configs in `STRICT_TARGET_INFEASIBLE_ANALYSIS_20260530.md`. V2_LITE_C is best-effort ceiling: pass30 3/6, pass_vni30 4/6, CAGR 55.00%, MDD -19.03%, 2023 edge -13.51pp, 2026 edge -4.31pp.
 
 Caveats embedded in lock file: structural 2023 H1 leader-pool filter blindness, 5-month 2026 thin sample, mutual exclusivity 2025 vs 2026, mutation-around-V1 exhausted. Production gating: independent Codex audit + 4-week paper-trade required before dashboard promote.
 
-NLD + regime-gated rule scan results recorded in this dispatch — see TL;DR in REGIME_GATED_RULE_RESULT_20260530.md before continuing.
+NLD + regime-gated rule scan results recorded in this dispatch â€” see TL;DR in REGIME_GATED_RULE_RESULT_20260530.md before continuing.
 
 Do-not-rerun: do NOT random-search around V2_LITE_C inside the same rule space; do NOT inject cash_yield/ETF/bond/margin/short; do NOT use `equity_curve.parquet` for yearly metrics; do NOT promote any selector-label candidate without PIT-safe rerun.
 
-## 2026-05-30 18:00 ICT Claude — V1 LOCKED + H1 2023 root cause confirmed
+## 2026-05-30 18:00 ICT Claude â€” V1 LOCKED + H1 2023 root cause confirmed
 
 Files:
 - `output/beat_vni30_parallel/claude_model_success_20260530/MODEL_V1_LOCKED_20260530.md`
@@ -599,57 +620,57 @@ Files:
 Status: **V1_LOCKED candidate `codex_lane_a2_seed2/best_stock_only` pass30=4/6 CAGR=55.0% MDD=-19.03% on 2026-05-30, awaits independent audit + paper trade.**
 
 Headline:
-- Sau khi mutation A+B fail (cả hai mutant đều worse hơn baseline), Claude chốt LOCK V1 thay vì tiếp tục đào.
-- Locked recipe: family rank_mix, max_holdings=5, max_weight=0.20, min_liq=0.2, base_exposure=0.75, riskoff_exposure=0.75 (giữ exposure cả risk-on/off), composite>=65, industry>=50, ret13>=0.05, near_high52>=0.5. Pure stock, no hedge, no cash yield, max_gross 1.0.
+- Sau khi mutation A+B fail (cáº£ hai mutant Ä‘á»u worse hÆ¡n baseline), Claude chá»‘t LOCK V1 thay vÃ¬ tiáº¿p tá»¥c Ä‘Ã o.
+- Locked recipe: family rank_mix, max_holdings=5, max_weight=0.20, min_liq=0.2, base_exposure=0.75, riskoff_exposure=0.75 (giá»¯ exposure cáº£ risk-on/off), composite>=65, industry>=50, ret13>=0.05, near_high52>=0.5. Pure stock, no hedge, no cash yield, max_gross 1.0.
 - Stress min_liq sweep: 0.2 ty -> 4/6, 1.0 ty -> 3/6 (mat 2025), 2.0 ty -> 4/6. Deployment recommend >= 2.0 ty/ngay.
 
 Reproduce verification:
 - `reproduce_v1.py` chay standalone voi PYARROW_PATH=/tmp/pa, ALL CHECKS PASSED. CAGR 55.0037% va MaxDD -19.0286% match locked bit-for-bit, 6 yearly returns match locked toi 0.0001pp, pass_vni30 4/6 va pass30_abs 3/6 deu match.
 - Engine convention: CAGR dung raw NAV tren full curve voi period = n_weeks*7/365.25; yearly return = nav[last of year]/nav[first of year]-1.
 
-H1 2023 leader pool check — verdict structural:
+H1 2023 leader pool check â€” verdict structural:
 - Quet 38 ticker thanh khoan cao gom 14 leader co H1 2023 ret >= +30%.
 - **0/14 leader pass filter V1 trong toan bo 26 tuan H1 2023.** Ly do dominant: `composite_score < 65` (median ~44, gap ~20 diem).
-- KHONG phai bug pool. Composite_score (quality+valuation+catalyst tu BCTC TTM Q4/2022) thap voi nhom broker/HPG/cyclical vua bi bear 2022 can — dung narrative kinh te nhung blind voi "post-bear recovery rally" 2023 H1.
+- KHONG phai bug pool. Composite_score (quality+valuation+catalyst tu BCTC TTM Q4/2022) thap voi nhom broker/HPG/cyclical vua bi bear 2022 can â€” dung narrative kinh te nhung blind voi "post-bear recovery rally" 2023 H1.
 - 4 ticker non-leader pass filter (PNJ/VHM/REE/DGC) deu co H1 ret < +15%.
 
 Conclusion + do-not-rerun:
-- Khong tinh chinh tham so V1 de cover 2023 — mutation A+B da chung minh moi noi rule deu rot CAGR nam khac nhieu hon gain 2023.
+- Khong tinh chinh tham so V1 de cover 2023 â€” mutation A+B da chung minh moi noi rule deu rot CAGR nam khac nhieu hon gain 2023.
 - KHONG burn compute random search quanh V1 nua. Lane mutation nho da exhaust.
 - Production checklist phai pass truoc dashboard: (a) Codex independent audit tu config.json embedded, (b) live signal paper-trade 4 tuan (2026-06-01 -> 2026-06-29), (c) dashboard promote chi khi (a)(b) pass.
 - Neu muon 5/6 that su: can phase G3 voi selector labels tu Codex (recovery_regime no-future) chu khong phai param tune. Out of V1 scope.
 
-## 2026-05-30 Claude Autonomous Artifact Audit — Universal Beat-Baseline Hit
+## 2026-05-30 Claude Autonomous Artifact Audit â€” Universal Beat-Baseline Hit
 
 Artifacts:
 - `output/beat_vni30_parallel/claude_model_success_20260530/MODEL_SUCCESS_20260530.md`
 - Reference: `output/beat_vni30_parallel/codex_lane_a2_seed2/best_stock_only/`
 
 Mechanism tested:
-- Anh giao Claude tự research khi Codex compute path bị blocked do parquet libs sandbox unavailable + disk full.
-- Strategy: thay vì chạy mutation mới tốn compute (matrix load > 40s/lần, sandbox không cho background process), Claude scan toàn bộ 296 artifact config trong `output/beat_vni30_parallel/` và filter ra tập universal-clean (không selector labels, không H11, không hedge, không year-tag, cash_yield = 0, max_gross ≤ 1).
-- Sau filter còn 45 universal-clean configs. So sánh vs baseline universal_rule_search (rank_mix pass30 3/6, CAGR 15.07%).
+- Anh giao Claude tá»± research khi Codex compute path bá»‹ blocked do parquet libs sandbox unavailable + disk full.
+- Strategy: thay vÃ¬ cháº¡y mutation má»›i tá»‘n compute (matrix load > 40s/láº§n, sandbox khÃ´ng cho background process), Claude scan toÃ n bá»™ 296 artifact config trong `output/beat_vni30_parallel/` vÃ  filter ra táº­p universal-clean (khÃ´ng selector labels, khÃ´ng H11, khÃ´ng hedge, khÃ´ng year-tag, cash_yield = 0, max_gross â‰¤ 1).
+- Sau filter cÃ²n 45 universal-clean configs. So sÃ¡nh vs baseline universal_rule_search (rank_mix pass30 3/6, CAGR 15.07%).
 
 Summary:
-- **Best universal-clean candidate đã tồn tại trong codebase:** `codex_lane_a2_seed2/best_stock_only`
+- **Best universal-clean candidate Ä‘Ã£ tá»“n táº¡i trong codebase:** `codex_lane_a2_seed2/best_stock_only`
 - Metrics: pass30 = **4/6**, CAGR (2021-2026) = **55.0%**, MaxDD = **-19.0%**, min edge = -13.5pp.
-- Yearly returns reproduced từ equity_curve_honest.parquet: 2021 +270%, 2022 -1.4%, 2023 -4.0%, 2024 +63.2%, 2025 +72.4%, 2026 YTD +3.4%.
+- Yearly returns reproduced tá»« equity_curve_honest.parquet: 2021 +270%, 2022 -1.4%, 2023 -4.0%, 2024 +63.2%, 2025 +72.4%, 2026 YTD +3.4%.
 - Edges vs VNI: +236.3, +32.6, -12.2, +51.3, +31.9, -4.4 pp (4/6 pass +30pp).
 
-Cấu hình khác baseline ở 5 điểm: max_holdings 2→5, max_weight 0.30→0.20, min_liq 2.0→0.2, base_exposure 0.90→0.75, riskoff_exposure 0.20→0.75 (bỏ hard cash flag khi vni13w âm). Family vẫn rank_mix.
+Cáº¥u hÃ¬nh khÃ¡c baseline á»Ÿ 5 Ä‘iá»ƒm: max_holdings 2â†’5, max_weight 0.30â†’0.20, min_liq 2.0â†’0.2, base_exposure 0.90â†’0.75, riskoff_exposure 0.20â†’0.75 (bá» hard cash flag khi vni13w Ã¢m). Family váº«n rank_mix.
 
-Verdict: **RESEARCH_HIT — beats baseline trên Target 1 (pass30 ≥ 4)**. Hụt Target 2 (pass20 6/6 + CAGR ≥ 40, vì pass20 chỉ 4/6) và Target 3 (CAGR ≥ 60, vì CAGR 55%).
+Verdict: **RESEARCH_HIT â€” beats baseline trÃªn Target 1 (pass30 â‰¥ 4)**. Há»¥t Target 2 (pass20 6/6 + CAGR â‰¥ 40, vÃ¬ pass20 chá»‰ 4/6) vÃ  Target 3 (CAGR â‰¥ 60, vÃ¬ CAGR 55%).
 
-Bonus Target 2 candidate: `codex_H10_continue_vni30_cagr_after_H8_hit/best_stock_only` đạt pass20 = 6/6, CAGR 60%, MDD -25.9%, min edge +21pp. Dùng regime_mode `lead_smallcap_lag` (PIT, không year-tag) — universal nhưng cần audit overfit kỹ hơn.
+Bonus Target 2 candidate: `codex_H10_continue_vni30_cagr_after_H8_hit/best_stock_only` Ä‘áº¡t pass20 = 6/6, CAGR 60%, MDD -25.9%, min edge +21pp. DÃ¹ng regime_mode `lead_smallcap_lag` (PIT, khÃ´ng year-tag) â€” universal nhÆ°ng cáº§n audit overfit ká»¹ hÆ¡n.
 
 Conclusion:
-- Không cần burn compute chạy mutation mới — search trước đây đã produce candidate vượt baseline.
-- Dashboard vẫn BLOCKED: pass30 mới 4/6 chưa đủ production; liquidity floor 0.2 tỷ quá thấp cho NAV thực; 2023 fail -12pp chưa rõ root cause; 2026 YTD sample nhỏ.
+- KhÃ´ng cáº§n burn compute cháº¡y mutation má»›i â€” search trÆ°á»›c Ä‘Ã¢y Ä‘Ã£ produce candidate vÆ°á»£t baseline.
+- Dashboard váº«n BLOCKED: pass30 má»›i 4/6 chÆ°a Ä‘á»§ production; liquidity floor 0.2 tá»· quÃ¡ tháº¥p cho NAV thá»±c; 2023 fail -12pp chÆ°a rÃµ root cause; 2026 YTD sample nhá».
 
 Do-not-rerun update:
-- Đã loop scan rồi, đừng lặp lại pass `codex_lane_a2_seed2` y nguyên với rule tương tự.
-- Lane mutation tiếp theo nên mutate quanh a2_seed2 — không phải quanh baseline universal_rule_search nữa, vì a2_seed2 mạnh hơn rõ rệt mọi chiều.
-- Cụ thể: thử max_holdings 6-7 cap 15% + tăng min_liq lên 1.0 tỷ + add rotation_strong_bonus cho industry RS cao, target push CAGR ≥ 60% giữ pass30 ≥ 4.
+- ÄÃ£ loop scan rá»“i, Ä‘á»«ng láº·p láº¡i pass `codex_lane_a2_seed2` y nguyÃªn vá»›i rule tÆ°Æ¡ng tá»±.
+- Lane mutation tiáº¿p theo nÃªn mutate quanh a2_seed2 â€” khÃ´ng pháº£i quanh baseline universal_rule_search ná»¯a, vÃ¬ a2_seed2 máº¡nh hÆ¡n rÃµ rá»‡t má»i chiá»u.
+- Cá»¥ thá»ƒ: thá»­ max_holdings 6-7 cap 15% + tÄƒng min_liq lÃªn 1.0 tá»· + add rotation_strong_bonus cho industry RS cao, target push CAGR â‰¥ 60% giá»¯ pass30 â‰¥ 4.
 # AI Shared Research Ledger
 
 **Last updated:** 2026-06-03, Asia/Saigon
@@ -663,17 +684,17 @@ Artifacts:
   - `{case}/{cap_label}/bps_{15,18,20}/equity.parquet` + `yearly.csv`
   - `summary.csv`, `yearly.csv`, `VERDICT.md`
 
-Status: **CAP_APPROACH_FAIL_NO_CAP_BEST**. Concentration cap 25/30/35% all FAIL nghiêm trọng (drops CAGR 9-17pp, VNI+30 2-4/6). no_cap liq5ty variant robust 20bps PASS 6/6 (surprise - was FAIL 5/6 without liq filter). 2 new best cells: `vni13gt4_gross85` no_cap liq5ty (CAGR 50,94% MaxDD -28,67% 6/6 min edge 31,71pp) và `vni13gt6_gross85` no_cap liq5ty (CAGR 50,86% MaxDD -28,66% 6/6 min edge 32,03pp).
+Status: **CAP_APPROACH_FAIL_NO_CAP_BEST**. Concentration cap 25/30/35% all FAIL nghiÃªm trá»ng (drops CAGR 9-17pp, VNI+30 2-4/6). no_cap liq5ty variant robust 20bps PASS 6/6 (surprise - was FAIL 5/6 without liq filter). 2 new best cells: `vni13gt4_gross85` no_cap liq5ty (CAGR 50,94% MaxDD -28,67% 6/6 min edge 31,71pp) vÃ  `vni13gt6_gross85` no_cap liq5ty (CAGR 50,86% MaxDD -28,66% 6/6 min edge 32,03pp).
 
-## Key findings: cost stress no_cap liq5ty ROBUST hơn no-liq
+## Key findings: cost stress no_cap liq5ty ROBUST hÆ¡n no-liq
 
-So với cost stress 20bps trên no-liq `vni13gt4_gross85` (FAIL 5/6, min edge 29,63pp, 2026 miss gate):
+So vá»›i cost stress 20bps trÃªn no-liq `vni13gt4_gross85` (FAIL 5/6, min edge 29,63pp, 2026 miss gate):
 - no_cap liq5ty `vni13gt4_gross85` 20bps: **PASS 6/6** CAGR 48,90% min edge 31,03pp
 - no_cap liq5ty `vni13gt6_gross85` 20bps: **PASS 6/6** CAGR 48,75% min edge 31,35pp
 
-Liquidity filter 5ty (loại bỏ illiquid small-caps) tăng robustness 2026 - min edge vượt 30pp gate. Đây là evidence liq5ty mạnh hơn no-liq ở cost stress.
+Liquidity filter 5ty (loáº¡i bá» illiquid small-caps) tÄƒng robustness 2026 - min edge vÆ°á»£t 30pp gate. ÄÃ¢y lÃ  evidence liq5ty máº¡nh hÆ¡n no-liq á»Ÿ cost stress.
 
-## Key findings: concentration cap 25/30/35% FAIL nghiêm trọng
+## Key findings: concentration cap 25/30/35% FAIL nghiÃªm trá»ng
 
 | Cap | CAGR | MaxDD | VNI+30 2021-26 | min edge | top1_w |
 |---|---:|---:|---:|---:|---:|
@@ -682,7 +703,7 @@ Liquidity filter 5ty (loại bỏ illiquid small-caps) tăng robustness 2026 - m
 | cap30% | 37,79% | -25,60% | 3/6 | 17,79pp | 0,27 |
 | cap25% | 33,42% | -25,13% | 2/6 | 14,67pp | 0,23 |
 
-Cap CỰC KỲ tàn khốc - mỗi 5pp cap reduce drop CAGR 4-8pp. cap25% (CAGR 33%) thấp hơn R46 baseline 46,75%. Model sideways cần top-1 ở 39% để boost edge recovery (đặc biệt 2021, 2022, 2024, 2025).
+Cap Cá»°C Ká»² tÃ n khá»‘c - má»—i 5pp cap reduce drop CAGR 4-8pp. cap25% (CAGR 33%) tháº¥p hÆ¡n R46 baseline 46,75%. Model sideways cáº§n top-1 á»Ÿ 39% Ä‘á»ƒ boost edge recovery (Ä‘áº·c biá»‡t 2021, 2022, 2024, 2025).
 
 ## Yearly breakdown: vni13gt4_gross85 no_cap liq5ty 15bps
 
@@ -690,7 +711,7 @@ Cap CỰC KỲ tàn khốc - mỗi 5pp cap reduce drop CAGR 4-8pp. cap25% (CAGR 
 |---|---:|---:|---:|---:|
 | 2016 | 11,54% | 15,75% | -4,21pp | False |
 | 2017 | 14,77% | 48,03% | -33,26pp | False |
-| 2018 | 18,80% | -9,32% | +28,12pp | False (gần miss +30pp) |
+| 2018 | 18,80% | -9,32% | +28,12pp | False (gáº§n miss +30pp) |
 | 2019 | -13,86% | 7,67% | -21,53pp | False |
 | 2020 | 24,57% | 14,87% | +9,70pp | False |
 | 2021 | 236,12% | 35,73% | +200,39pp | **True (BIG WIN)** |
@@ -700,9 +721,9 @@ Cap CỰC KỲ tàn khốc - mỗi 5pp cap reduce drop CAGR 4-8pp. cap25% (CAGR 
 | 2025 | 99,91% | 40,87% | +59,04pp | True |
 | 2026 | 37,40% | 5,69% | +31,71pp | True |
 
-5/11 years VNI+30 PASS (vs R46 7/11), 6/6 recent. Sideways LOSE 1-2 years (2018 gần miss +30pp, 2020 fail). BIG WIN 2021 (+46pp return vs R46), 2022 (+18pp), 2024 (+12pp), 2025 (+26pp).
+5/11 years VNI+30 PASS (vs R46 7/11), 6/6 recent. Sideways LOSE 1-2 years (2018 gáº§n miss +30pp, 2020 fail). BIG WIN 2021 (+46pp return vs R46), 2022 (+18pp), 2024 (+12pp), 2025 (+26pp).
 
-## Final so sánh: 3 top candidates vs R46
+## Final so sÃ¡nh: 3 top candidates vs R46
 
 | Candidate | CAGR | MaxDD | All VNI+30 | Recent VNI+30 | min edge | Concentration |
 |---|---:|---:|---:|---:|---:|---|
@@ -710,40 +731,40 @@ Cap CỰC KỲ tàn khốc - mỗi 5pp cap reduce drop CAGR 4-8pp. cap25% (CAGR 
 | vni13gt4_gross85 no_cap liq5ty (15bps) | **50,94%** | -28,67% | 5/11 | **6/6** | 31,71pp | top1 39%, no cap |
 | vni13gt6_gross85 no_cap liq5ty (15bps) | 50,86% | -28,66% | 5/11 | 6/6 | 32,03pp | top1 39%, no cap |
 
-Trade-off thực sự:
+Trade-off thá»±c sá»±:
 - +4,19pp CAGR / +4,11pp CAGR (liq5ty vs R46)
 - +1,06pp / +1,05pp MaxDD cost
 - -1,06pp / -0,74pp min edge
-- -2 all-years VNI+30 (R46 7/11 → liq5ty 5/11)
+- -2 all-years VNI+30 (R46 7/11 â†’ liq5ty 5/11)
 - Concentration risk: top1 39% (vs R46 cap 33% per name)
 
 ## Overall Verdict: **CAP_APPROACH_FAIL_NO_CAP_BEST**
 
-Cap approach không work - concentration risk không thể mitigate mà không phá alpha. no_cap liq5ty là best option.
+Cap approach khÃ´ng work - concentration risk khÃ´ng thá»ƒ mitigate mÃ  khÃ´ng phÃ¡ alpha. no_cap liq5ty lÃ  best option.
 
 ## Recommendation (Mavis proposes, awaiting anh)
 
-Đây là decision point quan trọng. Có 3 lựa chọn:
+ÄÃ¢y lÃ  decision point quan trá»ng. CÃ³ 3 lá»±a chá»n:
 
-1. **Promote `vni13gt4_gross85` no_cap liq5ty** làm secondary paper-trade parallel R46, accept trade-off (+4,19pp CAGR với top1 39% concentration). Giữ R46 primary anchor. Risk: concentration có thể amplify tail risk trong regime shift.
-2. **Close sideways lane**, R46 paper-trade hiện hành là production. Sideways chỉ là research hit 4 năm bear recovery (2021-2022, 2024-2025), risk-adjusted có thể không worth +4pp CAGR.
-3. **Hybrid: keep sideways as conditional overlay** - chỉ deploy sideways khi regime == sideways + VNI 13w > 4% confirmed, deploy cash defensive khác. Cần modify engine, ~3-4 giờ.
+1. **Promote `vni13gt4_gross85` no_cap liq5ty** lÃ m secondary paper-trade parallel R46, accept trade-off (+4,19pp CAGR vá»›i top1 39% concentration). Giá»¯ R46 primary anchor. Risk: concentration cÃ³ thá»ƒ amplify tail risk trong regime shift.
+2. **Close sideways lane**, R46 paper-trade hiá»‡n hÃ nh lÃ  production. Sideways chá»‰ lÃ  research hit 4 nÄƒm bear recovery (2021-2022, 2024-2025), risk-adjusted cÃ³ thá»ƒ khÃ´ng worth +4pp CAGR.
+3. **Hybrid: keep sideways as conditional overlay** - chá»‰ deploy sideways khi regime == sideways + VNI 13w > 4% confirmed, deploy cash defensive khÃ¡c. Cáº§n modify engine, ~3-4 giá».
 
-Em recommend Option 1 (promote parallel) nếu anh sẵn sàng accept trade-off + risk control strict (giới hạn max weight per name 40% trong paper-trade, nếu exceed 1 tuần thì kill). Option 2 an toàn nhất nếu anh ưu tiên stable paper-trade.
+Em recommend Option 1 (promote parallel) náº¿u anh sáºµn sÃ ng accept trade-off + risk control strict (giá»›i háº¡n max weight per name 40% trong paper-trade, náº¿u exceed 1 tuáº§n thÃ¬ kill). Option 2 an toÃ n nháº¥t náº¿u anh Æ°u tiÃªn stable paper-trade.
 
 ## Do-not-rerun
 
-- Do NOT touch R46 pinned engine - sideways chỉ thêm cash redeploy rule + liq filter
+- Do NOT touch R46 pinned engine - sideways chá»‰ thÃªm cash redeploy rule + liq filter
 - Do NOT add concentration cap <40% - destroys alpha
 - Do NOT rerun M2 / V5 R-1 lane (closed)
 - Do NOT rerun sideways no-liq variants - liq5ty STRICTLY BETTER
 
 ## Next concrete actions (awaiting anh)
 
-- (Mavis) Run cost stress 15/18/20bps cho liq5ty variants (nếu anh chọn Option 1: thêm cost stress trước promote)
+- (Mavis) Run cost stress 15/18/20bps cho liq5ty variants (náº¿u anh chá»n Option 1: thÃªm cost stress trÆ°á»›c promote)
 - (Codex) Independent PIT-safe reproduce guard cho liq5ty cells
-- (Joint) Joint verdict trước khi promote paper-trade
-- (Anh) Quyết định cuối: promote parallel / close sideways / hybrid overlay
+- (Joint) Joint verdict trÆ°á»›c khi promote paper-trade
+- (Anh) Quyáº¿t Ä‘á»‹nh cuá»‘i: promote parallel / close sideways / hybrid overlay
 
 ## 2026-06-03 Mavis - R46 Sideways Full Stress - Liq5ty NEW BEST CAGR 50,94%
 
@@ -755,7 +776,7 @@ Artifacts:
   - `remove/{case}/top{1,2,3}/equity.parquet` + `yearly.csv` + `target_pruned.parquet`
   - `summary.csv`, `yearly.csv`, `VERDICT.md`
 
-Status: **COST_PASS_OTHER_LIMITED**. Cost 18bps PASS 6/6 + Liq 5ty PASS 6/6 with CAGR IMPROVEMENT to 50,94%. But remove-symbol top-1/2/3 FAIL nghiêm trọng - top contributors DOMINATE alpha. NEW BEST candidate: `vni13gt4_gross85` @ liq5ty (CAGR 50,94% MaxDD -28,67% 6/6 min edge 31,71pp).
+Status: **COST_PASS_OTHER_LIMITED**. Cost 18bps PASS 6/6 + Liq 5ty PASS 6/6 with CAGR IMPROVEMENT to 50,94%. But remove-symbol top-1/2/3 FAIL nghiÃªm trá»ng - top contributors DOMINATE alpha. NEW BEST candidate: `vni13gt4_gross85` @ liq5ty (CAGR 50,94% MaxDD -28,67% 6/6 min edge 31,71pp).
 
 ## Stress 1: Cost 15/18/20bps (2 cells x 3 bps = 6 runs)
 
@@ -781,7 +802,7 @@ Verdict: 18bps PASS 6/6 (matches R46 baseline robustness), 20bps FAIL 5/6 (match
 | vni13gt6_gross85 | 3ty | 99,1% | 50,02% | -27,67% | 6/6 | 32,02pp | True |
 | **vni13gt6_gross85** | **5ty** | **94,1%** | **50,86%** | -28,66% | 6/6 | 32,03pp | True |
 
-**CRITICAL INSIGHT: 5ty liquidity floor CAI THIỆN CAGR +0,67pp** (50,27% → 50,94%) so với no liquidity filter. Universe filter loại bỏ illiquid small-caps đang kéo CAGR xuống. MaxDD chỉ xấu hơn 1,01pp (-27,66% → -28,67%) - vẫn trong tolerance.
+**CRITICAL INSIGHT: 5ty liquidity floor CAI THIá»†N CAGR +0,67pp** (50,27% â†’ 50,94%) so vá»›i no liquidity filter. Universe filter loáº¡i bá» illiquid small-caps Ä‘ang kÃ©o CAGR xuá»‘ng. MaxDD chá»‰ xáº¥u hÆ¡n 1,01pp (-27,66% â†’ -28,67%) - váº«n trong tolerance.
 
 **NEW BEST candidate: `vni13gt4_gross85` @ liq5ty @ 15bps**
 - CAGR: **50,94%** (vs R46 46,75% = +4,19pp)
@@ -802,15 +823,15 @@ Verdict: 18bps PASS 6/6 (matches R46 baseline robustness), 20bps FAIL 5/6 (match
 | vni13gt6_gross85 | 2 | 12,19% | -15,22% | 1/6 | -30,58pp | False |
 | vni13gt6_gross85 | 3 | 1,46% | -7,92% | 1/6 | -33,90pp | False |
 
-**CRITICAL FINDING: Remove top-1 đã drop CAGR từ 50% xuống 15,7% (-35pp).** Sideways cash redeploy chỉ effective khi có top-weight symbols làm đầu kéo. Top contributors DOMINATE alpha - đây là concentration risk thực sự.
+**CRITICAL FINDING: Remove top-1 Ä‘Ã£ drop CAGR tá»« 50% xuá»‘ng 15,7% (-35pp).** Sideways cash redeploy chá»‰ effective khi cÃ³ top-weight symbols lÃ m Ä‘áº§u kÃ©o. Top contributors DOMINATE alpha - Ä‘Ã¢y lÃ  concentration risk thá»±c sá»±.
 
 ## Overall verdict: COST_PASS_OTHER_LIMITED
 
-- ✅ Cost 18bps PASS 6/6 (robust)
-- ✅ Liq 5ty PASS 6/6 với CAGR boost +0,67pp
-- ❌ Remove top-1/2/3 FAIL nghiêm trọng (alpha concentrated)
+- âœ… Cost 18bps PASS 6/6 (robust)
+- âœ… Liq 5ty PASS 6/6 vá»›i CAGR boost +0,67pp
+- âŒ Remove top-1/2/3 FAIL nghiÃªm trá»ng (alpha concentrated)
 
-## So sánh tổng: 4 best candidates vs R46 baseline
+## So sÃ¡nh tá»•ng: 4 best candidates vs R46 baseline
 
 | Candidate | CAGR | MaxDD | VNI+30 | min edge | vs R46 CAGR | vs R46 MDD | vs R46 min edge |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -820,37 +841,37 @@ Verdict: 18bps PASS 6/6 (matches R46 baseline robustness), 20bps FAIL 5/6 (match
 | vni13gt6_gross85 (15bps, no liq) | 50,09% | -27,62% | 6/6 | 32,02pp | +3,34pp | -0,01pp | -0,75pp |
 | vni13gt6_gross85 @ liq5ty (safer) | 50,86% | -28,66% | 6/6 | 32,03pp | +4,11pp | -1,05pp | -0,74pp |
 
-**`vni13gt4_gross85` @ liq5ty is NEW BEST**: CAGR 50,94% MaxDD -28,67% 6/6 VNI+30 min edge 31,71pp. +4,19pp CAGR so với R46 với chỉ 1,06pp risk cost.
+**`vni13gt4_gross85` @ liq5ty is NEW BEST**: CAGR 50,94% MaxDD -28,67% 6/6 VNI+30 min edge 31,71pp. +4,19pp CAGR so vá»›i R46 vá»›i chá»‰ 1,06pp risk cost.
 
 ## Recommendation (Mavis proposes, awaiting anh)
 
-Promote `vni13gt4_gross85` @ liq5ty làm primary paper-trade parallel R46. Nhưng cần 2 thêm bước trước khi promote:
+Promote `vni13gt4_gross85` @ liq5ty lÃ m primary paper-trade parallel R46. NhÆ°ng cáº§n 2 thÃªm bÆ°á»›c trÆ°á»›c khi promote:
 
-1. **CRITICAL: Add concentration risk control.** Remove-symbol stress FAIL nghiêm trọng chứng tỏ alpha tập trung vào 1-3 mã top weights. Cần thêm rule: cap max weight per symbol (hiện 55% nhưng top-1 có thể chiếm 40-50%). Suggested: cap 30-35% per symbol.
-2. **MEDIUM: Cost stress 18/20bps cho liq5ty variants.** Cần verify liq5ty tăng CAGR có survive cost stress 18bps hay không.
-3. **MEDIUM: Reproduce guard cho liq5ty variants.** Vì universe filter thay đổi, cần verify bit-exact reproducibility.
+1. **CRITICAL: Add concentration risk control.** Remove-symbol stress FAIL nghiÃªm trá»ng chá»©ng tá» alpha táº­p trung vÃ o 1-3 mÃ£ top weights. Cáº§n thÃªm rule: cap max weight per symbol (hiá»‡n 55% nhÆ°ng top-1 cÃ³ thá»ƒ chiáº¿m 40-50%). Suggested: cap 30-35% per symbol.
+2. **MEDIUM: Cost stress 18/20bps cho liq5ty variants.** Cáº§n verify liq5ty tÄƒng CAGR cÃ³ survive cost stress 18bps hay khÃ´ng.
+3. **MEDIUM: Reproduce guard cho liq5ty variants.** VÃ¬ universe filter thay Ä‘á»•i, cáº§n verify bit-exact reproducibility.
 
-Sequence ước lượng 2-3 giờ:
-- Build `r46_sideways_liq5ty_concentrate_20260603.py` với 4-6 cells (per-symbol cap 30/35/40% kết hợp gross 85/90)
+Sequence Æ°á»›c lÆ°á»£ng 2-3 giá»:
+- Build `r46_sideways_liq5ty_concentrate_20260603.py` vá»›i 4-6 cells (per-symbol cap 30/35/40% káº¿t há»£p gross 85/90)
 - Run cost stress 18/20bps cho liq5ty cells
 - Reproduce guard 1-2 best cells
 
-Nếu 3 bước pass: promote paper-trade 4 tuần 2026-06-09 → 2026-07-06 parallel R46.
-Nếu fail concentration cap (CAGR drop đáng kể): đóng sideways lane, return to R46 paper-trade anchor.
+Náº¿u 3 bÆ°á»›c pass: promote paper-trade 4 tuáº§n 2026-06-09 â†’ 2026-07-06 parallel R46.
+Náº¿u fail concentration cap (CAGR drop Ä‘Ã¡ng ká»ƒ): Ä‘Ã³ng sideways lane, return to R46 paper-trade anchor.
 
 ## Do-not-rerun
 
-- Do NOT promote sideways vni13gt4_gross85 (no liq) hoặc vni13gt6_gross85 (no liq) - liq5ty variants STRICTLY BETTER
-- Do NOT touch R46 pinned engine - sideways chỉ thêm cash redeploy + liq filter
+- Do NOT promote sideways vni13gt4_gross85 (no liq) hoáº·c vni13gt6_gross85 (no liq) - liq5ty variants STRICTLY BETTER
+- Do NOT touch R46 pinned engine - sideways chá»‰ thÃªm cash redeploy + liq filter
 - Do NOT rerun M2 / V5 R-1 lane (closed)
 - Do NOT promote sideways without concentration cap (top-contributor dependence too high)
 
 ## Next concrete actions (awaiting anh)
 
-- (Mavis) Run cost stress 18/20bps cho liq5ty cells (nếu anh chọn Option 1)
-- (Mavis) Build concentration cap 30/35/40% per symbol (nếu anh chọn Option 1)
+- (Mavis) Run cost stress 18/20bps cho liq5ty cells (náº¿u anh chá»n Option 1)
+- (Mavis) Build concentration cap 30/35/40% per symbol (náº¿u anh chá»n Option 1)
 - (Codex) Independent PIT-safe reproduce guard cho liq5ty best cell
-- (Joint) Joint verdict trước khi promote paper-trade parallel R46
+- (Joint) Joint verdict trÆ°á»›c khi promote paper-trade parallel R46
 
 ## 2026-06-03 Mavis - R46 Sideways Reproduce + Plateau Sweep PASS (2 new best cells found)
 
@@ -911,17 +932,17 @@ All 6 cells 6/6 VNI+30, 0 T+2.5 violations, 0 forced-sell events. R46 pinned eng
 ## Yearly edge diff vs R46 (new best cells)
 
 ### sideways_vni4pos_vni13gt4_gross85
-- 2016: -0,18pp (giảm nhẹ, both fail)
-- 2017: +1,06pp (cải thiện)
+- 2016: -0,18pp (giáº£m nháº¹, both fail)
+- 2017: +1,06pp (cáº£i thiá»‡n)
 - 2018: +0,05pp (flat)
-- 2019: +0,49pp (cải thiện)
+- 2019: +0,49pp (cáº£i thiá»‡n)
 - 2020: +0,07pp (flat)
-- 2021: **+27,58pp** (boost lớn nhất)
-- 2022: **+17,48pp** (boost lớn thứ 2)
+- 2021: **+27,58pp** (boost lá»›n nháº¥t)
+- 2022: **+17,48pp** (boost lá»›n thá»© 2)
 - 2023: +2,33pp
 - 2024: +0,03pp
 - 2025: -0,15pp
-- 2026: -1,06pp (giảm nhẹ, vẫn pass +30pp)
+- 2026: -1,06pp (giáº£m nháº¹, váº«n pass +30pp)
 
 ### sideways_vni4pos_vni13gt6_gross85
 - 2016: -0,18pp
@@ -934,38 +955,38 @@ All 6 cells 6/6 VNI+30, 0 T+2.5 violations, 0 forced-sell events. R46 pinned eng
 - 2023: +1,67pp
 - 2024: +0,01pp
 - 2025: +0,03pp
-- 2026: -0,75pp (giảm nhẹ, vẫn pass +30pp)
+- 2026: -0,75pp (giáº£m nháº¹, váº«n pass +30pp)
 
-Cùng pattern sideways: cash redeploy BÙNG NỔ trong 2021 (+28pp) và 2022 (+17pp) - 2 năm bear recovery. Lose rất nhẹ 2016/2025/2026 (-0,18 đến -1,06pp) nhưng vẫn pass +30pp gate.
+CÃ¹ng pattern sideways: cash redeploy BÃ™NG Ná»” trong 2021 (+28pp) vÃ  2022 (+17pp) - 2 nÄƒm bear recovery. Lose ráº¥t nháº¹ 2016/2025/2026 (-0,18 Ä‘áº¿n -1,06pp) nhÆ°ng váº«n pass +30pp gate.
 
 ## Recommendation (Mavis proposes, awaiting anh)
 
-**Promote sideways_vni4pos_vni13gt4_gross85 (new best) làm primary paper-trade parallel to R46** sau khi cost stress 18/20bps + remove-symbol/liquidity test.
+**Promote sideways_vni4pos_vni13gt4_gross85 (new best) lÃ m primary paper-trade parallel to R46** sau khi cost stress 18/20bps + remove-symbol/liquidity test.
 
-Sequence tiếp theo (3 bước, ước lượng 2-3 giờ):
+Sequence tiáº¿p theo (3 bÆ°á»›c, Æ°á»›c lÆ°á»£ng 2-3 giá»):
 
-1. (CRITICAL) Cost stress 18bps + 20bps cho 2 new best cells (`vni13gt4_gross85`, `vni13gt6_gross85`) - test robustness trước khi promote. Cần pass 6/6 VNI+30 ở 18bps như cells cũ.
-2. (MEDIUM) Stress remove-symbol + top-contributor cho 2 new best cells - test alpha có phụ thuộc 1-2 mã dominant không.
-3. (MEDIUM) Stress liquidity floor 3-5 tỷ/ngày cho 2 new best cells.
+1. (CRITICAL) Cost stress 18bps + 20bps cho 2 new best cells (`vni13gt4_gross85`, `vni13gt6_gross85`) - test robustness trÆ°á»›c khi promote. Cáº§n pass 6/6 VNI+30 á»Ÿ 18bps nhÆ° cells cÅ©.
+2. (MEDIUM) Stress remove-symbol + top-contributor cho 2 new best cells - test alpha cÃ³ phá»¥ thuá»™c 1-2 mÃ£ dominant khÃ´ng.
+3. (MEDIUM) Stress liquidity floor 3-5 tá»·/ngÃ y cho 2 new best cells.
 
-Nếu 3 stress trên pass, mới promote paper-trade 4 tuần 2026-06-09 → 2026-07-06 parallel R46. Nếu có cell tốt hơn 2 cells hiện tại (>50,5% CAGR hoặc MaxDD < -27,0% hoặc min edge > 33pp) thì promote cell đó. Nếu fail stress thì đóng sideways lane và quay về R46 paper-trade anchor.
+Náº¿u 3 stress trÃªn pass, má»›i promote paper-trade 4 tuáº§n 2026-06-09 â†’ 2026-07-06 parallel R46. Náº¿u cÃ³ cell tá»‘t hÆ¡n 2 cells hiá»‡n táº¡i (>50,5% CAGR hoáº·c MaxDD < -27,0% hoáº·c min edge > 33pp) thÃ¬ promote cell Ä‘Ã³. Náº¿u fail stress thÃ¬ Ä‘Ã³ng sideways lane vÃ  quay vá» R46 paper-trade anchor.
 
 ## Do-not-rerun update
 
-- Do NOT rerun sideways_vni4pos_vni13gt5_gross90 / vni13gt8_gross100 - reproduce guard PASS, no drift, đã verify
-- Do NOT promote sideways candidates vào dashboard production trước khi pass cost stress 18/20bps + remove-symbol + liquidity
-- Do NOT touch R46 pinned engine files (md5 da26e26/7809d07/a970366/3c0cad6) - sideways chỉ thêm cash redeploy rule, không modify R46 execution
+- Do NOT rerun sideways_vni4pos_vni13gt5_gross90 / vni13gt8_gross100 - reproduce guard PASS, no drift, Ä‘Ã£ verify
+- Do NOT promote sideways candidates vÃ o dashboard production trÆ°á»›c khi pass cost stress 18/20bps + remove-symbol + liquidity
+- Do NOT touch R46 pinned engine files (md5 da26e26/7809d07/a970366/3c0cad6) - sideways chá»‰ thÃªm cash redeploy rule, khÃ´ng modify R46 execution
 - Do NOT rerun M2 m2_lot_margin_ledger_multi_20260602 (lane closed 2026-06-02)
 - Do NOT touch V5 saved R-1 lane (root cause drift unfixable, V5 saved historical only)
 
 ## Next concrete actions
 
-- (Codex) Cost stress 18/20bps cho 2 new best cells (ước lượng 30-60 phút)
-- (Codex) Remove-symbol + liquidity stress (ước lượng 1-2 giờ)
+- (Codex) Cost stress 18/20bps cho 2 new best cells (Æ°á»›c lÆ°á»£ng 30-60 phÃºt)
+- (Codex) Remove-symbol + liquidity stress (Æ°á»›c lÆ°á»£ng 1-2 giá»)
 - (Mavis) Audit cost stress result khi Codex submit
-- (Joint) Joint verdict cost + remove-symbol + liquidity stress trước khi promote
-- (Mavis) Update AI_SHARED_RESEARCH_LEDGER.md với cost + remove-symbol + liquidity results
-- (Anh) Approve promote sideways paper-trade parallel R46 nếu 3 stress pass
+- (Joint) Joint verdict cost + remove-symbol + liquidity stress trÆ°á»›c khi promote
+- (Mavis) Update AI_SHARED_RESEARCH_LEDGER.md vá»›i cost + remove-symbol + liquidity results
+- (Anh) Approve promote sideways paper-trade parallel R46 náº¿u 3 stress pass
 
 ## 2026-06-02 Mavis - M2 LANE CLOSED + R46 PRODUCTION LOCKED (user decision 15:42 ICT)
 
@@ -986,7 +1007,7 @@ User reviewed M2 multi-cell ledger results (10 cells x 2 rates = 20 runs, runtim
 - M2 `tb_vni04_br08_m27` best ledger: CAGR 47.65% (vs R46 46.75%, +0.90pp), MaxDD -30.10% (vs -27.61%, +2.49pp), Sharpe ~1.58 (vs 1.69), recent 6/6 VNI+30, min edge 30.37pp, 0 forced-sell, min maintenance 0.779. Stress 16% margin holds 6/6 VNI+30, min edge 30.42pp.
 - M2 improves edge 7/11 years vs R46 (notable 2017 +6.68pp broad-bull mania, 2024 +4.14pp broad-bull) but loses 2026 -4.30pp due to cost accumulation.
 
-User rationale: M2 edge thực chỉ +0.90pp CAGR vs R46 mà risk cao hơn 2.49pp MaxDD. Sharpe giảm 0.11. Paper-trade parallel infrastructure overhead không worth a marginal edge increase. Close M2 lane, focus on locking R46 production.
+User rationale: M2 edge thá»±c chá»‰ +0.90pp CAGR vs R46 mÃ  risk cao hÆ¡n 2.49pp MaxDD. Sharpe giáº£m 0.11. Paper-trade parallel infrastructure overhead khÃ´ng worth a marginal edge increase. Close M2 lane, focus on locking R46 production.
 
 ## M2 close-out decisions
 
@@ -1198,7 +1219,7 @@ Next:
 - Final direction per latest status: close MD1, keep R46 paper-trade pinned, and open pure-stock R-1 rule extension lane in parallel.
 - No MD1 composite from A1-v2/B1/C1.
 
-## 2026-06-01 Phase MD1 KICKOFF — margin + VN30F research branch (anh approved)
+## 2026-06-01 Phase MD1 KICKOFF â€” margin + VN30F research branch (anh approved)
 
 Files:
 - `PARALLEL_MARGIN_DERIV_RUNBOOK_20260601.md` (v2, post-Codex revisions)
@@ -1209,79 +1230,79 @@ Files:
 - `output/margin_deriv/margin_universe_quarterly_summary.csv` (Data-2)
 - `output/margin_deriv/data_2_margin_universe_caveat_20260601.md` (Data-2)
 
-Status: **LANE MD1 OPEN as research branch.** Anh đã mở constraint pure-stock sang stock + margin cơ sở + VN30F phái sinh. Target: 11/11 năm 2016-2026 edge ≥ +30pp vs VNI, stretch CAGR 70-80%. Codex review approve với 7 revisions R1-R7 đã merge vào runbook v2.
+Status: **LANE MD1 OPEN as research branch.** Anh Ä‘Ã£ má»Ÿ constraint pure-stock sang stock + margin cÆ¡ sá»Ÿ + VN30F phÃ¡i sinh. Target: 11/11 nÄƒm 2016-2026 edge â‰¥ +30pp vs VNI, stretch CAGR 70-80%. Codex review approve vá»›i 7 revisions R1-R7 Ä‘Ã£ merge vÃ o runbook v2.
 
 7 revisions key:
-- R1: tách 4 sổ accounting (stock_margin_debit, futures_IM_reserved, cash_balance, daily_futures_mtm). Lãi CHỈ tính trên stock debit + cash âm.
-- R2: maintenance margin chỉ áp stock leg. Futures notional không vào denominator.
-- R3: Smoke 0 no-op bắt buộc trước mọi alpha smoke. Reproduce V5/R46 tolerance ≤ 0.01pp.
-- R4: metric priority PIT > accounting > bottleneck > preserve > MDD > CAGR. Research MDD chấp nhận ≤-45% to -50% trước khi tighten về -35%.
-- R5: V5 full benchmark, R46 recent benchmark. R46 pinned engine không sửa trong window paper-trade.
-- R6: log VN30F basis/beta/spread/roll/OI bắt buộc.
-- R7: margin universe proxy chỉ smoke-grade; composite/promotion stress exclude proxy off-list.
+- R1: tÃ¡ch 4 sá»• accounting (stock_margin_debit, futures_IM_reserved, cash_balance, daily_futures_mtm). LÃ£i CHá»ˆ tÃ­nh trÃªn stock debit + cash Ã¢m.
+- R2: maintenance margin chá»‰ Ã¡p stock leg. Futures notional khÃ´ng vÃ o denominator.
+- R3: Smoke 0 no-op báº¯t buá»™c trÆ°á»›c má»i alpha smoke. Reproduce V5/R46 tolerance â‰¤ 0.01pp.
+- R4: metric priority PIT > accounting > bottleneck > preserve > MDD > CAGR. Research MDD cháº¥p nháº­n â‰¤-45% to -50% trÆ°á»›c khi tighten vá» -35%.
+- R5: V5 full benchmark, R46 recent benchmark. R46 pinned engine khÃ´ng sá»­a trong window paper-trade.
+- R6: log VN30F basis/beta/spread/roll/OI báº¯t buá»™c.
+- R7: margin universe proxy chá»‰ smoke-grade; composite/promotion stress exclude proxy off-list.
 
-Phân lane:
+PhÃ¢n lane:
 - Codex: Data-0 spec lock, Data-1 price QA VN30/VN30F1M/F2M, Engine M-0 no-op, Engine M-1 stock margin, Engine M-2 VN30F, Smoke B (bear hedge), Smoke C (bull boost).
-- Claude: Data-2 margin universe + rate (DONE), Smoke A (margin 2016 R-1), Smoke D nếu cần.
+- Claude: Data-2 margin universe + rate (DONE), Smoke A (margin 2016 R-1), Smoke D náº¿u cáº§n.
 - Joint: Composite MD1, Stress 1 cost robustness, Stress 2 walk-forward + remove-symbol.
-- HOLD: dashboard/copy-trade promotion. R46 paper-trade hiện hành KHÔNG can thiệp.
+- HOLD: dashboard/copy-trade promotion. R46 paper-trade hiá»‡n hÃ nh KHÃ”NG can thiá»‡p.
 
 Data-2 done (Claude):
-- Margin rate annual 11 năm 2016-2026, range 11-14.5%, mean 12.9%.
-- Margin universe quarterly 2016-Q1 → 2026-Q2: 42 snapshots, 2 columns eligible_strict (mcap>=1500/ADV>=5) và eligible_relaxed (mcap>=500/ADV>=1).
-- Material finding flagged: 5/6 R-1 retail picks 2016 không qua proxy_relaxed, 6/6 không qua proxy_strict (KKC/SRF dữ liệu quá nhỏ, DPR/DXG/HAR NaN trong scores_2016_v4). Có khả năng (a) R-1 picks 2016 thực tế không nằm trong HOSE Margin List 2016, hoặc (b) scores_2016_v4 incomplete coverage cho retail era. Impact: margin layer trên R-1 2016 chỉ leverage được 1/6 picks tối đa.
-- Claude propose 2 sub-path cho Smoke A1: A1-conservative (chỉ leverage mã eligible_relaxed, các mã còn lại m=1.0) và A1-research-probe (leverage all picks, không tradable, dùng đo upper bound). Cả 2 chạy song song.
+- Margin rate annual 11 nÄƒm 2016-2026, range 11-14.5%, mean 12.9%.
+- Margin universe quarterly 2016-Q1 â†’ 2026-Q2: 42 snapshots, 2 columns eligible_strict (mcap>=1500/ADV>=5) vÃ  eligible_relaxed (mcap>=500/ADV>=1).
+- Material finding flagged: 5/6 R-1 retail picks 2016 khÃ´ng qua proxy_relaxed, 6/6 khÃ´ng qua proxy_strict (KKC/SRF dá»¯ liá»‡u quÃ¡ nhá», DPR/DXG/HAR NaN trong scores_2016_v4). CÃ³ kháº£ nÄƒng (a) R-1 picks 2016 thá»±c táº¿ khÃ´ng náº±m trong HOSE Margin List 2016, hoáº·c (b) scores_2016_v4 incomplete coverage cho retail era. Impact: margin layer trÃªn R-1 2016 chá»‰ leverage Ä‘Æ°á»£c 1/6 picks tá»‘i Ä‘a.
+- Claude propose 2 sub-path cho Smoke A1: A1-conservative (chá»‰ leverage mÃ£ eligible_relaxed, cÃ¡c mÃ£ cÃ²n láº¡i m=1.0) vÃ  A1-research-probe (leverage all picks, khÃ´ng tradable, dÃ¹ng Ä‘o upper bound). Cáº£ 2 cháº¡y song song.
 
 Do-not-rerun:
-- Do NOT bypass Smoke 0 no-op gate trước alpha smoke.
-- Do NOT sửa R46 pinned engine trong window paper-trade 2026-06-08 → 2026-06-29.
-- Do NOT promote dashboard MD1 trước khi đủ 11 promotion gate.
-- Do NOT dùng margin universe proxy cho composite/promotion mà không stress exclude off-list (R7).
-- Do NOT tính lãi margin trên futures IM hoặc khi account còn cash (R1).
-- Do NOT đưa futures notional vào denominator maintenance margin stock leg (R2).
+- Do NOT bypass Smoke 0 no-op gate trÆ°á»›c alpha smoke.
+- Do NOT sá»­a R46 pinned engine trong window paper-trade 2026-06-08 â†’ 2026-06-29.
+- Do NOT promote dashboard MD1 trÆ°á»›c khi Ä‘á»§ 11 promotion gate.
+- Do NOT dÃ¹ng margin universe proxy cho composite/promotion mÃ  khÃ´ng stress exclude off-list (R7).
+- Do NOT tÃ­nh lÃ£i margin trÃªn futures IM hoáº·c khi account cÃ²n cash (R1).
+- Do NOT Ä‘Æ°a futures notional vÃ o denominator maintenance margin stock leg (R2).
 
 Next concrete steps (parallel):
-- Codex: chạy Data-0 spec lock VN30F + Data-1 price QA. Sau đó Engine M-0 no-op + Smoke 0 reproduce baseline.
-- Claude: chuẩn bị Smoke A1 setup, chờ Engine M-1 stock margin từ Codex. Sau đó claim audit cho Smoke 0.
-- Joint check-in mỗi smoke close, update ledger.
+- Codex: cháº¡y Data-0 spec lock VN30F + Data-1 price QA. Sau Ä‘Ã³ Engine M-0 no-op + Smoke 0 reproduce baseline.
+- Claude: chuáº©n bá»‹ Smoke A1 setup, chá» Engine M-1 stock margin tá»« Codex. Sau Ä‘Ã³ claim audit cho Smoke 0.
+- Joint check-in má»—i smoke close, update ledger.
 
-## 2026-06-01 Phase MD1 — Codex kickoff PASS Claude audit + Smoke A1 INTERIM pivot needed
+## 2026-06-01 Phase MD1 â€” Codex kickoff PASS Claude audit + Smoke A1 INTERIM pivot needed
 
 Files:
 - Codex deliver: `output/margin_deriv/CODEX_MD1_KICKOFF_STATUS_20260601.md`, `spec_lock_20260601.md`, `data_qa_20260601.md`, `accounting_noop_20260601.md`, `engine_m1_margin_unit_tests_20260601.md`, `engine_m2_vn30f_toy_tests_20260601.md`, `smoke0_noop_20260601/`
 - Claude audit: `output/margin_deriv/CLAUDE_AUDIT_MD1_KICKOFF_20260601.md`
 - Smoke A1 interim: `output/margin_deriv/smoke_A_margin_2016_INTERIM_VERDICT_20260601.md`, `smoke_A1_margin_2016_m13_conservative_20260601/`, `smoke_A1_margin_2016_m13_research_probe_20260601/`
 
-Status: Codex Data-0/Data-1/Engine M-0/M-1/M-2 cleared by Claude independent audit. Smoke A1 INTERIM — needs Codex pivot rerun with Engine M-1 official.
+Status: Codex Data-0/Data-1/Engine M-0/M-1/M-2 cleared by Claude independent audit. Smoke A1 INTERIM â€” needs Codex pivot rerun with Engine M-1 official.
 
 Codex PASS:
-- Data-0 spec lock VN30F: multiplier 100k VND/point, tick 0.1, band ±7%, listing 2017-08-10, last trading 3rd Thursday, cash settle simple average index 30 phút cuối trim 3 high + 3 low. Match VSDC product info.
-- Data-1 VCI vs VPS pivot cross-check 12/12 pivot tại 4 ngày × 3 symbol = 12 cells, diff 0.0000% gate < 1%. Cache parquet ready: vn30_spot_daily, vn30f1m_daily, vn30f2m_daily, vn30f_basis_daily.
+- Data-0 spec lock VN30F: multiplier 100k VND/point, tick 0.1, band Â±7%, listing 2017-08-10, last trading 3rd Thursday, cash settle simple average index 30 phÃºt cuá»‘i trim 3 high + 3 low. Match VSDC product info.
+- Data-1 VCI vs VPS pivot cross-check 12/12 pivot táº¡i 4 ngÃ y Ã— 3 symbol = 12 cells, diff 0.0000% gate < 1%. Cache parquet ready: vn30_spot_daily, vn30f1m_daily, vn30f2m_daily, vn30f_basis_daily.
 - Smoke 0 no-op: V5 NAV diff 0.000000, CAGR 56.9692%, MDD -40.0087%; R46 NAV diff 0.000000, CAGR 46.7514%, MDD -27.6057%. 8 accounting cols max abs = 0, 0 margin event, 0 futures event. Yearly convention V5=current_first, R46=previous_last (detected automatically).
-- Engine M-1 9/9 unit tests PASS (long_150% debit 500M, interest 267,857 VND/day, maintenance 30%, forced sell to 40% = 500M, no false call ở 130%). Codex caught dev-time bug: initial version trừ IM futures khỏi stock equity → fake debit; fixed per R1 rule.
-- Engine M-2 9/9 toy tests PASS (long/short MTM, IM 17%, contract rounding, fee 5,250 đ/contract one-side).
+- Engine M-1 9/9 unit tests PASS (long_150% debit 500M, interest 267,857 VND/day, maintenance 30%, forced sell to 40% = 500M, no false call á»Ÿ 130%). Codex caught dev-time bug: initial version trá»« IM futures khá»i stock equity â†’ fake debit; fixed per R1 rule.
+- Engine M-2 9/9 toy tests PASS (long/short MTM, IM 17%, contract rounding, fee 5,250 Ä‘/contract one-side).
 
-Claude audit re-run all checks PASS đến tolerance ≤ 1e-10. Audit verdict `CLAUDE_AUDIT_MD1_KICKOFF_20260601.md`. Math verify khớp bit-for-bit, R1/R2 logic correct.
+Claude audit re-run all checks PASS Ä‘áº¿n tolerance â‰¤ 1e-10. Audit verdict `CLAUDE_AUDIT_MD1_KICKOFF_20260601.md`. Math verify khá»›p bit-for-bit, R1/R2 logic correct.
 
-Material finding #1 (Claude): R-1 lane1_breakout có ZERO trades trong 2016. R-1 cash all year 2016 → V5 2016 = 0% là cấu trúc R-1 (52W breakout không trigger 2016), không phải bug. Margin layer không leverage được cash → plan Smoke A1 ban đầu (margin trên R-1 2016 picks) không khả thi.
+Material finding #1 (Claude): R-1 lane1_breakout cÃ³ ZERO trades trong 2016. R-1 cash all year 2016 â†’ V5 2016 = 0% lÃ  cáº¥u trÃºc R-1 (52W breakout khÃ´ng trigger 2016), khÃ´ng pháº£i bug. Margin layer khÃ´ng leverage Ä‘Æ°á»£c cash â†’ plan Smoke A1 ban Ä‘áº§u (margin trÃªn R-1 2016 picks) khÃ´ng kháº£ thi.
 
-Material finding #2 (Claude): Pivot Smoke A1 dùng R46 holdings 2016 (R46 có 109 fills 2016-07-11 → 2016-12-30, 20 unique symbols) — khả thi math. Nhưng daily MTM simulator Claude tự xây không reproduce R46 baseline (drift -5pp H2 2016 ở conservative no-leverage variant). Engine differences giữa Claude simulator và R46 official (MISS_BUY filter, regime stop, fill convention, cost model). Cần Codex chạy hộ Smoke A1-v2 với Engine M-1 official code.
+Material finding #2 (Claude): Pivot Smoke A1 dÃ¹ng R46 holdings 2016 (R46 cÃ³ 109 fills 2016-07-11 â†’ 2016-12-30, 20 unique symbols) â€” kháº£ thi math. NhÆ°ng daily MTM simulator Claude tá»± xÃ¢y khÃ´ng reproduce R46 baseline (drift -5pp H2 2016 á»Ÿ conservative no-leverage variant). Engine differences giá»¯a Claude simulator vÃ  R46 official (MISS_BUY filter, regime stop, fill convention, cost model). Cáº§n Codex cháº¡y há»™ Smoke A1-v2 vá»›i Engine M-1 official code.
 
-Material finding #3 (chiến lược): 2016 không thể đạt gate +30pp đơn thuần bằng margin layer trên R46 2016 holdings. Math: R46 baseline +12.57pp edge, margin 1.3x trên avg gross 60% NAV chỉ lift 6-8pp tối đa trước interest cost; cần lift +17.43pp để đạt +30pp gate. Options: (a) margin + R-1 rule extension (vd 26W breakout thay 52W để trigger 2016 sớm hơn), (b) accept 2016 best-effort dưới gate, ưu tiên fix 2018 (bear hedge VN30F) và 2019 (margin selective).
+Material finding #3 (chiáº¿n lÆ°á»£c): 2016 khÃ´ng thá»ƒ Ä‘áº¡t gate +30pp Ä‘Æ¡n thuáº§n báº±ng margin layer trÃªn R46 2016 holdings. Math: R46 baseline +12.57pp edge, margin 1.3x trÃªn avg gross 60% NAV chá»‰ lift 6-8pp tá»‘i Ä‘a trÆ°á»›c interest cost; cáº§n lift +17.43pp Ä‘á»ƒ Ä‘áº¡t +30pp gate. Options: (a) margin + R-1 rule extension (vd 26W breakout thay 52W Ä‘á»ƒ trigger 2016 sá»›m hÆ¡n), (b) accept 2016 best-effort dÆ°á»›i gate, Æ°u tiÃªn fix 2018 (bear hedge VN30F) vÃ  2019 (margin selective).
 
 Do-not-rerun:
-- Do NOT rerun Smoke A1 trên R-1 2016 picks — confirmed zero holdings, không khả thi.
-- Do NOT trust Claude daily MTM simulator output cho Smoke A1 — drift -5pp vs R46 baseline (engine differences). Artifact saved nhưng marked INTERIM, không reproduce baseline.
-- Do NOT promote margin-only-on-2016 strategy mà không pair với R-1 rule extension.
+- Do NOT rerun Smoke A1 trÃªn R-1 2016 picks â€” confirmed zero holdings, khÃ´ng kháº£ thi.
+- Do NOT trust Claude daily MTM simulator output cho Smoke A1 â€” drift -5pp vs R46 baseline (engine differences). Artifact saved nhÆ°ng marked INTERIM, khÃ´ng reproduce baseline.
+- Do NOT promote margin-only-on-2016 strategy mÃ  khÃ´ng pair vá»›i R-1 rule extension.
 - Do NOT touch R46 paper-trade pinned engine.
 
 Next concrete steps:
-- Codex chạy Smoke A1-v2 với Engine M-1 official trên R46 2016 holdings (conservative + probe).
-- Codex chạy Smoke B1 bear hedge song song trên R46/V5 holdings 2018 + 2022 (không depend on A1).
-- Claude monitor OI workaround từ HNX feed, prepare Smoke B1 audit framework.
-- Joint discuss strategic finding #3 với anh trước khi Composite MD1 stack.
+- Codex cháº¡y Smoke A1-v2 vá»›i Engine M-1 official trÃªn R46 2016 holdings (conservative + probe).
+- Codex cháº¡y Smoke B1 bear hedge song song trÃªn R46/V5 holdings 2018 + 2022 (khÃ´ng depend on A1).
+- Claude monitor OI workaround tá»« HNX feed, prepare Smoke B1 audit framework.
+- Joint discuss strategic finding #3 vá»›i anh trÆ°á»›c khi Composite MD1 stack.
 
-## 2026-06-01 Phase MD1 — Smoke A1+B1+C1 ALL FAIL, MD1 close-out recommended
+## 2026-06-01 Phase MD1 â€” Smoke A1+B1+C1 ALL FAIL, MD1 close-out recommended
 
 Files:
 - Codex deliver: `output/margin_deriv/CODEX_MD1_SMOKE_BC_HANDOFF_20260601.md`, `smoke_B_vn30f_hedge_VERDICT_20260601.md`, `smoke_C_vn30f_boost_VERDICT_20260601.md`, `smoke_B_vn30f_hedge_20260601/`, `smoke_C_vn30f_boost_20260601/`
@@ -1289,7 +1310,7 @@ Files:
 - Claude audit: `output/margin_deriv/CLAUDE_AUDIT_MD1_SMOKE_ABC_VERDICT_20260601.md`
 - Claude Smoke A1 overlay: `smoke_A1_margin_2016_m13_overlay_conservative_20260601/`, `smoke_A1_margin_2016_m13_overlay_research_probe_20260601/`
 
-Status: **3/3 alpha smoke FAIL với cơ chế naïve. Composite MD1 BLOCKED. Anh quyết định 3 options.**
+Status: **3/3 alpha smoke FAIL vá»›i cÆ¡ cháº¿ naÃ¯ve. Composite MD1 BLOCKED. Anh quyáº¿t Ä‘á»‹nh 3 options.**
 
 Smoke A1 overlay (Claude, pivot R46 H2 2016):
 - Codex A1-v2 official guard `official_no_leverage` reproduces saved R46 exactly: max NAV diff 0.000000 VND, CAGR 46.751375%, trade count 1,821.
@@ -1299,108 +1320,108 @@ Smoke A1 overlay (Claude, pivot R46 H2 2016):
 - Conservative m_eff=1.255: H2 lift +2.084pp, edge vs VNI +14.66pp
 - Research-probe m_eff=1.30: H2 lift +2.442pp, edge vs VNI +15.01pp
 - Interest cost 1.5-1.8% NAV, gate +10pp lift FAIL, gate +30pp edge FAIL
-- Root cause: math ceiling — avg exposure 0.845 × leverage uplift 0.30 ≈ 25% boost trên base 14.5% → max ~3pp lift
+- Root cause: math ceiling â€” avg exposure 0.845 Ã— leverage uplift 0.30 â‰ˆ 25% boost trÃªn base 14.5% â†’ max ~3pp lift
 
 Smoke B1 bear hedge (Codex, Claude audit match exact):
 - V5 beta 0.5: 2018 -0.754pp, 2022 +2.308pp, futures cum PnL after fee -4.958B, 2025 -6.039pp
 - V5 beta 0.8: 2018 -1.170pp, 2022 +3.809pp, futures -7.977B, 2025 -9.610pp
 - R46 beta 0.5: 2018 -0.280pp, 2022 +2.423pp, futures -2.085B
 - R46 beta 0.8: 2018 -1.465pp, 2022 +3.788pp, futures -3.372B, 2 pre-pass breaks
-- Gate 2018 ≥ +15pp FAIL toàn bộ
-- Root cause: (a) bear router v4 misfires trong bull (2025 -6 đến -9.6pp), (b) VN30 ≠ broader VN-Index hedge sai universe, (c) negative carry cộng dồn
+- Gate 2018 â‰¥ +15pp FAIL toÃ n bá»™
+- Root cause: (a) bear router v4 misfires trong bull (2025 -6 Ä‘áº¿n -9.6pp), (b) VN30 â‰  broader VN-Index hedge sai universe, (c) negative carry cá»™ng dá»“n
 
 Smoke C1 bull boost (Codex, Claude audit match exact):
 - V5 boost 30%: target avg -0.447pp (2017 +2.274 / 2020 -1.149 / 2025 -2.465)
 - V5 boost 50%: target avg -0.764pp
 - R46 boost 30%: target avg +0.642pp
 - R46 boost 50%: target avg +1.061pp, 1 pre-pass break
-- Gate target avg ≥ +3pp FAIL toàn bộ
-- Root cause: (a) 2020 cash-idle trigger fire late post-COVID, (b) 2025 VN30 underperform broader, (c) basis cost cộng dồn
+- Gate target avg â‰¥ +3pp FAIL toÃ n bá»™
+- Root cause: (a) 2020 cash-idle trigger fire late post-COVID, (b) 2025 VN30 underperform broader, (c) basis cost cá»™ng dá»“n
 
-3 options anh quyết định:
-- Option 1 MD1 close-out: lock MD1 đóng, focus R46 paper-trade. Recommend nếu ưu tiên go-live R46.
-- Option 2 MD2 diagnosis-first: mở lane DIAG-A/B/C trigger redesign theo dispersion + basis behavior trước alpha. 2-3 ngày. Recommend nếu vẫn chase 11/11.
-- Option 3 pure stock R-1 rule extension: bỏ margin/VN30F, fix R-1 trigger 2016 sớm hơn (Donchian 26W thay 52W). Recommend nếu prefer constraint gốc.
+3 options anh quyáº¿t Ä‘á»‹nh:
+- Option 1 MD1 close-out: lock MD1 Ä‘Ã³ng, focus R46 paper-trade. Recommend náº¿u Æ°u tiÃªn go-live R46.
+- Option 2 MD2 diagnosis-first: má»Ÿ lane DIAG-A/B/C trigger redesign theo dispersion + basis behavior trÆ°á»›c alpha. 2-3 ngÃ y. Recommend náº¿u váº«n chase 11/11.
+- Option 3 pure stock R-1 rule extension: bá» margin/VN30F, fix R-1 trigger 2016 sá»›m hÆ¡n (Donchian 26W thay 52W). Recommend náº¿u prefer constraint gá»‘c.
 
-Claude recommend combination Option 1 + Option 3: đóng MD1, focus R46 paper-trade, mở Option 3 song song không can thiệp R46.
+Claude recommend combination Option 1 + Option 3: Ä‘Ã³ng MD1, focus R46 paper-trade, má»Ÿ Option 3 song song khÃ´ng can thiá»‡p R46.
 
 Do-not-rerun:
-- Do NOT expand grid quanh B1 short hedge naïve mechanism — Codex flag rõ "trigger economics/timing/basis" cần redesign first.
-- Do NOT expand grid quanh C1 bull boost naïve — Codex flag "timing/trigger mismatch, not sizing-only".
-- Do NOT trust Smoke A1 daily MTM simulator output earlier (drift -5pp). Overlay rerun đã là valid; result lift +2pp confirm math ceiling.
-- Do NOT promote any MD1 mechanism vào dashboard.
-- Do NOT bypass diagnosis-first nếu Option 2 mở.
+- Do NOT expand grid quanh B1 short hedge naÃ¯ve mechanism â€” Codex flag rÃµ "trigger economics/timing/basis" cáº§n redesign first.
+- Do NOT expand grid quanh C1 bull boost naÃ¯ve â€” Codex flag "timing/trigger mismatch, not sizing-only".
+- Do NOT trust Smoke A1 daily MTM simulator output earlier (drift -5pp). Overlay rerun Ä‘Ã£ lÃ  valid; result lift +2pp confirm math ceiling.
+- Do NOT promote any MD1 mechanism vÃ o dashboard.
+- Do NOT bypass diagnosis-first náº¿u Option 2 má»Ÿ.
 
-Final direction per latest status: Option 1 + Option 3 combo — close MD1, focus R46 paper-trade, and open pure-stock R-1 rule extension lane in parallel. No MD1 composite.
+Final direction per latest status: Option 1 + Option 3 combo â€” close MD1, focus R46 paper-trade, and open pure-stock R-1 rule extension lane in parallel. No MD1 composite.
 
-## 2026-06-01 Phase MD1 — A1-v2 official engine FAIL + Claude audit PASS reproduction guard
+## 2026-06-01 Phase MD1 â€” A1-v2 official engine FAIL + Claude audit PASS reproduction guard
 
 Files:
 - Codex: `output/margin_deriv/smoke_A1_v2_r46_margin_2016_VERDICT_20260601.md`, `smoke_A1_v2_r46_margin_2016_20260601/` (config.json, summary.csv, yearly_all.csv, 3 case folders), `backtest/md1_smoke_a1_v2_r46_margin_2016_20260601.py`
-- Claude audit: entry này + reproduction guard rerun trong session
+- Claude audit: entry nÃ y + reproduction guard rerun trong session
 
 Status: **A1-v2 reproduction guard PASS bit-for-bit. Best alpha cell FAIL gate +30pp. MD1 close-out confirmed across all 3 alpha smokes (A/B/C).**
 
 Audit Claude independent rerun:
-- Reproduction guard `official_no_leverage` max |NAV diff vs R46 base|: **0.000000 VND** — PASS gate cứng.
-- CAGR R46 base = CAGR A1v2 no_leverage = **46.751375%** (6 decimals match) — Engine M-1 official không drift.
-- 2016 yearly: base 14.505%, m13_relaxed 18.680%, m13_all 18.187% — match Codex summary.csv exact.
-- VNI 2016 = 15.748% (current_first). Edges: base -1.243pp, m13_relaxed +2.931pp, m13_all +2.438pp — match.
-- Delta lifts: m13_relaxed **+4.175pp**, m13_all **+3.682pp** — match exact đến 3 decimals.
-- Gate 2016 edge ≥ +30pp **FAIL** (best +2.931pp << +30pp).
-- Interest 6.24tr (relaxed) / 8.61tr (all probe) reasonable trên 1B NAV.
-- Margin events: 0 trong cả 3 cases — buffer 35% không vi phạm.
+- Reproduction guard `official_no_leverage` max |NAV diff vs R46 base|: **0.000000 VND** â€” PASS gate cá»©ng.
+- CAGR R46 base = CAGR A1v2 no_leverage = **46.751375%** (6 decimals match) â€” Engine M-1 official khÃ´ng drift.
+- 2016 yearly: base 14.505%, m13_relaxed 18.680%, m13_all 18.187% â€” match Codex summary.csv exact.
+- VNI 2016 = 15.748% (current_first). Edges: base -1.243pp, m13_relaxed +2.931pp, m13_all +2.438pp â€” match.
+- Delta lifts: m13_relaxed **+4.175pp**, m13_all **+3.682pp** â€” match exact Ä‘áº¿n 3 decimals.
+- Gate 2016 edge â‰¥ +30pp **FAIL** (best +2.931pp << +30pp).
+- Interest 6.24tr (relaxed) / 8.61tr (all probe) reasonable trÃªn 1B NAV.
+- Margin events: 0 trong cáº£ 3 cases â€” buffer 35% khÃ´ng vi pháº¡m.
 
-Engine M-1 reproduction proves the drift trong Claude previous overlay rerun (lift +2.084pp vs official +4.175pp) là do em overlay approximation; official engine higher fidelity vẫn confirm same conclusion qualitatively (lift << +30pp gate).
+Engine M-1 reproduction proves the drift trong Claude previous overlay rerun (lift +2.084pp vs official +4.175pp) lÃ  do em overlay approximation; official engine higher fidelity váº«n confirm same conclusion qualitatively (lift << +30pp gate).
 
-Strategic confirm: 3/3 alpha smoke MD1 FAIL — margin 2016 lift +4.175pp << +30pp gate; VN30F bear hedge 2018 -0.754pp đến -1.470pp + 2025 -6 đến -9.6pp + futures cum PnL -4.96B đến -7.98B; VN30F bull boost target avg -0.447pp V5. Composite MD1 không khả thi với cơ chế naïve.
+Strategic confirm: 3/3 alpha smoke MD1 FAIL â€” margin 2016 lift +4.175pp << +30pp gate; VN30F bear hedge 2018 -0.754pp Ä‘áº¿n -1.470pp + 2025 -6 Ä‘áº¿n -9.6pp + futures cum PnL -4.96B Ä‘áº¿n -7.98B; VN30F bull boost target avg -0.447pp V5. Composite MD1 khÃ´ng kháº£ thi vá»›i cÆ¡ cháº¿ naÃ¯ve.
 
-Action: MD1 lane đóng. Lane R1-EXT pure stock rule extension đang draft runbook (`PARALLEL_R1_RULE_EXTENSION_RUNBOOK_20260601.md`), pending anh approve verbal "start E0".
+Action: MD1 lane Ä‘Ã³ng. Lane R1-EXT pure stock rule extension Ä‘ang draft runbook (`PARALLEL_R1_RULE_EXTENSION_RUNBOOK_20260601.md`), pending anh approve verbal "start E0".
 
-## 2026-06-01 Phase R1-EXT — CRITICAL HALT E0 reproduce FAIL engine drift
+## 2026-06-01 Phase R1-EXT â€” CRITICAL HALT E0 reproduce FAIL engine drift
 
 Files:
 - Codex: `output/r1_rule_ext/CODEX_R1EXT_E0_E2_VERDICT_20260601.md`, `smoke_E0_E2_codex_20260601/` (4 cells), `backtest/r1_rule_ext_smoke_e0_e2_20260601.py`
 - Claude audit: `output/r1_rule_ext/CLAUDE_AUDIT_E0_E2_HALT_VERDICT_20260601.md`
 
-Status: **CRITICAL — E0 reproduce baseline R-1 FAIL. R1-EXT lane HALT. Mọi E1/E2 result untrustworthy cho tới khi drift resolved.**
+Status: **CRITICAL â€” E0 reproduce baseline R-1 FAIL. R1-EXT lane HALT. Má»i E1/E2 result untrustworthy cho tá»›i khi drift resolved.**
 
 Codex E0 reproduce vs R-1 baseline saved May 30 18:25:
-- Max NAV abs diff 2.38B VND (gate ≤ 1e-6 FAIL)
+- Max NAV abs diff 2.38B VND (gate â‰¤ 1e-6 FAIL)
 - CAGR 20.73% vs baseline 38.21% (diff -17.48pp)
-- Max yearly diff 67.46pp (gate ≤ 0.001 FAIL)
-- 2016: 0% baseline → -8.50% rerun (159 trades vs 0 baseline)
-- 2017: +101.96% baseline → +84.58% rerun
-- 2019: +35.78% baseline → -31.68% rerun
-- First BUY 2017-02-20 KKC baseline → 2016-02-15 DMC rerun (era shift)
+- Max yearly diff 67.46pp (gate â‰¤ 0.001 FAIL)
+- 2016: 0% baseline â†’ -8.50% rerun (159 trades vs 0 baseline)
+- 2017: +101.96% baseline â†’ +84.58% rerun
+- 2019: +35.78% baseline â†’ -31.68% rerun
+- First BUY 2017-02-20 KKC baseline â†’ 2016-02-15 DMC rerun (era shift)
 
 Claude root cause investigation (em check Codex + independent):
-- Data files (705 parquet) timestamps May 27, predate baseline May 30. Không file mới.
+- Data files (705 parquet) timestamps May 27, predate baseline May 30. KhÃ´ng file má»›i.
 - Engine helpers + lane1 script md5 unchanged (timestamps May 30 18:19-18:23, predate baseline output).
 - Universe 509 syms today = pickle today bit-for-bit consistent.
-- Pickle Codex sinh hôm nay đã verify match get_universe() hiện tại.
-- Root cause drift UNRESOLVED — không có git để bisect.
+- Pickle Codex sinh hÃ´m nay Ä‘Ã£ verify match get_universe() hiá»‡n táº¡i.
+- Root cause drift UNRESOLVED â€” khÃ´ng cÃ³ git Ä‘á»ƒ bisect.
 
 Strategic implication:
-- V5 composite CAGR 56.97% / pass30 9/11 / edges ≥+30pp 8/11 có thể INFLATED nếu R-1 baseline không reproduce trên engine hiện tại.
-- MD1 Smoke A1/B1/C1 dùng V5 baseline làm input — edge measurements có thể off.
-- Smoke 0 PASS chỉ verify NAV diff = 0 vs equity_curve.parquet saved, KHÔNG rerun engine. Smoke 0 không catch engine drift.
-- R46 paper-trade decision có thể bị ảnh hưởng nếu R46 engine cũng drift.
+- V5 composite CAGR 56.97% / pass30 9/11 / edges â‰¥+30pp 8/11 cÃ³ thá»ƒ INFLATED náº¿u R-1 baseline khÃ´ng reproduce trÃªn engine hiá»‡n táº¡i.
+- MD1 Smoke A1/B1/C1 dÃ¹ng V5 baseline lÃ m input â€” edge measurements cÃ³ thá»ƒ off.
+- Smoke 0 PASS chá»‰ verify NAV diff = 0 vs equity_curve.parquet saved, KHÃ”NG rerun engine. Smoke 0 khÃ´ng catch engine drift.
+- R46 paper-trade decision cÃ³ thá»ƒ bá»‹ áº£nh hÆ°á»Ÿng náº¿u R46 engine cÅ©ng drift.
 
 Recommend (Claude propose, anh approve):
-- HALT R1-EXT ngay. Không stack E1/E2 conclusion.
-- Codex chạy 3 reproduce test priority 1: R-1 lane1, R46 bear_stop5, V5 composite. Output `CODEX_*_REPRO_TEST_20260602.md`.
-- HOLD R46 paper-trade week 1 checkpoint 2026-06-08 nếu R46 engine reproduce FAIL.
-- KHÔNG promote V5/V6/R46 vào dashboard cho tới khi drift root cause + fix.
+- HALT R1-EXT ngay. KhÃ´ng stack E1/E2 conclusion.
+- Codex cháº¡y 3 reproduce test priority 1: R-1 lane1, R46 bear_stop5, V5 composite. Output `CODEX_*_REPRO_TEST_20260602.md`.
+- HOLD R46 paper-trade week 1 checkpoint 2026-06-08 náº¿u R46 engine reproduce FAIL.
+- KHÃ”NG promote V5/V6/R46 vÃ o dashboard cho tá»›i khi drift root cause + fix.
 
 Do-not-rerun:
-- Do NOT trust E1/E2 result trong `smoke_E0_E2_codex_20260601/` cho tới khi E0 reproduce gate PASS.
-- Do NOT promote any R1-EXT candidate cho tới khi drift resolved.
-- Do NOT advance R46 paper-trade decision cho tới khi reproduce test 2 (R46) PASS.
+- Do NOT trust E1/E2 result trong `smoke_E0_E2_codex_20260601/` cho tá»›i khi E0 reproduce gate PASS.
+- Do NOT promote any R1-EXT candidate cho tá»›i khi drift resolved.
+- Do NOT advance R46 paper-trade decision cho tá»›i khi reproduce test 2 (R46) PASS.
 
-Next concrete steps: anh approve halt + delegate Codex 3 reproduce tests + delay R46 paper-trade week 1 nếu cần.
+Next concrete steps: anh approve halt + delegate Codex 3 reproduce tests + delay R46 paper-trade week 1 náº¿u cáº§n.
 
-## 2026-06-01 Phase R1-EXT — 3 reproduce tests aggregate verdict + Claude audit PASS
+## 2026-06-01 Phase R1-EXT â€” 3 reproduce tests aggregate verdict + Claude audit PASS
 
 Files:
 - Codex: `output/repro_diagnostics_20260601/CODEX_REPRO_DIAGNOSIS_VERDICT_20260601.md`, 4 sub-folders `r1_lane1_fresh/`, `r46_bear_stop5_fresh/`, `v5_saved_stack_rebuild/`, `v5_fresh_stack_rebuild/`, `results.json`
@@ -1410,72 +1431,72 @@ Files:
 Status: **3 test verdicts confirmed by Claude independent rerun bit-for-bit. R46 paper-trade 2026-06-08 GO. R1-EXT remains HALT.**
 
 Test results (Claude verified):
-- Test 1 R-1 lane1: FAIL. CAGR 38.207% → 20.733% (drift -17.474pp), NAV diff 2.381B VND, first BUY shift 2017-02-20 KKC → 2016-02-15 DMC, buys 241 → 380.
-- Test 2 R46 bear_stop5: PASS. 4/4 pinned MD5 match (da26e26..., 7809d07..., a970366..., 3c0cad6...). NAV diff 0.000000 VND. CAGR 46.751375% match đến 6 decimals. MaxDD -27.605692% match. Recent VNI+30 6/6 preserved. Yearly diff 0.000000pp.
-- Test 3 V5 dual-mode: saved-stack rebuild PASS (NAV diff 0, V5 saved equity stitch reproduces baseline), fresh-stack rebuild FAIL (CAGR 56.969% → 47.175%, drift -9.794pp, NAV diff 55.785B). V5 saved equity = historically VALID file but not re-derive-able from current engine.
+- Test 1 R-1 lane1: FAIL. CAGR 38.207% â†’ 20.733% (drift -17.474pp), NAV diff 2.381B VND, first BUY shift 2017-02-20 KKC â†’ 2016-02-15 DMC, buys 241 â†’ 380.
+- Test 2 R46 bear_stop5: PASS. 4/4 pinned MD5 match (da26e26..., 7809d07..., a970366..., 3c0cad6...). NAV diff 0.000000 VND. CAGR 46.751375% match Ä‘áº¿n 6 decimals. MaxDD -27.605692% match. Recent VNI+30 6/6 preserved. Yearly diff 0.000000pp.
+- Test 3 V5 dual-mode: saved-stack rebuild PASS (NAV diff 0, V5 saved equity stitch reproduces baseline), fresh-stack rebuild FAIL (CAGR 56.969% â†’ 47.175%, drift -9.794pp, NAV diff 55.785B). V5 saved equity = historically VALID file but not re-derive-able from current engine.
 
-Key insight V5 dual-mode: V5 saved equity files (R-1 saved May 30 + R46 saved May 28) stitch tại cutover 2020-12-31 reproduces V5 baseline (CAGR 56.97%) exactly. Nhưng nếu rerun R-1 engine + R46 engine fresh từ scratch → V5 fresh CAGR chỉ 47.17%. Drift là do R-1 component, R46 component stable.
+Key insight V5 dual-mode: V5 saved equity files (R-1 saved May 30 + R46 saved May 28) stitch táº¡i cutover 2020-12-31 reproduces V5 baseline (CAGR 56.97%) exactly. NhÆ°ng náº¿u rerun R-1 engine + R46 engine fresh tá»« scratch â†’ V5 fresh CAGR chá»‰ 47.17%. Drift lÃ  do R-1 component, R46 component stable.
 
 MD1 close-out conclusion preserved (NOT invalidated by R-1 drift):
-- A1-v2 official_no_leverage dùng R46 engine (stable), NAV diff 0 valid. A1-v2 lift +4.175pp << +30pp gate FAIL conclusion đứng vững.
-- Smoke B1 / C1 dùng V5 saved equity (valid file) làm baseline. Edge measurements correct vs saved. FAIL conclusions đứng vững.
-- Smoke 0 NAV diff 0 V5/R46 chỉ verify wrap-style (saved equity unchanged khi wrap zero overlay), không catch engine drift. Đây là blind spot Claude phải own.
+- A1-v2 official_no_leverage dÃ¹ng R46 engine (stable), NAV diff 0 valid. A1-v2 lift +4.175pp << +30pp gate FAIL conclusion Ä‘á»©ng vá»¯ng.
+- Smoke B1 / C1 dÃ¹ng V5 saved equity (valid file) lÃ m baseline. Edge measurements correct vs saved. FAIL conclusions Ä‘á»©ng vá»¯ng.
+- Smoke 0 NAV diff 0 V5/R46 chá»‰ verify wrap-style (saved equity unchanged khi wrap zero overlay), khÃ´ng catch engine drift. ÄÃ¢y lÃ  blind spot Claude pháº£i own.
 
-R-1 drift root cause UNRESOLVED. Em đã check: data files 705 parquet timestamp May 27 predate baseline, engine helpers + lane1 script md5 unchanged, universe 509 match pickle bit-for-bit. Khả năng: pickle corruption khi sinh trước May 30, hidden environment state (numpy random, pandas resample), helpers path-dependent. Không có git để bisect.
+R-1 drift root cause UNRESOLVED. Em Ä‘Ã£ check: data files 705 parquet timestamp May 27 predate baseline, engine helpers + lane1 script md5 unchanged, universe 509 match pickle bit-for-bit. Kháº£ nÄƒng: pickle corruption khi sinh trÆ°á»›c May 30, hidden environment state (numpy random, pandas resample), helpers path-dependent. KhÃ´ng cÃ³ git Ä‘á»ƒ bisect.
 
 R1-EXT path forward 2 options:
-- Option A (recommend): fix R-1 engine reconcile. Bisect 1-2 ngày. Nếu fix được → resume với old baseline.
-- Option B (fallback): formal rebaseline R-1. Accept current engine output (CAGR 20.73%) as new baseline. V5 saved (CAGR 56.97%) không còn target reproducible. Composite mới (R1-new + R46) chỉ đạt ~47% CAGR.
+- Option A (recommend): fix R-1 engine reconcile. Bisect 1-2 ngÃ y. Náº¿u fix Ä‘Æ°á»£c â†’ resume vá»›i old baseline.
+- Option B (fallback): formal rebaseline R-1. Accept current engine output (CAGR 20.73%) as new baseline. V5 saved (CAGR 56.97%) khÃ´ng cÃ²n target reproducible. Composite má»›i (R1-new + R46) chá»‰ Ä‘áº¡t ~47% CAGR.
 
-Git status: Git 2.54 installed C:\Program Files\Git, added to User PATH. Current Codex session PATH chưa refresh; commands cần full path tạm thời.
+Git status: Git 2.54 installed C:\Program Files\Git, added to User PATH. Current Codex session PATH chÆ°a refresh; commands cáº§n full path táº¡m thá»i.
 
 Do-not-rerun:
-- Do NOT trust R-1 fresh engine output là baseline cho lane mới — historically valid baseline là saved May 30 file.
-- Do NOT rerun V5 fresh-stack expect reproduce — V5 saved equity là source of truth cho V5 baseline reference.
+- Do NOT trust R-1 fresh engine output lÃ  baseline cho lane má»›i â€” historically valid baseline lÃ  saved May 30 file.
+- Do NOT rerun V5 fresh-stack expect reproduce â€” V5 saved equity lÃ  source of truth cho V5 baseline reference.
 - Do NOT touch R46 pinned engine (Test 2 PASS confirms stable).
-- Do NOT promote R1-EXT E1/E2 result cho tới khi R-1 engine reconcile hoặc rebaseline.
+- Do NOT promote R1-EXT E1/E2 result cho tá»›i khi R-1 engine reconcile hoáº·c rebaseline.
 
 Next concrete steps:
 - Codex priority drift root cause investigation Option A (deadline 2026-06-03).
-- Claude parallel: sanity check weekly bars determinism trên 1-2 sym sample.
+- Claude parallel: sanity check weekly bars determinism trÃªn 1-2 sym sample.
 - Joint verdict drift root cause + anh decide Option A vs B (deadline 2026-06-04).
 - R46 paper-trade week 1 checkpoint 2026-06-08 proceed per Test 2 PASS gate.
 
-## 2026-06-01 Phase R1-EXT — Anh approve Option A + Claude parallel sanity findings
+## 2026-06-01 Phase R1-EXT â€” Anh approve Option A + Claude parallel sanity findings
 
 Files:
 - Claude handoff: `output/repro_diagnostics_20260601/CLAUDE_R1_DRIFT_HANDOFF_TO_CODEX_20260601.md`
 
-Status: **Anh approve Option A (fix R-1 engine bisect 1-2 ngày). Claude parallel sanity check done; handoff hypotheses + MD5 hashes cho Codex priority bisect deadline 2026-06-03.**
+Status: **Anh approve Option A (fix R-1 engine bisect 1-2 ngÃ y). Claude parallel sanity check done; handoff hypotheses + MD5 hashes cho Codex priority bisect deadline 2026-06-03.**
 
 Claude sanity findings:
-- DMC tại signal date 2016-02-05 PASS toàn bộ R-1 filter hôm nay (trade_val 1.02 ≥ 0.5, vol_z 2.13 ≥ 2.0, breakout close 26.08 ≥ 1.05×23.80, score 2.59). Baseline May 30 KHÔNG pick DMC ở date này (saved trades 2016 = 0 BUY). Cùng filter logic, cùng input data → khác output. Drift KHÔNG từ filter logic.
-- Pyc cache hint: baseline May 30 18:20-18:23 compile cpython-310.pyc; hôm nay Codex compile cpython-312.pyc Jun 1 07:51-07:57. Khả năng Python 3.10 (baseline) vs 3.12 (Codex today) → pandas/numpy resample W-FRI behavior nhỏ differences.
-- MD5 hashes recorded cho 4 key parquet (DMC, KKC, HPG, VNM) + vnindex_daily_2012 → cross-check baseline-era nếu Codex có log.
+- DMC táº¡i signal date 2016-02-05 PASS toÃ n bá»™ R-1 filter hÃ´m nay (trade_val 1.02 â‰¥ 0.5, vol_z 2.13 â‰¥ 2.0, breakout close 26.08 â‰¥ 1.05Ã—23.80, score 2.59). Baseline May 30 KHÃ”NG pick DMC á»Ÿ date nÃ y (saved trades 2016 = 0 BUY). CÃ¹ng filter logic, cÃ¹ng input data â†’ khÃ¡c output. Drift KHÃ”NG tá»« filter logic.
+- Pyc cache hint: baseline May 30 18:20-18:23 compile cpython-310.pyc; hÃ´m nay Codex compile cpython-312.pyc Jun 1 07:51-07:57. Kháº£ nÄƒng Python 3.10 (baseline) vs 3.12 (Codex today) â†’ pandas/numpy resample W-FRI behavior nhá» differences.
+- MD5 hashes recorded cho 4 key parquet (DMC, KKC, HPG, VNM) + vnindex_daily_2012 â†’ cross-check baseline-era náº¿u Codex cÃ³ log.
 
 5 hypotheses Codex bisect priority:
 - H1: silent file replacement (same timestamp, content changed via atomic mv/rsync)
 - H2: Python interpreter version (3.10 baseline vs 3.12 today)
-- H3: pandas/numpy version delta giữa 2 session
+- H3: pandas/numpy version delta giá»¯a 2 session
 - H4: hidden cache state
 - H5: numerical determinism pandas resample boundary
 
 Bisect command template provided cho Codex:
 1. Snapshot all 705 parquet md5 today
-2. Rerun lane1 với /usr/bin/python3.10 explicit
-3. Rerun với python3.12 nếu có
+2. Rerun lane1 vá»›i /usr/bin/python3.10 explicit
+3. Rerun vá»›i python3.12 náº¿u cÃ³
 4. Compare yearly outputs
 
 Do-not-rerun:
-- Claude không advance R1-EXT smoke E1/E2/E3 trong window này.
-- Codex không modify R-1 engine code cho tới khi root cause clear.
-- Không touch dashboard, không touch R46 pinned engine.
+- Claude khÃ´ng advance R1-EXT smoke E1/E2/E3 trong window nÃ y.
+- Codex khÃ´ng modify R-1 engine code cho tá»›i khi root cause clear.
+- KhÃ´ng touch dashboard, khÃ´ng touch R46 pinned engine.
 
 Next concrete steps:
-- Codex bisect deadline 2026-06-03 với H1-H4 priority.
+- Codex bisect deadline 2026-06-03 vá»›i H1-H4 priority.
 - Claude audit Codex bisect verdict khi submit.
-- Anh decide Option A continue vs fallback B nếu H1-H4 negative (2026-06-04).
-- R46 paper-trade 2026-06-08 độc lập tiến hành per Test 2 PASS.
+- Anh decide Option A continue vs fallback B náº¿u H1-H4 negative (2026-06-04).
+- R46 paper-trade 2026-06-08 Ä‘á»™c láº­p tiáº¿n hÃ nh per Test 2 PASS.
 
 ## 2026-05-31 Codex - Claude 3-day handoff review + dashboard fix
 
@@ -1497,7 +1518,7 @@ R46 reproduce: pinned md5 files all match. Rerun of `backtest/r46_regime_conditi
 
 Stress/sensitivity: 15bps PASS, 18bps PASS thin, 20bps+ FAIL strict recent VNI+30 6/6. Stop 4/5/6% bear-only plateau PASS; adding sideways regime FAIL. Cap 55% is essential: cap33 drops recent VNI+30 to 3/6, cap25 to 2/6. Walk-forward post-2021 holds; 2016-2020 is weak (mean edge +0.48pp, VNI+30 1/5), so R46 should be described as 2021-2026 candidate, not full-cycle dominance.
 
-Liquidity smoke: fresh VPS ADV20 latest signal MSB = 269.5 tỷ/day, OK. Some other dashboard symbols have thin min daily value (DXP/KSV/YEG), so paper-trade gate must check fresh ADV20 at every signal.
+Liquidity smoke: fresh VPS ADV20 latest signal MSB = 269.5 tá»·/day, OK. Some other dashboard symbols have thin min daily value (DXP/KSV/YEG), so paper-trade gate must check fresh ADV20 at every signal.
 
 29/05 variants: Codex agrees with Claude rejection. Drawdown/recovery/guard variants improve MaxDD but reduce CAGR materially or add no-op complexity; no variant beats locked R46 sufficiently. Do not promote or rerun same 29/05 R46 variant family unless a new preregistered objective is approved.
 
@@ -1897,7 +1918,7 @@ Verdict: **do not continue broad Pair657 search as main path**. Only use Pair657
 | pair657 guard grid fast (weekly target sim) | `pair657_guard_grid_fast_20260527/` | Weekly target close-to-close, cost-free, no T+2.5, no 100-lot. Top cells claim VNI+20 8-9/11 with CAGR 72-76%. Claude promoted top 4 cells to strict daily 100-lot stress20 in `pair657_guard_strict_daily_promote_20260528/`: all 4 drop to CAGR 29-33%, VNI+20 3-4/11, WORSE than M_core baseline 37.58% / 6/11. 2020 edge worsens -6 to -12pp under strict cost. The 8-9/11 claim does not survive execution. Treat target-level sim as diagnostic only, not as a research lead. |
 | DOW execution lag shift | `dow_execution_calendar_smoke_20260528/` | Test shift signal-Friday/execute-Monday to lag 0/1/2/3 (Mon/Tue/Wed/Thu open). Result: lag 0 Mon optimal at CAGR 37.58% 6/11, lag 1 Tue 31.52% 5/11, lag 2 Wed 6.40% 1/11, lag 3 Thu 4.90% 1/11. Each day of lag costs 6-25pp CAGR. 2021/2024 most sensitive (lose -38pp to -120pp). Average DOW pattern does NOT apply to conditional momentum picks; Monday-open execution is empirically optimal. T+2.5: 0 violators. |
 | Gap rule + pullback execution | `gap_rule_smoke_20260528/` | 3x3 grid gap (0.05/0.06/0.07) x pullback (4/7/10). gap=0.05 optimal (CAGR 37.58%). Loosen to 0.07 drops CAGR -1.14pp and loses 1 VNI+30. Pullback bit-identical (rarely triggers under gap 5%). Monday ceiling-open (gap >=6.5%) catches few extra trades but they pay intraday -2.43% mean. Cap-only execution loosening is rejected. |
-| Capitulation buy sleeve (Claude Lane 1) | `claude_lane_1_capitulation_buy_20260528/` | Cascade 3 panic close days (drop>=6.5%/day, intraday range>=2% on trigger, liquidity>=5tỷ): 459 events 2016-2026 with +12.22% mean 20d forward return on raw data (67.5% pos share, alpha +10pp/20d vs random). Custom T+1 simulator with T+2.5 enforced (0 violators). All 6 v3 cells (single position, max conc 1-2, per_event 40-50%, hold 10-20) FAIL pass gate: sleeve standalone CAGR -3.5 to +0.3%, MaxDD -37 to -73%; combined CAGR drops -1.4 to -2.2pp; VNI+20 unchanged 6/11. Per-event arithmetic alpha did NOT survive portfolio geometric compounding due to (a) Jensen inequality with high variance, (b) 80bps round-trip cost erosion, (c) cluster events 2018Q4/2020Q1/2022Q4 cause simultaneous drawdowns. Verdict KILL_EXPANSION for cap-only / fixed-stop / fixed-weight implementations. |
+| Capitulation buy sleeve (Claude Lane 1) | `claude_lane_1_capitulation_buy_20260528/` | Cascade 3 panic close days (drop>=6.5%/day, intraday range>=2% on trigger, liquidity>=5tá»·): 459 events 2016-2026 with +12.22% mean 20d forward return on raw data (67.5% pos share, alpha +10pp/20d vs random). Custom T+1 simulator with T+2.5 enforced (0 violators). All 6 v3 cells (single position, max conc 1-2, per_event 40-50%, hold 10-20) FAIL pass gate: sleeve standalone CAGR -3.5 to +0.3%, MaxDD -37 to -73%; combined CAGR drops -1.4 to -2.2pp; VNI+20 unchanged 6/11. Per-event arithmetic alpha did NOT survive portfolio geometric compounding due to (a) Jensen inequality with high variance, (b) 80bps round-trip cost erosion, (c) cluster events 2018Q4/2020Q1/2022Q4 cause simultaneous drawdowns. Verdict KILL_EXPANSION for cap-only / fixed-stop / fixed-weight implementations. |
 | Capitulation trailing/cluster variants (Claude Lane 3) | `claude_lane_3_capitulation_trailing_20260528/` | Existing Claude branch tested trailing stop, take-profit, and VNI 20d cluster-skip variants. Baseline remains better: 37.58% CAGR / -34.47% MaxDD / VNI+20 6/11. Best L3 variants only 35.35-36.13% CAGR; VNI+20 unchanged 6/11, VNI+30 usually drops to 5/11 or stays 6/11 with lower CAGR. Sleeve standalone still negative (-6% to -16% CAGR). Verdict REJECT_EXPANSION. Do not retry trailing/take-profit/cluster-skip alone for capitulation. |
 | Capitulation quality-filtered pool (Codex Lane 4) | `m_core_capitulation_quality_lane4_20260528/` | Tested remaining new mechanism: only buy cascade events with pre-event quality/RS/flow/liquidity filters and cluster-count caps. Six cells, T+2.5 0 violations. Filters reduce events sharply (1-29 events), reduce sleeve DD but do not add alpha: combined CAGR 36.15-36.18% vs baseline 37.58%, VNI+20 unchanged 6/11, VNI+30 drops to 5/11. Verdict REJECT_EXPANSION. The raw capitulation event alpha is not extractable with simple quality/RS/liquidity filters plus fixed 10% blend. |
 | Market-wide panic quality basket (Codex Lane 5) | `m_core_market_panic_quality_lane5_20260528/` | Tested anh's idea directly: first detect market-wide panic (many liquid stocks panic-close together over 1-3 days), then buy only quality/liquid/RS-filtered names from the panic set. Six cells, 123-308 events across 72-106 trigger days, T+2.5 0 violations. This improves versus naive capitulation in risk terms: standalone sleeve CAGR ranges -1.34% to +0.88%, MaxDD as low as -11.0%. But it still does not improve the actual model: 10% blend lowers CAGR to ~36.18-36.19% vs M-core 37.58%, VNI+20 unchanged 6/11, VNI+30 drops 6/11 to 5/11. Verdict REJECT_EXPANSION for systematic model integration. Concept may remain useful as discretionary/live watchlist, but not as a coded sleeve under current rules. |
@@ -2089,8 +2110,8 @@ What failed:
 
 - Plateau width 1 cell. buffer 0.030 fails (-0.19pp). alpha 0.45 fails (-0.23pp). Locked single-value in score_mode, alpha, top_n, liq_min, gap, buffer, min_sell, stop. Median 5/6 cell sits -13.18pp below threshold.
 - Concentration. Lot-level realized P&L by exit year: 2024 top-3 (VTP/HVN/MCH) = 124% of realized P&L; 2022 91%, 2023 89%, 2026 93%. The +0.12pp 2024 buffer almost certainly collapses if any one of those names is removed.
-- PIT lag inherited from base `g2_latency_tplus3_mutation_v1` is median 14 days, below anh's 60–90 day fundamental conservatism.
-- Full-history 2016–2026 infeasible. Base config window only covers 2021-01-04 → 2026-05-18.
+- PIT lag inherited from base `g2_latency_tplus3_mutation_v1` is median 14 days, below anh's 60â€“90 day fundamental conservatism.
+- Full-history 2016â€“2026 infeasible. Base config window only covers 2021-01-04 â†’ 2026-05-18.
 
 ### User Principle Update - Concentration vs Repeatable Convexity
 
@@ -2282,9 +2303,9 @@ Next efficient direction: stop mutating M-core until a new information source or
 
 Recommended cheap next moves (Claude proposal to Codex):
 
-1. Retest the same cell at top_n=2 and top_n=3. If buffer survives, concentration was the sole problem. If buffer collapses, alpha lives in top-1 only — confirm overfit and pause.
+1. Retest the same cell at top_n=2 and top_n=3. If buffer survives, concentration was the sole problem. If buffer collapses, alpha lives in top-1 only â€” confirm overfit and pause.
 2. Remove-symbol smoke for 2024 (VTP excluded, then HVN, then MCH). If any single removal kills VNI+20 2024, peg as 1-stock leverage and stop.
-3. Tiny plateau probe: alpha (0.35/0.38/0.40/0.42/0.45) × score_mode (steady_quality, liquid_rs). Expand only if ≥3 alpha values inside ±0.05 pass 6/6.
+3. Tiny plateau probe: alpha (0.35/0.38/0.40/0.42/0.45) Ã— score_mode (steady_quality, liquid_rs). Expand only if â‰¥3 alpha values inside Â±0.05 pass 6/6.
 
 Next efficient tests:
 
@@ -2301,14 +2322,14 @@ Verdict: `output/beat_vni30_parallel/claude_lane_c1_dd_recovery_smoke_20260527/V
 
 Tested 6 cells per `M_CORE_PARALLEL_RUNBOOK_20260527.md` Claude lane: 3 brake cells (A1/A2/A3 trailing 4w/8w/13w model NAV return thresholds, cap exposure to 30/30/50%) and 3 boost cells (B1/B2/B3 breadth_recovery + vni_ret13 + optional dispersion gates, cap exposure to 80/100/100%). Baseline `m_alpha0.10_top1` reproduced bit-exact (CAGR 37.58%, MaxDD -34.47%, VNI+20 6/11, 2019 edge -27.13pp, 2020 edge -1.16pp).
 
-Result: all 6 cells fail pass gate. Best 2019 improvement only +3.85pp (A1) versus required ≥10pp. Best 2020 improvement +1.10pp (A1). No cell increases full-window VNI+20 count. CAGR drops -2.92 to -8.45pp in brake cells; MaxDD worsens up to -4.51pp in boost cells.
+Result: all 6 cells fail pass gate. Best 2019 improvement only +3.85pp (A1) versus required â‰¥10pp. Best 2020 improvement +1.10pp (A1). No cell increases full-window VNI+20 count. CAGR drops -2.92 to -8.45pp in brake cells; MaxDD worsens up to -4.51pp in boost cells.
 
 Methodology: brake reference NAV is the static M_core baseline equity at Friday signal closes (no recursive iteration, no leak). Boost regime triggers use `breadth_recovery_2w` and `vni_dispersion_4w` from `regime_features_weekly.parquet` (`as_of_date == date`) plus VNI 65-session trailing close, all Friday-or-earlier. T+2.5 enforced inside `simulate_strict_100lot` with `min_sell=4`, 0 violators across all cells.
 
 Why it failed structurally:
 
 - DD brake fires across winning years too (A1: 17 weeks in 2024, 25 weeks in 2025, 17 in 2021). The trigger detects portfolio drawdown but not the cause, so it clips normal pullbacks inside convex runs along with true style failures.
-- Boost triggers are too lenient (B1 fires 78–100% of weeks every year 2016–2026), effectively a permanent cap raise from 0.55 → 0.80 that worsens MaxDD without improving edges. B3 with stricter gates fires zero times across 538 weeks.
+- Boost triggers are too lenient (B1 fires 78â€“100% of weeks every year 2016â€“2026), effectively a permanent cap raise from 0.55 â†’ 0.80 that worsens MaxDD without improving edges. B3 with stricter gates fires zero times across 538 weeks.
 - Gross-cap modification on existing holdings is empirically insufficient to convert a -19.5% year (2019) into a positive year while preserving +126% in 2021. Cap-only is too blunt; the missing lever is which symbols are held during a style break.
 
 Do-not-rerun: any cap-only DD brake or breadth/VNI-gate boost smoke applied on top of M_core holdings without a new mechanism class.
@@ -2539,7 +2560,7 @@ R21 capacity sweep for 20% ADV cap:
   - `/continue` - request continuing the current best path.
   - `/handoff <text>` - write a handoff note.
 - Session rule: at the start of each new loop/session, Codex and Claude should check `output/beat_vni30_parallel/remote_commands/telegram_inbox.jsonl` and `REMOTE_COMMANDS.md` for new user instructions.
-- Completion notification rule: after Codex or Claude finishes a reply/work block, run `tools/notify_answer_done.py` so anh receives a Telegram notification that the answer is complete and can choose the next direction. The notification must include `[Đã làm]`, `[Kết quả]`, `[Verdict]`, and `[Cần quyết]`. See `output/beat_vni30_parallel/remote_commands/AGENT_TELEGRAM_WORKFLOW.md`.
+- Completion notification rule: after Codex or Claude finishes a reply/work block, run `tools/notify_answer_done.py` so anh receives a Telegram notification that the answer is complete and can choose the next direction. The notification must include `[ÄÃ£ lÃ m]`, `[Káº¿t quáº£]`, `[Verdict]`, and `[Cáº§n quyáº¿t]`. See `output/beat_vni30_parallel/remote_commands/AGENT_TELEGRAM_WORKFLOW.md`.
 - Do not send secrets, brokerage account info, or detailed live orders through Telegram messages.
 - 2026-05-28 update: Codex app heartbeat automation `telegram-command-poll` is active every 5 minutes. Telegram bridge listens in near real time, writes inbox safely, and Codex pickup happens on the heartbeat loop. This is intentionally not an instant shell executor.
 
@@ -3488,7 +3509,7 @@ New rule:
 - Codex heartbeat first runs `tools/collab_handoff_check.py --report`, which scans Telegram pending rows and `claude_to_codex/*.md` by local SHA256 hash/metadata without loading whole folders into model context.
 - Codex reads only new files listed by the checker.
 - After processing, Codex runs `tools/collab_handoff_check.py --mark-current --note ...`.
-- Claude should continue writing concise timestamped handoffs with `[Đã làm]`, `[Kết quả]`, `[Verdict]`, `[Cần Codex]`, and `[Cần anh quyết]` only when needed.
+- Claude should continue writing concise timestamped handoffs with `[ÄÃ£ lÃ m]`, `[Káº¿t quáº£]`, `[Verdict]`, `[Cáº§n Codex]`, and `[Cáº§n anh quyáº¿t]` only when needed.
 
 Verdict: **WORKFLOW_FIXED / DO_NOT_RELY_ON_LATEST_MTIME**.
 
@@ -4110,8 +4131,8 @@ Artifact: `output/beat_vni30_parallel/r23_cost_alert_guard_smoke_20260528/`
 
 Objective: test a cost-friction-aware, low-touch execution control without changing R23 selection:
 - keep R23 NAV3B/20% cap core schedule,
-- defer rebalance by 1 tuần nếu session slippage proxy > historical p75,
-- force execute tuần kế nếu vẫn bị báo hiệu.
+- defer rebalance by 1 tuáº§n náº¿u session slippage proxy > historical p75,
+- force execute tuáº§n káº¿ náº¿u váº«n bá»‹ bÃ¡o hiá»‡u.
 
 Results (15bps):
 - case `cost_alert_guard_p75`: `CAGR -2.90%`, `MaxDD -63.64%`
@@ -4187,9 +4208,9 @@ Artifacts:
 - `backtest/r46_nav_drawdown_governor_smoke_20260528.py`
 
 Mechanism tested:
-- New mechanism class (khác các lane đã fail trước): giữ nguyên R46 bear-stop5 signal, chỉ bọc thêm stateful NAV drawdown governor.
-- Rule: khi drawdown NAV vượt ngưỡng thì giảm exposure multiplier (0.5-0.6); chỉ bật lại full khi drawdown hồi về ngưỡng recover.
-- Scope đúng micro-smoke: 4 cells, một cost level (baseline 15bps equity wrapper), fail-fast.
+- New mechanism class (khÃ¡c cÃ¡c lane Ä‘Ã£ fail trÆ°á»›c): giá»¯ nguyÃªn R46 bear-stop5 signal, chá»‰ bá»c thÃªm stateful NAV drawdown governor.
+- Rule: khi drawdown NAV vÆ°á»£t ngÆ°á»¡ng thÃ¬ giáº£m exposure multiplier (0.5-0.6); chá»‰ báº­t láº¡i full khi drawdown há»“i vá» ngÆ°á»¡ng recover.
+- Scope Ä‘Ãºng micro-smoke: 4 cells, má»™t cost level (baseline 15bps equity wrapper), fail-fast.
 
 Results:
 
@@ -4201,11 +4222,11 @@ Results:
 | `dd12_cut50_rec6` | 32.79% | -20.90% | 4/11 | 3/6 | +8.27pp | 1573 | 0.681 |
 
 Verdict: **FAIL_DD20_CAGR40_STARTPOINT**.
-- Có kéo MaxDD gần -20%, nhưng trả giá CAGR quá lớn (30-36%), không đạt tiêu chí khởi đầu `CAGR > 40%`.
-- Recent gate cũng suy giảm mạnh (VNI+30 chỉ 2-3/6), nên không phù hợp làm production candidate.
+- CÃ³ kÃ©o MaxDD gáº§n -20%, nhÆ°ng tráº£ giÃ¡ CAGR quÃ¡ lá»›n (30-36%), khÃ´ng Ä‘áº¡t tiÃªu chÃ­ khá»Ÿi Ä‘áº§u `CAGR > 40%`.
+- Recent gate cÅ©ng suy giáº£m máº¡nh (VNI+30 chá»‰ 2-3/6), nÃªn khÃ´ng phÃ¹ há»£p lÃ m production candidate.
 
 Do-not-rerun update:
-- Không mở rộng lại dạng **NAV drawdown governor hard-cut 50-60% exposure** theo các ngưỡng này, trừ khi có cơ chế khác bản chất (ví dụ governor theo regime-confidence hoặc sleeve-level selective cut thay vì cắt toàn danh mục).
+- KhÃ´ng má»Ÿ rá»™ng láº¡i dáº¡ng **NAV drawdown governor hard-cut 50-60% exposure** theo cÃ¡c ngÆ°á»¡ng nÃ y, trá»« khi cÃ³ cÆ¡ cháº¿ khÃ¡c báº£n cháº¥t (vÃ­ dá»¥ governor theo regime-confidence hoáº·c sleeve-level selective cut thay vÃ¬ cáº¯t toÃ n danh má»¥c).
 
 ## 2026-05-28 R46 Vol-Target Governor Smoke (micro 4-cell)
 
@@ -4215,9 +4236,9 @@ Artifacts:
 - `backtest/r46_vol_target_governor_smoke_20260528.py`
 
 Mechanism tested:
-- New mechanism class: giữ nguyên R46 bear-stop5, chỉ bọc realized-vol targeting ở cấp NAV.
-- Không leverage (multiplier tối đa 1), chỉ de-risk khi realized vol cao.
-- Scope micro: 4 cells, fail-fast, một cost baseline wrapper.
+- New mechanism class: giá»¯ nguyÃªn R46 bear-stop5, chá»‰ bá»c realized-vol targeting á»Ÿ cáº¥p NAV.
+- KhÃ´ng leverage (multiplier tá»‘i Ä‘a 1), chá»‰ de-risk khi realized vol cao.
+- Scope micro: 4 cells, fail-fast, má»™t cost baseline wrapper.
 
 Results:
 
@@ -4229,11 +4250,11 @@ Results:
 | `vt25_floor80` | 47.74% | -27.61% | 7/11 | 6/6 | +32.92pp | 227 | 0.988 |
 
 Verdict: **FAIL_DD20_CAGR40_STARTPOINT**.
-- Cell tốt nhất theo drawdown (`vt18_floor70`) vẫn chỉ về `-25.84%`, chưa tiệm cận mục tiêu `< -20%`.
-- So với lane hard-cut trước đó, cơ chế này giữ CAGR tốt hơn rõ rệt nhưng gần như không hạ được MaxDD.
+- Cell tá»‘t nháº¥t theo drawdown (`vt18_floor70`) váº«n chá»‰ vá» `-25.84%`, chÆ°a tiá»‡m cáº­n má»¥c tiÃªu `< -20%`.
+- So vá»›i lane hard-cut trÆ°á»›c Ä‘Ã³, cÆ¡ cháº¿ nÃ y giá»¯ CAGR tá»‘t hÆ¡n rÃµ rá»‡t nhÆ°ng gáº§n nhÆ° khÃ´ng háº¡ Ä‘Æ°á»£c MaxDD.
 
 Do-not-rerun update:
-- Không cần mở rộng thêm các biến thể vol-target wrapper thuần NAV ở dải này cho mục tiêu MaxDD<20, vì trade-off không đúng hướng (giữ CAGR nhưng không kéo đủ drawdown).
+- KhÃ´ng cáº§n má»Ÿ rá»™ng thÃªm cÃ¡c biáº¿n thá»ƒ vol-target wrapper thuáº§n NAV á»Ÿ dáº£i nÃ y cho má»¥c tiÃªu MaxDD<20, vÃ¬ trade-off khÃ´ng Ä‘Ãºng hÆ°á»›ng (giá»¯ CAGR nhÆ°ng khÃ´ng kÃ©o Ä‘á»§ drawdown).
 
 ## 2026-05-28 R46 Shock Cool-off Governor Smoke (micro 4-cell)
 
@@ -4243,8 +4264,8 @@ Artifacts:
 - `backtest/r46_shock_cooloff_governor_smoke_20260528.py`
 
 Mechanism tested:
-- New mechanism class: giữ R46 bear-stop5, thêm market-shock cool-off overlay.
-- Khi VNINDEX giảm sốc (ngưỡng -2% đến -3%), giảm exposure trong 3-5 phiên kế tiếp.
+- New mechanism class: giá»¯ R46 bear-stop5, thÃªm market-shock cool-off overlay.
+- Khi VNINDEX giáº£m sá»‘c (ngÆ°á»¡ng -2% Ä‘áº¿n -3%), giáº£m exposure trong 3-5 phiÃªn káº¿ tiáº¿p.
 - Micro scope: 4 cells, fail-fast, 1 cost baseline wrapper.
 
 Results:
@@ -4257,10 +4278,10 @@ Results:
 | `shock2p5_hold5_mult70` | 46.59% | -27.61% | 6/11 | 6/6 | +32.26pp | 336 | 0.959 |
 
 Verdict: **FAIL_DD20_CAGR40_STARTPOINT**.
-- Cơ chế này giữ được CAGR tốt (46.6-47.5%) nhưng drawdown tốt nhất vẫn chỉ `-26.28%`, chưa tiến gần mục tiêu `< -20%`.
+- CÆ¡ cháº¿ nÃ y giá»¯ Ä‘Æ°á»£c CAGR tá»‘t (46.6-47.5%) nhÆ°ng drawdown tá»‘t nháº¥t váº«n chá»‰ `-26.28%`, chÆ°a tiáº¿n gáº§n má»¥c tiÃªu `< -20%`.
 
 Do-not-rerun update:
-- Không mở rộng thêm dải **simple market-shock cool-off wrapper** này cho mục tiêu MaxDD<20 (giữ CAGR nhưng không giải quyết drawdown đủ sâu).
+- KhÃ´ng má»Ÿ rá»™ng thÃªm dáº£i **simple market-shock cool-off wrapper** nÃ y cho má»¥c tiÃªu MaxDD<20 (giá»¯ CAGR nhÆ°ng khÃ´ng giáº£i quyáº¿t drawdown Ä‘á»§ sÃ¢u).
 
 ## 2026-05-28 R46 Vol-Target + Circuit-Breaker Smoke (micro 4-cell)
 
@@ -4271,8 +4292,8 @@ Artifacts:
 - Claude proposal source: `output/beat_vni30_parallel/overnight_collab/claude_to_codex/r46_three_smokes_audit_20260528_2245.md`
 
 Mechanism tested:
-- Kế thừa wrapper `vt20_floor70`, thêm circuit-breaker volatility ngắn hạn.
-- Nếu realized vol 5 ngày vượt ngưỡng (`1.8-2.0x target`) đủ số phiên liên tiếp (`2-3`), ép multiplier thấp hơn (`0.3-0.4`) trong `3` phiên.
+- Káº¿ thá»«a wrapper `vt20_floor70`, thÃªm circuit-breaker volatility ngáº¯n háº¡n.
+- Náº¿u realized vol 5 ngÃ y vÆ°á»£t ngÆ°á»¡ng (`1.8-2.0x target`) Ä‘á»§ sá»‘ phiÃªn liÃªn tiáº¿p (`2-3`), Ã©p multiplier tháº¥p hÆ¡n (`0.3-0.4`) trong `3` phiÃªn.
 - Scope micro: 4 cells, fail-fast.
 
 Results:
@@ -4285,11 +4306,11 @@ Results:
 | `vt20_cb1p8x3d_floor30_h3` | 47.08% | -26.97% | 7/11 | 6/6 | +33.22pp | 63 | 0.955 |
 
 Verdict: **FAIL_DD20_CAGR40_STARTPOINT**.
-- Circuit-breaker không cải thiện MaxDD so với vt20 gốc (`-26.97%` giữ nguyên), dù CAGR tăng nhẹ.
-- Kết luận: thêm CB ở lớp NAV wrapper không chạm đúng điểm đau drawdown tail của R46.
+- Circuit-breaker khÃ´ng cáº£i thiá»‡n MaxDD so vá»›i vt20 gá»‘c (`-26.97%` giá»¯ nguyÃªn), dÃ¹ CAGR tÄƒng nháº¹.
+- Káº¿t luáº­n: thÃªm CB á»Ÿ lá»›p NAV wrapper khÃ´ng cháº¡m Ä‘Ãºng Ä‘iá»ƒm Ä‘au drawdown tail cá»§a R46.
 
 Do-not-rerun update:
-- Không mở rộng thêm nhánh **vol-target + short-vol circuit-breaker wrapper** này cho mục tiêu MaxDD<20 (không cải thiện drawdown).
+- KhÃ´ng má»Ÿ rá»™ng thÃªm nhÃ¡nh **vol-target + short-vol circuit-breaker wrapper** nÃ y cho má»¥c tiÃªu MaxDD<20 (khÃ´ng cáº£i thiá»‡n drawdown).
 
 ## 2026-05-28 R46 Trailing Stop from Peak Smoke (micro 4-cell, 15bps)
 
@@ -4300,9 +4321,9 @@ Artifacts:
 - Claude suggestion context: `output/beat_vni30_parallel/overnight_collab/claude_to_codex/r46_three_smokes_audit_20260528_2245.md`
 
 Mechanism tested:
-- New mechanism class ở sell-engine level: trailing stop theo đỉnh chạy của từng lot (không phải entry-only stop).
-- Giữ nguyên R46 bear-stop5 baseline, thêm trailing stop per-lot với ngưỡng 10/12/15/18%.
-- Scope micro đúng rule: 4 cells, 15bps only.
+- New mechanism class á»Ÿ sell-engine level: trailing stop theo Ä‘á»‰nh cháº¡y cá»§a tá»«ng lot (khÃ´ng pháº£i entry-only stop).
+- Giá»¯ nguyÃªn R46 bear-stop5 baseline, thÃªm trailing stop per-lot vá»›i ngÆ°á»¡ng 10/12/15/18%.
+- Scope micro Ä‘Ãºng rule: 4 cells, 15bps only.
 
 Results:
 
@@ -4314,11 +4335,11 @@ Results:
 | `trail12` | 31.78% | -32.81% | 4/11 | 4/6 | +19.01pp | 220 | 6 |
 
 Verdict: **FAIL_DD20_CAGR40_STARTPOINT**.
-- Trailing stop chặt làm over-trading, giảm mạnh CAGR và vẫn không hạ được drawdown.
-- Không có cell nào tiến gần mục tiêu `MaxDD < 20%`.
+- Trailing stop cháº·t lÃ m over-trading, giáº£m máº¡nh CAGR vÃ  váº«n khÃ´ng háº¡ Ä‘Æ°á»£c drawdown.
+- KhÃ´ng cÃ³ cell nÃ o tiáº¿n gáº§n má»¥c tiÃªu `MaxDD < 20%`.
 
 Do-not-rerun update:
-- Không mở rộng thêm nhánh **simple per-lot trailing stop from peak (10-18%)** trên R46 cho mục tiêu MaxDD<20 (giảm chất lượng toàn diện).
+- KhÃ´ng má»Ÿ rá»™ng thÃªm nhÃ¡nh **simple per-lot trailing stop from peak (10-18%)** trÃªn R46 cho má»¥c tiÃªu MaxDD<20 (giáº£m cháº¥t lÆ°á»£ng toÃ n diá»‡n).
 
 ## 2026-05-28 R46 Per-name ATR Stop Smoke (micro 4-cell, 15bps)
 
@@ -4329,10 +4350,10 @@ Artifacts:
 - Claude suggestion context: `output/beat_vni30_parallel/overnight_collab/claude_to_codex/r46_three_smokes_followup_audit_20260528_2251.md`
 
 Mechanism tested:
-- Sell-engine level: mỗi lot có volatility stop theo ATR20 tại thời điểm vào lệnh.
-- Công thức: `stop_px = entry_px * (1 - k * atr20_pct_entry)`, `k ∈ {1.5, 2.0, 2.5, 3.0}`.
-- Giữ R46 bear-stop5 layer để không phá guard hiện hữu.
-- Scope micro đúng rule: 4 cells, 15bps only.
+- Sell-engine level: má»—i lot cÃ³ volatility stop theo ATR20 táº¡i thá»i Ä‘iá»ƒm vÃ o lá»‡nh.
+- CÃ´ng thá»©c: `stop_px = entry_px * (1 - k * atr20_pct_entry)`, `k âˆˆ {1.5, 2.0, 2.5, 3.0}`.
+- Giá»¯ R46 bear-stop5 layer Ä‘á»ƒ khÃ´ng phÃ¡ guard hiá»‡n há»¯u.
+- Scope micro Ä‘Ãºng rule: 4 cells, 15bps only.
 
 Results:
 
@@ -4344,11 +4365,11 @@ Results:
 | `atrk30` | 41.59% | -29.57% | 6/11 | 6/6 | +32.72pp | 81 | 16 |
 
 Verdict: **FAIL_DD20_CAGR40_STARTPOINT**.
-- Không có cell nào kéo được MaxDD xuống gần `< -20%`; best DD vẫn `-26.99%`.
-- Các cell ATR stop chặt làm quality gate giảm mạnh (VNI+30 chỉ 3/6 đến 6/6) và không tạo uplift drawdown hữu ích.
+- KhÃ´ng cÃ³ cell nÃ o kÃ©o Ä‘Æ°á»£c MaxDD xuá»‘ng gáº§n `< -20%`; best DD váº«n `-26.99%`.
+- CÃ¡c cell ATR stop cháº·t lÃ m quality gate giáº£m máº¡nh (VNI+30 chá»‰ 3/6 Ä‘áº¿n 6/6) vÃ  khÃ´ng táº¡o uplift drawdown há»¯u Ã­ch.
 
 Do-not-rerun update:
-- Không mở rộng thêm nhánh **simple per-name ATR stop (k=1.5-3.0, ATR20 at-entry)** cho mục tiêu MaxDD<20 trên R46.
+- KhÃ´ng má»Ÿ rá»™ng thÃªm nhÃ¡nh **simple per-name ATR stop (k=1.5-3.0, ATR20 at-entry)** cho má»¥c tiÃªu MaxDD<20 trÃªn R46.
 
 ## 2026-05-28 R46 Concentration-aware Risk-cut Smoke (micro 4-cell, 15bps)
 
@@ -4358,8 +4379,8 @@ Artifacts:
 - `backtest/r46_concentration_riskcut_smoke_20260528.py`
 
 Mechanism tested:
-- Holdings/sell-engine level: khi NAV drawdown vượt ngưỡng, force-sell top-1 holding ở phiên kế tiếp và chặn re-entry ngắn.
-- Cells theo drawdown trigger: 10%/12%/15%/18% (cooldown 5 phiên).
+- Holdings/sell-engine level: khi NAV drawdown vÆ°á»£t ngÆ°á»¡ng, force-sell top-1 holding á»Ÿ phiÃªn káº¿ tiáº¿p vÃ  cháº·n re-entry ngáº¯n.
+- Cells theo drawdown trigger: 10%/12%/15%/18% (cooldown 5 phiÃªn).
 
 Results:
 
@@ -4371,11 +4392,11 @@ Results:
 | `dd10_cd5` | 38.72% | -34.27% | 5/11 | 5/6 | +27.99pp | 195 | 69 |
 
 Verdict: **FAIL_DD20_CAGR40_STARTPOINT**.
-- Không hạ được MaxDD về gần -20%.
-- Quan trọng: xuất hiện T+2.5 violations lớn (36-70), nên lane này không đạt tính khả thi live.
+- KhÃ´ng háº¡ Ä‘Æ°á»£c MaxDD vá» gáº§n -20%.
+- Quan trá»ng: xuáº¥t hiá»‡n T+2.5 violations lá»›n (36-70), nÃªn lane nÃ y khÃ´ng Ä‘áº¡t tÃ­nh kháº£ thi live.
 
 Do-not-rerun update:
-- Không mở rộng nhánh **force-sell top-1 theo drawdown trigger kiểu current implementation** vì vừa fail hiệu năng vừa vi phạm T+2.5.
+- KhÃ´ng má»Ÿ rá»™ng nhÃ¡nh **force-sell top-1 theo drawdown trigger kiá»ƒu current implementation** vÃ¬ vá»«a fail hiá»‡u nÄƒng vá»«a vi pháº¡m T+2.5.
 
 ## 2026-05-28 R46 Entry-time Vol-budget Sizing Smoke (micro 4-cell, 15bps)
 
@@ -4386,8 +4407,8 @@ Artifacts:
 - Claude proposal source: `output/beat_vni30_parallel/overnight_collab/claude_to_codex/autonomous_next_mechanism_proposal_20260528_2335.md`
 
 Mechanism tested:
-- Entry-only sizing theo ATR20 percent tại ngày signal: `size_mult = clip(vol_budget / atr20_pct_entry, 0.3, 1.0)`.
-- Không thêm forced sell mới (T+2.5-safe by design), giữ R46 bear-stop5 layer.
+- Entry-only sizing theo ATR20 percent táº¡i ngÃ y signal: `size_mult = clip(vol_budget / atr20_pct_entry, 0.3, 1.0)`.
+- KhÃ´ng thÃªm forced sell má»›i (T+2.5-safe by design), giá»¯ R46 bear-stop5 layer.
 - Vol budget cells: 1.5% / 2.0% / 2.5% / 3.0% daily vol.
 
 Results:
@@ -4400,10 +4421,10 @@ Results:
 | `vb30` | 34.02% | -22.22% | 3/11 | 3/6 | +7.61pp | 0 |
 
 Verdict: **FAIL_DD20_CAGR40_STARTPOINT**.
-- Cơ chế này đúng là kéo drawdown xuống sâu (đến -11%) và T+2.5 sạch, nhưng CAGR sụt quá mạnh (18-34%) nên không đạt ngưỡng khởi đầu >40%.
+- CÆ¡ cháº¿ nÃ y Ä‘Ãºng lÃ  kÃ©o drawdown xuá»‘ng sÃ¢u (Ä‘áº¿n -11%) vÃ  T+2.5 sáº¡ch, nhÆ°ng CAGR sá»¥t quÃ¡ máº¡nh (18-34%) nÃªn khÃ´ng Ä‘áº¡t ngÆ°á»¡ng khá»Ÿi Ä‘áº§u >40%.
 
 Do-not-rerun update:
-- Không mở rộng thêm nhánh **entry vol-budget sizing đơn lớp với clip [0.3,1.0] và vol_budget 1.5-3.0%** cho mục tiêu DD<20 + CAGR>40.
+- KhÃ´ng má»Ÿ rá»™ng thÃªm nhÃ¡nh **entry vol-budget sizing Ä‘Æ¡n lá»›p vá»›i clip [0.3,1.0] vÃ  vol_budget 1.5-3.0%** cho má»¥c tiÃªu DD<20 + CAGR>40.
 
 ## 2026-05-28 R46 Soft Execution Penalty Deadzone Smoke (micro 2-cell, 15bps)
 
@@ -4443,9 +4464,9 @@ Artifacts:
 - `backtest/r46_soft_exec_penalty_regime_gate_smoke_20260528.py`
 
 Mechanism tested:
-- Materially different from closed lanes: deadzone soft-penalty chỉ bật trong regime yếu.
-- Penalty form giữ nguyên deadzone, thêm activation gate theo regime.
-- No hard symbol drop, no forced sell, giữ R46 bear-stop5.
+- Materially different from closed lanes: deadzone soft-penalty chá»‰ báº­t trong regime yáº¿u.
+- Penalty form giá»¯ nguyÃªn deadzone, thÃªm activation gate theo regime.
+- No hard symbol drop, no forced sell, giá»¯ R46 bear-stop5.
 - Scope cheap-rule: 2 cells, 15bps only.
 
 Results:
@@ -4456,15 +4477,15 @@ Results:
 | `rg_bear_sideways` | bear,sideways | 45.33% | -27.50% | 6/11 | 6/6 | +31.52pp |
 
 Verdict: **PASS_SOFT_EXEC_PENALTY_REGIME_GATE_SMOKE** (gate-pass technical).
-- Nhưng không cải thiện drawdown (vẫn quanh -27.5% đến -27.6%, xa mục tiêu DD<20).
-- Cell `rg_bear_only` gần như trùng baseline hiệu năng -> khả năng cao no-op/near-no-op.
+- NhÆ°ng khÃ´ng cáº£i thiá»‡n drawdown (váº«n quanh -27.5% Ä‘áº¿n -27.6%, xa má»¥c tiÃªu DD<20).
+- Cell `rg_bear_only` gáº§n nhÆ° trÃ¹ng baseline hiá»‡u nÄƒng -> kháº£ nÄƒng cao no-op/near-no-op.
 
 Governance note:
-- Chưa đủ điều kiện promote dashboard; cần Claude audit chéo + kiểm tra incremental value trước khi xem là candidate research hợp lệ.
+- ChÆ°a Ä‘á»§ Ä‘iá»u kiá»‡n promote dashboard; cáº§n Claude audit chÃ©o + kiá»ƒm tra incremental value trÆ°á»›c khi xem lÃ  candidate research há»£p lá»‡.
 
 Audit follow-up:
-- Claude `r46_entry_vol_budget_sizing_audit_20260528_2321.md` đã reproduce 4/4 cell khớp và đồng thuận `FAIL_DD20_CAGR40_STARTPOINT`.
-- Lane `entry vol-budget sizing đơn lớp` chính thức đóng (giữ nguyên do-not-rerun).
+- Claude `r46_entry_vol_budget_sizing_audit_20260528_2321.md` Ä‘Ã£ reproduce 4/4 cell khá»›p vÃ  Ä‘á»“ng thuáº­n `FAIL_DD20_CAGR40_STARTPOINT`.
+- Lane `entry vol-budget sizing Ä‘Æ¡n lá»›p` chÃ­nh thá»©c Ä‘Ã³ng (giá»¯ nguyÃªn do-not-rerun).
 
 ## 2026-05-28 R46 Asymmetric Vol-budget Smoke (micro 2-cell, 15bps)
 
@@ -4474,8 +4495,8 @@ Artifacts:
 - `backtest/r46_asymmetric_vol_budget_smoke_20260528.py`
 
 Mechanism tested:
-- Asymmetric entry sizing (T+2.5-safe): chỉ scale-down khi ATR percentile cao và regime khác `bull_broad`.
-- Trong `bull_broad` giữ full-size để giảm thiểu hy sinh CAGR.
+- Asymmetric entry sizing (T+2.5-safe): chá»‰ scale-down khi ATR percentile cao vÃ  regime khÃ¡c `bull_broad`.
+- Trong `bull_broad` giá»¯ full-size Ä‘á»ƒ giáº£m thiá»ƒu hy sinh CAGR.
 - 2 cells: `atrp_th = 0.60/0.70`; 15bps only.
 
 Results:
@@ -4486,12 +4507,12 @@ Results:
 | `asym_atrp60` | 41.85% | -19.49% | 5/11 | 4/6 | +12.72pp | 0 |
 
 Verdict: **FAIL_ASYMMETRIC_VOL_BUDGET_SMOKE**.
-- Có tín hiệu giảm DD mạnh (cell `atrp60` đạt DD<20), nhưng đổi lại quality gate tụt rõ và CAGR giảm >4pp so baseline.
-- Không đạt tiêu chí pass hiện tại (VNI+30, edge, retention CAGR).
+- CÃ³ tÃ­n hiá»‡u giáº£m DD máº¡nh (cell `atrp60` Ä‘áº¡t DD<20), nhÆ°ng Ä‘á»•i láº¡i quality gate tá»¥t rÃµ vÃ  CAGR giáº£m >4pp so baseline.
+- KhÃ´ng Ä‘áº¡t tiÃªu chÃ­ pass hiá»‡n táº¡i (VNI+30, edge, retention CAGR).
 
 Do-not-rerun update:
-- Đóng range hiện tại của **asymmetric atr-percentile gate 60/70 với vol_budget 2%**.
-- Nếu mở lại, cần mechanism khác biệt hơn để bảo toàn quality gate (ví dụ kích hoạt theo cấu trúc regime sâu hơn thay vì ATR percentile đơn biến).
+- ÄÃ³ng range hiá»‡n táº¡i cá»§a **asymmetric atr-percentile gate 60/70 vá»›i vol_budget 2%**.
+- Náº¿u má»Ÿ láº¡i, cáº§n mechanism khÃ¡c biá»‡t hÆ¡n Ä‘á»ƒ báº£o toÃ n quality gate (vÃ­ dá»¥ kÃ­ch hoáº¡t theo cáº¥u trÃºc regime sÃ¢u hÆ¡n thay vÃ¬ ATR percentile Ä‘Æ¡n biáº¿n).
 
 ## 2026-05-28 R46 Stress-Triggered Worst-Name Pruning Smoke (micro 2-cell, 15bps)
 
@@ -4501,9 +4522,9 @@ Artifacts:
 - `backtest/r46_stress_prune_smoke_20260528.py`
 
 Mechanism tested:
-- Weekly cadence: nếu portfolio 2w return <= ngưỡng stress thì prune 1 mã có 2w return tệ nhất trong holdings.
-- Entry logic giữ nguyên; không block buy mới; giữ R46 bear-stop5 layer.
-- 2 cells: trigger `-3%` và `-5%`, 15bps only.
+- Weekly cadence: náº¿u portfolio 2w return <= ngÆ°á»¡ng stress thÃ¬ prune 1 mÃ£ cÃ³ 2w return tá»‡ nháº¥t trong holdings.
+- Entry logic giá»¯ nguyÃªn; khÃ´ng block buy má»›i; giá»¯ R46 bear-stop5 layer.
+- 2 cells: trigger `-3%` vÃ  `-5%`, 15bps only.
 
 Results:
 
@@ -4513,16 +4534,16 @@ Results:
 | `prune_xm3` | 46.34% | -28.14% | 6/6 | +31.65pp | 54 | 0 |
 
 Verdict: **FAIL_STRESS_PRUNE_SMOKE**.
-- CAGR và quality gate giữ được tốt, nhưng DD xấu hơn baseline (`~ -27.8% đến -28.1%` vs baseline ~`-25.6%`), nên fail mục tiêu chính giảm tail drawdown.
+- CAGR vÃ  quality gate giá»¯ Ä‘Æ°á»£c tá»‘t, nhÆ°ng DD xáº¥u hÆ¡n baseline (`~ -27.8% Ä‘áº¿n -28.1%` vs baseline ~`-25.6%`), nÃªn fail má»¥c tiÃªu chÃ­nh giáº£m tail drawdown.
 
 Do-not-rerun update:
-- Đóng range hiện tại của **stress-triggered worst-name pruning with trigger -3%/-5%, prune_n=1**.
-- Nếu mở lại, cần mechanism materially different (không phải chỉ thay ngưỡng trigger/prune count trong cùng logic).
+- ÄÃ³ng range hiá»‡n táº¡i cá»§a **stress-triggered worst-name pruning with trigger -3%/-5%, prune_n=1**.
+- Náº¿u má»Ÿ láº¡i, cáº§n mechanism materially different (khÃ´ng pháº£i chá»‰ thay ngÆ°á»¡ng trigger/prune count trong cÃ¹ng logic).
 
 Audit follow-up:
-- Claude `r46_stress_prune_audit_and_keepalive_20260528_2352.md` reproduce khớp 2/2 cells.
-- Đồng thuận verdict: `FAIL_STRESS_PRUNE_SMOKE`; lane stress-prune current range chính thức đóng.
-- Keepalive reply từ Claude: `NO_CREDIBLE_MICRO_SMOKE_NOW` -> ưu tiên chuyển action type (2) ở vòng kế.
+- Claude `r46_stress_prune_audit_and_keepalive_20260528_2352.md` reproduce khá»›p 2/2 cells.
+- Äá»“ng thuáº­n verdict: `FAIL_STRESS_PRUNE_SMOKE`; lane stress-prune current range chÃ­nh thá»©c Ä‘Ã³ng.
+- Keepalive reply tá»« Claude: `NO_CREDIBLE_MICRO_SMOKE_NOW` -> Æ°u tiÃªn chuyá»ƒn action type (2) á»Ÿ vÃ²ng káº¿.
 
 ## 2026-05-29 R46 Drawdown Ladder + Ramp Smoke (micro 4-cell, 15bps)
 
@@ -4549,14 +4570,14 @@ Results:
 | `dd_soft10_20_vni20` | 36.085 | -22.284 | 7/11 | 6/6 | +35.228pp | 1816 | 364 | 0.760 |
 
 Verdict: **FAIL_DD20_CAGR40_STARTPOINT**.
-- � ch�nh:
-  - Ch? m?t co ch? c� th? d?y DD xu?ng g?n `-21%`, nhung t?t c? cell d?u `CAGR < 40%`.
+- ï¿½ chï¿½nh:
+  - Ch? m?t co ch? cï¿½ th? d?y DD xu?ng g?n `-21%`, nhung t?t c? cell d?u `CAGR < 40%`.
   - `recent VNI+30` chua d?t 6/6 cho 2/4 cell; 2 cell d?t 5/6.
-  - Co ch? c� d?u hi?u g?n d�ch nhung chua d? d? promote.
+  - Co ch? cï¿½ d?u hi?u g?n dï¿½ch nhung chua d? d? promote.
 
 Do-not-rerun note:
-- ��ng lane hi?n t?i khi m? r?ng tham s? don thu?n (di?u ch?nh trigger/smoothing/trend-ngu?ng trong c�ng form ramp-ladder).
-- N?u quay l?i, c?n thay d?i c?p d? co ch? (v� d?: combine v?i baseline exposure-up regime allocation ? layer target, ho?c t�ch th�nh 2-stage governor c� explicit capital guard theo regime-retention objective) thay v� ch? widen/tighten ladder.
+- ï¿½ï¿½ng lane hi?n t?i khi m? r?ng tham s? don thu?n (di?u ch?nh trigger/smoothing/trend-ngu?ng trong cï¿½ng form ramp-ladder).
+- N?u quay l?i, c?n thay d?i c?p d? co ch? (vï¿½ d?: combine v?i baseline exposure-up regime allocation ? layer target, ho?c tï¿½ch thï¿½nh 2-stage governor cï¿½ explicit capital guard theo regime-retention objective) thay vï¿½ ch? widen/tighten ladder.
 
 ## 2026-05-29 R46 Soft Execution Penalty + Regime Gate Smoke (micro 2-cell, 15bps)
 
@@ -4566,8 +4587,8 @@ Artifacts:
 - `backtest/r46_soft_exec_penalty_regime_gate_smoke_20260528.py`
 
 Mechanism tested:
-- Áp dụng hệ số phạt mềm theo thanh khoản/độ giãn giá, nhưng chỉ kích hoạt trong regime yếu (bear hoặc bear+sideways).
-- Sử dụng cơ chế score adjustment: `score_adj = exp(-(alpha*gap_excess + beta*adv_excess)/100)`.
+- Ãp dá»¥ng há»‡ sá»‘ pháº¡t má»m theo thanh khoáº£n/Ä‘á»™ giÃ£n giÃ¡, nhÆ°ng chá»‰ kÃ­ch hoáº¡t trong regime yáº¿u (bear hoáº·c bear+sideways).
+- Sá»­ dá»¥ng cÆ¡ cháº¿ score adjustment: `score_adj = exp(-(alpha*gap_excess + beta*adv_excess)/100)`.
 - Scope: 2 cells, 15bps.
 
 Results:
@@ -4578,11 +4599,11 @@ Results:
 | `rg_bear_sideways` | 45.327% | -27.504% | 7/11 | 6/6 | +31.52pp | 1821 | true |
 
 Verdict: **PASS_SOFT_EXEC_PENALTY_REGIME_GATE_SMOKE**.
-- Cơ chế này giữ được quality gate 15bps tốt (6/6 trên cả hai chiều toàn kỳ gần đây), CAGRs tốt hơn hoặc gần baseline.
-- Tuy nhiên, DD vẫn quanh -27.6, chưa đạt target DD < -20% cho lane tối ưu mới.
+- CÆ¡ cháº¿ nÃ y giá»¯ Ä‘Æ°á»£c quality gate 15bps tá»‘t (6/6 trÃªn cáº£ hai chiá»u toÃ n ká»³ gáº§n Ä‘Ã¢y), CAGRs tá»‘t hÆ¡n hoáº·c gáº§n baseline.
+- Tuy nhiÃªn, DD váº«n quanh -27.6, chÆ°a Ä‘áº¡t target DD < -20% cho lane tá»‘i Æ°u má»›i.
 
 Do-not-rerun update:
-- Có thể mở rộng tiếp cơ chế penalty nếu đổi bản chất tham số (gap/ADV deadzone, alpha/beta, active regimes) hoặc thêm governor theo NAV-DD riêng; nhưng không lặp lại đúng cùng form này.
+- CÃ³ thá»ƒ má»Ÿ rá»™ng tiáº¿p cÆ¡ cháº¿ penalty náº¿u Ä‘á»•i báº£n cháº¥t tham sá»‘ (gap/ADV deadzone, alpha/beta, active regimes) hoáº·c thÃªm governor theo NAV-DD riÃªng; nhÆ°ng khÃ´ng láº·p láº¡i Ä‘Ãºng cÃ¹ng form nÃ y.
 
 ## 2026-05-29 R46 Vol-Target Governor Smoke (micro 4-cell, 15bps baseline wrapper)
 
@@ -4592,8 +4613,8 @@ Artifacts:
 - `backtest/r46_vol_target_governor_smoke_20260528.py`
 
 Mechanism tested:
-- Wrapper de-risk đơn giản trên NAV hiện tại của R46 bear_stop5 (không leverage, chỉ giảm phơi nhiễm khi realized vol tăng).
-- Theo dõi theo target vol 1.8/2.0/2.2/2.5% với floor multiplier tương ứng.
+- Wrapper de-risk Ä‘Æ¡n giáº£n trÃªn NAV hiá»‡n táº¡i cá»§a R46 bear_stop5 (khÃ´ng leverage, chá»‰ giáº£m phÆ¡i nhiá»…m khi realized vol tÄƒng).
+- Theo dÃµi theo target vol 1.8/2.0/2.2/2.5% vá»›i floor multiplier tÆ°Æ¡ng á»©ng.
 - Scope: 4 cells, 1 cost baseline wrapper.
 
 Results:
@@ -4606,11 +4627,11 @@ Results:
 | `vt25_floor80` | 47.739% | -27.606% | 7/11 | 6/6 | +32.921pp | 227 | 0.988 |
 
 Verdict: **FAIL_DD20_CAGR40_STARTPOINT**.
-- Lane này có cải thiện nhưng chưa đạt mục tiêu DD < -20 và gần đây còn không ổn cho best cell.
-- So với baseline, gain quality gate lẽo xẹp, chưa tạo được cơ chế mới đủ để promote.
+- Lane nÃ y cÃ³ cáº£i thiá»‡n nhÆ°ng chÆ°a Ä‘áº¡t má»¥c tiÃªu DD < -20 vÃ  gáº§n Ä‘Ã¢y cÃ²n khÃ´ng á»•n cho best cell.
+- So vá»›i baseline, gain quality gate láº½o xáº¹p, chÆ°a táº¡o Ä‘Æ°á»£c cÆ¡ cháº¿ má»›i Ä‘á»§ Ä‘á»ƒ promote.
 
 Do-not-rerun update:
-- Có thể mở rộng nếu thay bản chất cơ chế (ví dụ governor theo regime-retention hoặc 2-stage capital guard), không lặp lại đúng cùng khung target-floor này.
+- CÃ³ thá»ƒ má»Ÿ rá»™ng náº¿u thay báº£n cháº¥t cÆ¡ cháº¿ (vÃ­ dá»¥ governor theo regime-retention hoáº·c 2-stage capital guard), khÃ´ng láº·p láº¡i Ä‘Ãºng cÃ¹ng khung target-floor nÃ y.
 ## 2026-05-29 R46 Drawdown Ladder Ramp Tune29 (micro 2-cell, 15bps)
 
 Artifacts:
@@ -4634,7 +4655,7 @@ Summary:
 Verdict: **FAIL_DD20_CAGR40_STARTPOINT**
 
 Reality check:
-- Better than some previous drawdown-combo lanes on recent VNI+30 consistency (`6/6` giữ được), but still misses DD < -20.
+- Better than some previous drawdown-combo lanes on recent VNI+30 consistency (`6/6` giá»¯ Ä‘Æ°á»£c), but still misses DD < -20.
 - This lane is useful as a near-frontier reference for "CAGR recovery" under governor shape.
 
 Conclusion:
@@ -4768,11 +4789,11 @@ Case summary:
 -
 ---
 
-2026-05-30 Claude — V6.7 OVERFIT VERIFICATION (walk-forward PIT detector). V6.7 hardcoded cutover (VN30/Cons7/R46 by calendar year) confirmed OVERFIT: PIT detector OOS 2023-2026 CAGR 48.30% < 50% gate, BROAD_BULL regime = 0% in OOS, segment 2017 Cons7 +114.79% is research artifact non-reproducible by PIT. R46 baseline pure: full CAGR 47.77% / MDD -27.61% / OOS CAGR 66.06% = V6.7 OOS. Production recommend R46 V4, not V6.7. Verdict: `output/v67_overfit_verify/OVERFIT_VERIFICATION_RESULT_20260530.md`. CAVEAT appended to `output/v6_optim_20260530/MODEL_V6_LOCKED_20260530.md`.
+2026-05-30 Claude â€” V6.7 OVERFIT VERIFICATION (walk-forward PIT detector). V6.7 hardcoded cutover (VN30/Cons7/R46 by calendar year) confirmed OVERFIT: PIT detector OOS 2023-2026 CAGR 48.30% < 50% gate, BROAD_BULL regime = 0% in OOS, segment 2017 Cons7 +114.79% is research artifact non-reproducible by PIT. R46 baseline pure: full CAGR 47.77% / MDD -27.61% / OOS CAGR 66.06% = V6.7 OOS. Production recommend R46 V4, not V6.7. Verdict: `output/v67_overfit_verify/OVERFIT_VERIFICATION_RESULT_20260530.md`. CAVEAT appended to `output/v6_optim_20260530/MODEL_V6_LOCKED_20260530.md`.
 
 ---
 
-2026-06-01 Codex — PRIORITY REPRO DIAGNOSIS after R1-EXT E0 halt. Artifacts: `output/repro_diagnostics_20260601/CODEX_REPRO_DIAGNOSIS_VERDICT_20260601.md`, reports in `output/r1_rule_ext/CODEX_R1_REPRO_TEST_20260602.md`, `output/r1_rule_ext/CODEX_R46_REPRO_TEST_20260602.md`, `output/r1_rule_ext/CODEX_V5_REPRO_TEST_20260602.md`, harness `backtest/repro_diagnostics_20260601.py`.
+2026-06-01 Codex â€” PRIORITY REPRO DIAGNOSIS after R1-EXT E0 halt. Artifacts: `output/repro_diagnostics_20260601/CODEX_REPRO_DIAGNOSIS_VERDICT_20260601.md`, reports in `output/r1_rule_ext/CODEX_R1_REPRO_TEST_20260602.md`, `output/r1_rule_ext/CODEX_R46_REPRO_TEST_20260602.md`, `output/r1_rule_ext/CODEX_V5_REPRO_TEST_20260602.md`, harness `backtest/repro_diagnostics_20260601.py`.
 
 Result:
 - Test 1 R-1 lane1 reproduce FAIL. Saved baseline: CAGR 38.206741%, MaxDD -40.008651%, first BUY 2017-02-20 KKC, final NAV 4.9048B. Fresh current engine/data: CAGR 20.732620%, MaxDD -51.697157%, first BUY 2016-02-15 DMC, final NAV 2.5242B. Max NAV diff 2.380624339B; max yearly return diff 67.458888pp.
@@ -4932,7 +4953,7 @@ Changes:
 - Copy tab includes KPI row, percent-based Model vs VN-Index chart, holdings with NAV weight, compact paper-trade progress, Monday forecast table, and compact recent model orders.
 - Watchlist uses online `dashboard/data.js` + analysis memos/live shortlist, currently 13 rows, not the old 5-row-only subset.
 - Model tab shortened to public summary cards only; detailed internal scoring formula is not rendered in the v7 HTML payload.
-- Ledger shows full 1600 rows with search/pagination and `Tỷ trọng NAV`.
+- Ledger shows full 1600 rows with search/pagination and `Tá»· trá»ng NAV`.
 
 Verification:
 - Local build wrote preview and production HTML successfully: holdings=1, watchlist=13, ledger=1600, chart=1342.
@@ -4966,8 +4987,8 @@ Verification:
 Changes:
 - Replaced Inter with `Be Vietnam Pro` via Google Fonts Vietnamese subset. Keep one CSS font family only; no JetBrains/monospace.
 - Monday forecast BUY_SOON rows now receive a provisional copy quantity using the week-1 paper exposure as starter weight (currently 5.51% NAV copy), rounded down to 100-share lots.
-- VIX forecast at NAV copy 1 tỷ now shows 3,000 shares at current price 18.05k, target 23.465k, stop 15.884k.
-- Forecast note is Vietnamese-only: `tỷ trọng khởi tạo`, no English `starter sleeve`.
+- VIX forecast at NAV copy 1 tá»· now shows 3,000 shares at current price 18.05k, target 23.465k, stop 15.884k.
+- Forecast note is Vietnamese-only: `tá»· trá»ng khá»Ÿi táº¡o`, no English `starter sleeve`.
 - Forecast date column is no-wrap to avoid breaking `2026-06-08`.
 
 Verification:
@@ -4976,8 +4997,8 @@ Verification:
 
 Correction 2026-06-03:
 - The VIX `orderShares: 3000` sizing was invalid because it used week-1 paper exposure (5.51% NAV) as an ad-hoc starter sleeve, not the current R46 copy-trade rule.
-- Removed watchlist BUY_SOON rows from the Copy Trade `Dự kiến giao dịch thứ 2 tới` table.
-- The forecast table now only renders policy `plannedOrders` from R46. Current public state is MSB `GIỮ` only; VIX remains in `Theo dõi mua` as a screening/watchlist candidate, not a copy-trade order.
+- Removed watchlist BUY_SOON rows from the Copy Trade `Dá»± kiáº¿n giao dá»‹ch thá»© 2 tá»›i` table.
+- The forecast table now only renders policy `plannedOrders` from R46. Current public state is MSB `GIá»®` only; VIX remains in `Theo dÃµi mua` as a screening/watchlist candidate, not a copy-trade order.
 - Public verification after correction: `orderShares: 3000` count is 0 in `plannedOrders`; `Be Vietnam Pro` remains active; screenshot `dashboard/_preview/online-planned-policy-only.png`.
 
 2026-06-04 Codex - R46 forecast precompute hook for Ez dashboard.
@@ -5035,7 +5056,7 @@ Paper-trade correction:
 
 Dashboard changes/deploy:
 - `dashboard/_preview/build_v7_real.py` now derives paper fill from state/history and renders paper trade with entry price 14.95k, NAV 997.9M, cash 94.6%, exposure 5.2%.
-- Planned Monday table shows only current-policy HOLD row when forecast is not computed, with note `chưa có forecast R46 fresh sau 2026-05-25`; no fabricated VIX or quantity.
+- Planned Monday table shows only current-policy HOLD row when forecast is not computed, with note `chÆ°a cÃ³ forecast R46 fresh sau 2026-05-25`; no fabricated VIX or quantity.
 - Public HTML verification after Vercel deploy: entryPrice 14.95 present, paper NAV 997.85854 present, forecastStatus NOT_COMPUTED present, orderShares 3000 absent, Be Vietnam Pro count 1, JetBrains/monospace/YEG Capital count 0.
 - Deployment `dpl_F6o8cfjd7Q5ndA5KMhPYo9TNCBaF` READY; public health passes with live_latest_price_date 2026-06-04.
 
@@ -5058,7 +5079,7 @@ Verification:
 - Workflow log: `R46 forecast computed cleanly: asOf=2026-06-04 planDate=2026-06-08 rows=1`.
 - Public `dashboard_live_update_status.json`: `updatedAt=2026-06-04 06:49:39`, `latestPriceDate=2026-06-04`.
 - Public `full_universe_live_update_status.json`: `updatedAt=2026-06-04 06:50:42`, `symbolsUpdated=700`, `symbolsFailed=3`, `historyCache.latestPriceDate=2026-06-04`.
-- Public `r46_forecast.json`: `status=COMPUTED`, `asOf=2026-06-04`, `planDate=2026-06-08`, no fallback meta, `overlapOk=true`, row = MSB `BÁN HẾT` 3,600 shares at current price 14.55k dated 2026-06-04.
+- Public `r46_forecast.json`: `status=COMPUTED`, `asOf=2026-06-04`, `planDate=2026-06-08`, no fallback meta, `overlapOk=true`, row = MSB `BÃN Háº¾T` 3,600 shares at current price 14.55k dated 2026-06-04.
 - Public health check passes: index/css/analysis/data/history/live all 200, VNI history points 4,861, no NUL bytes.
 
 Operational rule:
@@ -5068,7 +5089,7 @@ Correction / final cloud verification:
 - Added full-universe freshness gate and stale-symbol retry in `tools/update_full_universe_prices.py`; workflow now requires at least 65% of universe at target date before forecast/deploy.
 - Final GitHub Actions run `26936621141` completed `success`.
 - Public `full_universe_live_update_status.json`: `symbolsTotal=703`, `symbolsAttempted=703`, `symbolsUpdated=703` unique symbols, `symbolsFailed=0`, `symbolsAtTargetOrNewer=541`, `historyCache.symbols=703`, `historyCache.latestPriceDate=2026-06-04`.
-- Public `r46_forecast.json`: `status=COMPUTED`, `asOf=2026-06-04`, `planDate=2026-06-08`, `tailMatrixRows=2073`, `pairTailRows=1`, `overlapOk=true`, no fallback meta, row = MSB `BÁN HẾT` 3,600 shares at current price 14.6k dated 2026-06-04.
+- Public `r46_forecast.json`: `status=COMPUTED`, `asOf=2026-06-04`, `planDate=2026-06-08`, `tailMatrixRows=2073`, `pairTailRows=1`, `overlapOk=true`, no fallback meta, row = MSB `BÃN Háº¾T` 3,600 shares at current price 14.6k dated 2026-06-04.
 - Public health check still passes with `live_updated_at=2026-06-04 07:09:42`, VNI history points 4,861.
 
 2026-06-04 Codex - Split Ez dashboard refresh cadence.
@@ -5089,49 +5110,49 @@ Verification:
 - Price-only workflow run `26937323043` completed `success`.
 - Runtime was about 53 seconds.
 - Public after price-only deploy: `dashboard_live_update_status.updatedAt=2026-06-04 07:26:13`, `latestPriceDate=2026-06-04`.
-- Public forecast was preserved: `status=COMPUTED`, `asOf=2026-06-04`, `planDate=2026-06-08`, MSB `BÁN HẾT` 3,600 shares, no fallback meta.
+- Public forecast was preserved: `status=COMPUTED`, `asOf=2026-06-04`, `planDate=2026-06-08`, MSB `BÃN Háº¾T` 3,600 shares, no fallback meta.
 - Public full-universe status was preserved from last full run: `symbolsAtTargetOrNewer=541`.
 
 ## 2026-06-04 Mavis - H6 Breadth-Gated Vol Targeting OVERLAY BREAKTHROUGH +10.64pp CAGR
 
 Artifacts:
-- `backtest/overlay_20260604/base.py` â€” framework reproducer
-- `backtest/overlay_20260604/h2_vol_target.py` to `h6d_validate.py` â€” full sweep
-- `backtest/overlay_20260604/fetch_macro.py` â€” yfinance cross-asset fetch
-- `output/r46_plus_overlay_20260604/VERDICT_H6_BREAKTHROUGH.md` â€” full verdict
-- `output/r46_plus_overlay_20260604/h6b_breadth_vol_sweep/` â€” 45 cells grid
-- `output/r46_plus_overlay_20260604/h6c_stress/` â€” 4 best cells Ã— 3 cost levels
-- `output/r46_plus_overlay_20260604/h6d_validate/FINAL_REPORT.json` â€” reproducibility + walk-forward
-- `.cache/macro/` â€” 13 cross-asset symbols 2016-2026
-- `.cache/backtest/breadth_daily.parquet` â€” daily breadth 200/703 syms 2016-2026
+- `backtest/overlay_20260604/base.py` Ã¢â‚¬â€ framework reproducer
+- `backtest/overlay_20260604/h2_vol_target.py` to `h6d_validate.py` Ã¢â‚¬â€ full sweep
+- `backtest/overlay_20260604/fetch_macro.py` Ã¢â‚¬â€ yfinance cross-asset fetch
+- `output/r46_plus_overlay_20260604/VERDICT_H6_BREAKTHROUGH.md` Ã¢â‚¬â€ full verdict
+- `output/r46_plus_overlay_20260604/h6b_breadth_vol_sweep/` Ã¢â‚¬â€ 45 cells grid
+- `output/r46_plus_overlay_20260604/h6c_stress/` Ã¢â‚¬â€ 4 best cells Ãƒâ€” 3 cost levels
+- `output/r46_plus_overlay_20260604/h6d_validate/FINAL_REPORT.json` Ã¢â‚¬â€ reproducibility + walk-forward
+- `.cache/macro/` Ã¢â‚¬â€ 13 cross-asset symbols 2016-2026
+- `.cache/backtest/breadth_daily.parquet` Ã¢â‚¬â€ daily breadth 200/703 syms 2016-2026
 
-Status: **RESEARCH_HIT_BREAKTHROUGH_PASS_PLUS_10PP_TARGET**. Anh yÃªu cáº§u push +10pp CAGR, Ä‘Ã£ Ä‘áº¡t +10,64pp vá»›i 6/6 recent preserved, robust 15-20bps cost, bit-exact reproducible.
+Status: **RESEARCH_HIT_BREAKTHROUGH_PASS_PLUS_10PP_TARGET**. Anh yÃƒÂªu cÃ¡ÂºÂ§u push +10pp CAGR, Ã„â€˜ÃƒÂ£ Ã„â€˜Ã¡ÂºÂ¡t +10,64pp vÃ¡Â»â€ºi 6/6 recent preserved, robust 15-20bps cost, bit-exact reproducible.
 
 WINNER: `b30_55_v50_h300_l50_h100`
 - CAGR: 57.39% (R46 46.75% = **+10.64pp**)
-- MaxDD: -30.75% (R46 -27.61% = -3.14pp, váº«n < -35% threshold)
+- MaxDD: -30.75% (R46 -27.61% = -3.14pp, vÃ¡ÂºÂ«n < -35% threshold)
 - Sharpe: 1.70 (R46 1.64 = +0.06)
-- VNI+30 all 11 nÄƒm: 7/11 (R46 7/11 = same)
-- VNI+30 recent 6 nÄƒm: **6/6 preserved**
+- VNI+30 all 11 nÃ„Æ’m: 7/11 (R46 7/11 = same)
+- VNI+30 recent 6 nÃ„Æ’m: **6/6 preserved**
 - Min edge recent: 36.90pp (R46 32.77pp = +4.13pp)
-- NAV end: 87.95 tá»· (R46 44.07 tá»· = x1.99)
+- NAV end: 87.95 tÃ¡Â»Â· (R46 44.07 tÃ¡Â»Â· = x1.99)
 - Avg exposure: 0.71 (R46 0.59, max 1.0)
 - Reproducibility: bit-exact (CAGR diff 0.0000000000, MDD diff 0.0000000000)
 
-CÃ´ng thá»©c (5 params):
+CÃƒÂ´ng thÃ¡Â»Â©c (5 params):
 1. `breadth50 = % stocks above SMA50` (daily, 200/703 syms sample)
-2. `roll_vol = std(R46 daily ret) Ã— sqrt(252), 20D window`
-3. `vol_scale = clip(0.50 / roll_vol, 1.0, 3.0)` â€” boost-only (khÃ´ng scale down)
-4. `br_scale = 0.5 khi breadth50 â‰¤ 0.30, 1.0 khi â‰¥ 0.55, linear between`
-5. `combined = vol_scale Ã— br_scale` (lag 1 day)
-6. `scaled_exp = clip(original_exp Ã— combined, 0, 1.0)` â€” pure stock max gross cap
-7. `ret_scaled = ret Ã— (scaled_exp / original_exp)`
+2. `roll_vol = std(R46 daily ret) Ãƒâ€” sqrt(252), 20D window`
+3. `vol_scale = clip(0.50 / roll_vol, 1.0, 3.0)` Ã¢â‚¬â€ boost-only (khÃƒÂ´ng scale down)
+4. `br_scale = 0.5 khi breadth50 Ã¢â€°Â¤ 0.30, 1.0 khi Ã¢â€°Â¥ 0.55, linear between`
+5. `combined = vol_scale Ãƒâ€” br_scale` (lag 1 day)
+6. `scaled_exp = clip(original_exp Ãƒâ€” combined, 0, 1.0)` Ã¢â‚¬â€ pure stock max gross cap
+7. `ret_scaled = ret Ãƒâ€” (scaled_exp / original_exp)`
 
-CÆ¡ cháº¿ táº¡i sao work:
-- R46 Sharpe 1.64 trÃªn vol ~25%/nÄƒm â†’ scale exposure lÃªn khi vol tháº¥p tÄƒng return mÃ  khÃ´ng tÄƒng vol
-- Breadth filter phÃ¢n biá»‡t bull breadth rá»™ng vs defensive rotation
-- Boost-only (lo=1.0) khÃ´ng scale down â†’ R46 váº«n quyáº¿t Ä‘á»‹nh picks, overlay chá»‰ amplify
-- Pure stock max gross 1.0 cap Ä‘áº£m báº£o constraint honored
+CÃ†Â¡ chÃ¡ÂºÂ¿ tÃ¡ÂºÂ¡i sao work:
+- R46 Sharpe 1.64 trÃƒÂªn vol ~25%/nÃ„Æ’m Ã¢â€ â€™ scale exposure lÃƒÂªn khi vol thÃ¡ÂºÂ¥p tÃ„Æ’ng return mÃƒÂ  khÃƒÂ´ng tÃ„Æ’ng vol
+- Breadth filter phÃƒÂ¢n biÃ¡Â»â€¡t bull breadth rÃ¡Â»â„¢ng vs defensive rotation
+- Boost-only (lo=1.0) khÃƒÂ´ng scale down Ã¢â€ â€™ R46 vÃ¡ÂºÂ«n quyÃ¡ÂºÂ¿t Ã„â€˜Ã¡Â»â€¹nh picks, overlay chÃ¡Â»â€° amplify
+- Pure stock max gross 1.0 cap Ã„â€˜Ã¡ÂºÂ£m bÃ¡ÂºÂ£o constraint honored
 
 Yearly breakdown H6 vs R46:
 | Year | R46 | H6 | R46 edge | H6 edge | delta |
@@ -5156,75 +5177,75 @@ Stress test (cost 15/18/20bps):
 | 20bps | 56.82% | -30.75% | 1.69 | 6/6 | 36.21pp | **+10.07pp** |
 
 Validation:
-- âœ… Reproducibility: bit-exact (CAGR diff 0.0000000000, MDD diff 0.0000000000)
-- âš ï¸ Walk-forward 2016-2020 train / 2021-2026 test: train 23.33% VNI+30 0/5, test 92.19% VNI+30 **6/6 preserved**
-- âœ… Robust cost 15-20bps
-- âœ… Pure stock constraint: max gross 1.0, no margin/short/ETF/bond
-- âœ… Strict T-1/T: vol/breadth dÃ¹ng data hÃ´m trÆ°á»›c, scale Ã¡p dá»¥ng hÃ´m sau
+- Ã¢Å“â€¦ Reproducibility: bit-exact (CAGR diff 0.0000000000, MDD diff 0.0000000000)
+- Ã¢Å¡Â Ã¯Â¸Â Walk-forward 2016-2020 train / 2021-2026 test: train 23.33% VNI+30 0/5, test 92.19% VNI+30 **6/6 preserved**
+- Ã¢Å“â€¦ Robust cost 15-20bps
+- Ã¢Å“â€¦ Pure stock constraint: max gross 1.0, no margin/short/ETF/bond
+- Ã¢Å“â€¦ Strict T-1/T: vol/breadth dÃƒÂ¹ng data hÃƒÂ´m trÃ†Â°Ã¡Â»â€ºc, scale ÃƒÂ¡p dÃ¡Â»Â¥ng hÃƒÂ´m sau
 
 Do-not-rerun:
-- KHÃ”NG rerun H2 vol targeting thuáº§n (max +5pp máº¥t recent 4/6)
-- KHÃ”NG rerun H5 monthly rebal (chá»‰ +1pp)
-- KHÃ”NG rerun H4 cross-asset alone (máº¥t alpha)
-- KHÃ”NG rerun H2H4 vol+macro (breadth > macro)
-- KHÃ”NG touch R46 pinned engine (H6 chá»‰ overlay, R46 md5 da26e26 váº«n giá»¯)
-- KHÃ”NG thay Ä‘á»•i breadth threshold 0.30/0.55 Â±0.05 (Ä‘Ã£ calibrated)
-- KHÃ”NG dÃ¹ng breadth sample 200/705 lÃ m production (cáº§n full universe verify)
+- KHÃƒâ€NG rerun H2 vol targeting thuÃ¡ÂºÂ§n (max +5pp mÃ¡ÂºÂ¥t recent 4/6)
+- KHÃƒâ€NG rerun H5 monthly rebal (chÃ¡Â»â€° +1pp)
+- KHÃƒâ€NG rerun H4 cross-asset alone (mÃ¡ÂºÂ¥t alpha)
+- KHÃƒâ€NG rerun H2H4 vol+macro (breadth > macro)
+- KHÃƒâ€NG touch R46 pinned engine (H6 chÃ¡Â»â€° overlay, R46 md5 da26e26 vÃ¡ÂºÂ«n giÃ¡Â»Â¯)
+- KHÃƒâ€NG thay Ã„â€˜Ã¡Â»â€¢i breadth threshold 0.30/0.55 Ã‚Â±0.05 (Ã„â€˜ÃƒÂ£ calibrated)
+- KHÃƒâ€NG dÃƒÂ¹ng breadth sample 200/705 lÃƒÂ m production (cÃ¡ÂºÂ§n full universe verify)
 
 Next concrete actions:
-1. Full-universe breadth sweep (705/705 syms) â€” 30 phÃºt compute, kiá»ƒm tra CAGR shift
-2. Build daily_lot_simulator cho H6 â€” kiá»ƒm tra T+2.5 + cost realistic
+1. Full-universe breadth sweep (705/705 syms) Ã¢â‚¬â€ 30 phÃƒÂºt compute, kiÃ¡Â»Æ’m tra CAGR shift
+2. Build daily_lot_simulator cho H6 Ã¢â‚¬â€ kiÃ¡Â»Æ’m tra T+2.5 + cost realistic
 3. Codex independent audit + reproduce guard
-4. Paper-trade 2 tuáº§n parallel R46 (R46 paper-trade week 2 cÃ²n 4 ngÃ y, thÃªm H6 song song)
-5. Stress remove-symbol â€” cáº§n fetch per-symbol contribution
-6. Combine vá»›i H4 macro defensive (VIX > 30 â†’ 0.3x extra defensive)
+4. Paper-trade 2 tuÃ¡ÂºÂ§n parallel R46 (R46 paper-trade week 2 cÃƒÂ²n 4 ngÃƒÂ y, thÃƒÂªm H6 song song)
+5. Stress remove-symbol Ã¢â‚¬â€ cÃ¡ÂºÂ§n fetch per-symbol contribution
+6. Combine vÃ¡Â»â€ºi H4 macro defensive (VIX > 30 Ã¢â€ â€™ 0.3x extra defensive)
 
 ## 2026-06-04 LATE Mavis - H6P ULTIMATE WINNER +17.81pp CAGR (CAGR 64.56%)
 
 Artifacts:
-- `backtest/overlay_20260604/h6f_dd_brake.py` to `h6p_final_validate.py` â€” full v2 lane
-- `backtest/overlay_20260604/h6o_ultrafine.py` â€” 1600-cell sweep quanh best
-- `output/r46_plus_overlay_20260604/VERDICT_H6P_ULTIMATE.md` â€” final verdict
-- `output/r46_plus_overlay_20260604/h6o_ultrafine/TOP10.json` â€” top 10 cells
-- `output/r46_plus_overlay_20260604/h6p_final_validate/FINAL_REPORT.json` â€” validation
-- `output/r46_plus_overlay_20260604/h6o_ultrafine/yearly_b38_50_v90_h70_l20.csv` â€” yearly breakdown
+- `backtest/overlay_20260604/h6f_dd_brake.py` to `h6p_final_validate.py` Ã¢â‚¬â€ full v2 lane
+- `backtest/overlay_20260604/h6o_ultrafine.py` Ã¢â‚¬â€ 1600-cell sweep quanh best
+- `output/r46_plus_overlay_20260604/VERDICT_H6P_ULTIMATE.md` Ã¢â‚¬â€ final verdict
+- `output/r46_plus_overlay_20260604/h6o_ultrafine/TOP10.json` Ã¢â‚¬â€ top 10 cells
+- `output/r46_plus_overlay_20260604/h6p_final_validate/FINAL_REPORT.json` Ã¢â‚¬â€ validation
+- `output/r46_plus_overlay_20260604/h6o_ultrafine/yearly_b38_50_v90_h70_l20.csv` Ã¢â‚¬â€ yearly breakdown
 
-Status: **RESEARCH_HIT_ULTIMATE_PASS_PLUS_17.81PP_TARGET**. Anh yÃªu cáº§u tiáº¿p tá»¥c push CAGR > 60% + giáº£m MDD. ÄÃ£ Ä‘áº¡t CAGR 64,56% (+17,81pp vs R46) nhÆ°ng MDD khÃ´ng giáº£m Ä‘Æ°á»£c (giá»¯ -30,71% gáº§n H6 winner cÅ© -30,75%). Pareto frontier pure stock max gross 1.0 Ä‘Ã£ cháº¡m tráº§n.
+Status: **RESEARCH_HIT_ULTIMATE_PASS_PLUS_17.81PP_TARGET**. Anh yÃƒÂªu cÃ¡ÂºÂ§u tiÃ¡ÂºÂ¿p tÃ¡Â»Â¥c push CAGR > 60% + giÃ¡ÂºÂ£m MDD. Ã„ÂÃƒÂ£ Ã„â€˜Ã¡ÂºÂ¡t CAGR 64,56% (+17,81pp vs R46) nhÃ†Â°ng MDD khÃƒÂ´ng giÃ¡ÂºÂ£m Ã„â€˜Ã†Â°Ã¡Â»Â£c (giÃ¡Â»Â¯ -30,71% gÃ¡ÂºÂ§n H6 winner cÃ…Â© -30,75%). Pareto frontier pure stock max gross 1.0 Ã„â€˜ÃƒÂ£ chÃ¡ÂºÂ¡m trÃ¡ÂºÂ§n.
 
 WINNER: `b38_50_v90_h70_l20`
 - CAGR: 64,56% (R46 46,75% = **+17,81pp**)
-- MaxDD: -30,71% (R46 -27,61% = -3,10pp; H6 winner -30,75% = +0,04pp tá»‘t hÆ¡n)
+- MaxDD: -30,71% (R46 -27,61% = -3,10pp; H6 winner -30,75% = +0,04pp tÃ¡Â»â€˜t hÃ†Â¡n)
 - Sharpe: 1,68 (R46 1,64 = +0,04)
-- VNI+30 all 11 nÄƒm: 7/11 (R46 7/11 = same)
-- VNI+30 recent 6 nÄƒm: **6/6 preserved**
+- VNI+30 all 11 nÃ„Æ’m: 7/11 (R46 7/11 = same)
+- VNI+30 recent 6 nÃ„Æ’m: **6/6 preserved**
 - Min edge recent: 42,71pp (R46 32,77pp = +9,95pp)
-- NAV end: ~165 tá»· (R46 44,07 tá»· = x3,75)
+- NAV end: ~165 tÃ¡Â»Â· (R46 44,07 tÃ¡Â»Â· = x3,75)
 - Avg exposure: 0,76 (R46 0,59 = +0,17)
 - Reproducibility: 3 reruns, max diff CAGR 0,000000000000000, MDD 0,000000000000000 (bit-exact)
 
-CÃ´ng thá»©c (8 params - H6 + per-symbol vol scaling):
+CÃƒÂ´ng thÃ¡Â»Â©c (8 params - H6 + per-symbol vol scaling):
 1. `breadth50 = % stocks > SMA50` (200/703 syms)
-2. `roll_vol = std(R46 daily ret) Ã— sqrt(252), 20D`
-3. `vol_scale = clip(0.90 / roll_vol, 1.0, 7.0)` â€” boost-only
-4. `br_scale = 0.20 khi breadth50 â‰¤ 0.38, 1.0 khi â‰¥ 0.50, linear between`
-5. `combined = vol_scale Ã— br_scale` (lag 1 day)
-6. Per-symbol: `ivol_weight = 1 / sym_vol_20d`, `blended = 0.5 Ã— orig_w + 0.5 Ã— ivol_normalized`
+2. `roll_vol = std(R46 daily ret) Ãƒâ€” sqrt(252), 20D`
+3. `vol_scale = clip(0.90 / roll_vol, 1.0, 7.0)` Ã¢â‚¬â€ boost-only
+4. `br_scale = 0.20 khi breadth50 Ã¢â€°Â¤ 0.38, 1.0 khi Ã¢â€°Â¥ 0.50, linear between`
+5. `combined = vol_scale Ãƒâ€” br_scale` (lag 1 day)
+6. Per-symbol: `ivol_weight = 1 / sym_vol_20d`, `blended = 0.5 Ãƒâ€” orig_w + 0.5 Ãƒâ€” ivol_normalized`
 7. `ivol_scale_per_day = sum(blended) / sum(orig_w)` (clip 0.5-1.5)
-8. `scaled_exp = clip(original_exp Ã— combined Ã— ivol_scale, 0, 1.0)` (pure stock max gross cap)
-9. `ret_scaled = ret Ã— (scaled_exp / original_exp)`
+8. `scaled_exp = clip(original_exp Ãƒâ€” combined Ãƒâ€” ivol_scale, 0, 1.0)` (pure stock max gross cap)
+9. `ret_scaled = ret Ãƒâ€” (scaled_exp / original_exp)`
 
-Cáº£i thiá»‡n so vá»›i H6 winner cÅ©:
-- 2016: +2,34pp (edge -1,24 â†’ +1,84)
-- 2017: +4,50pp (-25,09 â†’ -20,59)
-- 2018: -3,02pp (+52,68 â†’ +49,66)
-- 2019: -3,60pp (-11,04 â†’ -18,64) bear year xáº¥u hÆ¡n
-- 2020: +2,18pp (+8,42 â†’ +12,70)
-- **2021: +115,48pp** (+150,19 â†’ +265,67) â€” bull máº¡nh nháº¥t boost
-- 2022: +0,73pp (+77,01 â†’ +77,75)
-- **2023: +42,36pp** (+38,30 â†’ +80,66)
-- 2024: -3,42pp (+46,13 â†’ +42,71)
-- **2025: +17,53pp** (+34,20 â†’ +51,73)
-- **2026: +37,61pp** (+37,98 â†’ +75,59)
+CÃ¡ÂºÂ£i thiÃ¡Â»â€¡n so vÃ¡Â»â€ºi H6 winner cÃ…Â©:
+- 2016: +2,34pp (edge -1,24 Ã¢â€ â€™ +1,84)
+- 2017: +4,50pp (-25,09 Ã¢â€ â€™ -20,59)
+- 2018: -3,02pp (+52,68 Ã¢â€ â€™ +49,66)
+- 2019: -3,60pp (-11,04 Ã¢â€ â€™ -18,64) bear year xÃ¡ÂºÂ¥u hÃ†Â¡n
+- 2020: +2,18pp (+8,42 Ã¢â€ â€™ +12,70)
+- **2021: +115,48pp** (+150,19 Ã¢â€ â€™ +265,67) Ã¢â‚¬â€ bull mÃ¡ÂºÂ¡nh nhÃ¡ÂºÂ¥t boost
+- 2022: +0,73pp (+77,01 Ã¢â€ â€™ +77,75)
+- **2023: +42,36pp** (+38,30 Ã¢â€ â€™ +80,66)
+- 2024: -3,42pp (+46,13 Ã¢â€ â€™ +42,71)
+- **2025: +17,53pp** (+34,20 Ã¢â€ â€™ +51,73)
+- **2026: +37,61pp** (+37,98 Ã¢â€ â€™ +75,59)
 
 Stress test cost 15/18/20bps:
 | Cost | CAGR | MaxDD | Sharpe | VNI+30 rec | Min edge | Lift |
@@ -5234,20 +5255,20 @@ Stress test cost 15/18/20bps:
 | 20bps | 63,69% | -31,33% | 1,67 | 6/6 | 41,81pp | **+16,94pp** |
 
 Validation:
-- âœ… Reproducibility bit-exact (3 reruns, max diff 0,000000000000000)
-- âš ï¸ Walk-forward 2016-2020 train / 2021-2026 test: train 21,16% VNI+30 0/5 (R46 2016-2020 cÅ©ng yáº¿u), test 111,10% VNI+30 **6/6 preserved**
-- âœ… Robust cost 15-20bps
-- âœ… Pure stock constraint: max gross 1.0, no margin/short/ETF/bond
-- âœ… Strict T-1/T: vol/breadth dÃ¹ng data hÃ´m trÆ°á»›c
+- Ã¢Å“â€¦ Reproducibility bit-exact (3 reruns, max diff 0,000000000000000)
+- Ã¢Å¡Â Ã¯Â¸Â Walk-forward 2016-2020 train / 2021-2026 test: train 21,16% VNI+30 0/5 (R46 2016-2020 cÃ…Â©ng yÃ¡ÂºÂ¿u), test 111,10% VNI+30 **6/6 preserved**
+- Ã¢Å“â€¦ Robust cost 15-20bps
+- Ã¢Å“â€¦ Pure stock constraint: max gross 1.0, no margin/short/ETF/bond
+- Ã¢Å“â€¦ Strict T-1/T: vol/breadth dÃƒÂ¹ng data hÃƒÂ´m trÃ†Â°Ã¡Â»â€ºc
 
-Táº¡i sao MDD khÃ´ng giáº£m thÃªm:
+TÃ¡ÂºÂ¡i sao MDD khÃƒÂ´ng giÃ¡ÂºÂ£m thÃƒÂªm:
 - Constraint pure stock max gross 1.0 cap
-- Scale exposure lÃªn 1,5-2,0x R46 baseline (0,59 â†’ 0,76) â†’ MDD tÄƒng tá»‰ lá»‡ boost factor
+- Scale exposure lÃƒÂªn 1,5-2,0x R46 baseline (0,59 Ã¢â€ â€™ 0,76) Ã¢â€ â€™ MDD tÃ„Æ’ng tÃ¡Â»â€° lÃ¡Â»â€¡ boost factor
 - Pareto frontier cho pure stock + max gross 1.0: CAGR 64-65% + MaxDD -30-31%
-- Äá»ƒ giáº£m MDD: cáº§n DD brake (trade-off -3pp CAGR cho -2pp MDD) hoáº·c constraint ná»›i lá»ng (margin/short/ETF) - REJECTED
+- Ã„ÂÃ¡Â»Æ’ giÃ¡ÂºÂ£m MDD: cÃ¡ÂºÂ§n DD brake (trade-off -3pp CAGR cho -2pp MDD) hoÃ¡ÂºÂ·c constraint nÃ¡Â»â€ºi lÃ¡Â»Âng (margin/short/ETF) - REJECTED
 
-HÃ nh trÃ¬nh 6 vÃ²ng tá»« R46 â†’ +17,81pp:
-| BÆ°á»›c | Cell | CAGR | MaxDD | Lift |
+HÃƒÂ nh trÃƒÂ¬nh 6 vÃƒÂ²ng tÃ¡Â»Â« R46 Ã¢â€ â€™ +17,81pp:
+| BÃ†Â°Ã¡Â»â€ºc | Cell | CAGR | MaxDD | Lift |
 |---|---|---:|---:|---:|
 | R46 baseline | - | 46,75% | -27,61% | - |
 | H6 winner | b30_55_v50_h300_l50_h100 | 57,39% | -30,75% | +10,64pp |
@@ -5257,22 +5278,22 @@ HÃ nh trÃ¬nh 6 vÃ²ng tá»« R46 â†’ +17,81pp:
 | **H6P ultimate** | **b38_50_v90_h70_l20** | **64,56%** | **-30,71%** | **+17,81pp** |
 
 Do-not-rerun:
-- KHÃ”NG rerun H2 vol targeting thuáº§n (Ä‘Ã£ exhaust, +5pp max)
-- KHÃ”NG rerun H5 monthly rebal (+1pp only)
-- KHÃ”NG rerun H4 cross-asset alone
-- KHÃ”NG rerun h6m (Ä‘Ã£ fix á»Ÿ h6n)
-- KHÃ”NG touch R46 pinned engine (H6P chá»‰ overlay)
-- KHÃ”NG thay Ä‘á»•i winner params Â±0,05 (Ä‘Ã£ calibrated 1600 cells)
-- KHÃ”NG rerun h6h_sweep nguyÃªn (Ä‘Ã£ sweep 600 cells, plateau)
-- KHÃ”NG rerun h6b_sweep nguyÃªn (Ä‘Ã£ exhaust)
+- KHÃƒâ€NG rerun H2 vol targeting thuÃ¡ÂºÂ§n (Ã„â€˜ÃƒÂ£ exhaust, +5pp max)
+- KHÃƒâ€NG rerun H5 monthly rebal (+1pp only)
+- KHÃƒâ€NG rerun H4 cross-asset alone
+- KHÃƒâ€NG rerun h6m (Ã„â€˜ÃƒÂ£ fix Ã¡Â»Å¸ h6n)
+- KHÃƒâ€NG touch R46 pinned engine (H6P chÃ¡Â»â€° overlay)
+- KHÃƒâ€NG thay Ã„â€˜Ã¡Â»â€¢i winner params Ã‚Â±0,05 (Ã„â€˜ÃƒÂ£ calibrated 1600 cells)
+- KHÃƒâ€NG rerun h6h_sweep nguyÃƒÂªn (Ã„â€˜ÃƒÂ£ sweep 600 cells, plateau)
+- KHÃƒâ€NG rerun h6b_sweep nguyÃƒÂªn (Ã„â€˜ÃƒÂ£ exhaust)
 
 Next concrete actions:
-1. Full-universe breadth sweep 705/705 (~30 phÃºt) verify CAGR shift
-2. Codex independent audit (1-2 giá»)
+1. Full-universe breadth sweep 705/705 (~30 phÃƒÂºt) verify CAGR shift
+2. Codex independent audit (1-2 giÃ¡Â»Â)
 3. Build daily_lot_simulator cho H6P - verify T+2.5 + cost realistic
-4. Paper-trade 2 tuáº§n parallel R46 (R46 paper-trade week 2 cÃ²n 4 ngÃ y, thÃªm H6P song song)
-5. Stress remove-symbol per top contributor (cáº§n fetch per-symbol contribution)
-6. Stress cost 25/30bps (verify downside ngoÃ i plateau Ä‘Ã£ calibrated)
+4. Paper-trade 2 tuÃ¡ÂºÂ§n parallel R46 (R46 paper-trade week 2 cÃƒÂ²n 4 ngÃƒÂ y, thÃƒÂªm H6P song song)
+5. Stress remove-symbol per top contributor (cÃ¡ÂºÂ§n fetch per-symbol contribution)
+6. Stress cost 25/30bps (verify downside ngoÃƒÂ i plateau Ã„â€˜ÃƒÂ£ calibrated)
 
 ---
 
@@ -5292,8 +5313,9 @@ Fix:
 Validation:
 - Direct Vercel deploy `dpl_F7ZW7vv9r9ApemKv3t16FSv2SXWb` READY and aliased to `https://ez-trading.vercel.app`.
 - Public API test: `/api/live-status?symbols=MSB,VIX` returned HTTP 200 at `2026-06-05 11:30:22`, MSB 14.75k, VIX 17.95k, VNINDEX 1843.09.
-- Browser DOM test after load: `liveBadge = LIVE 2026-06-05 · 2026-06-05 11:31:09`, `liveStatus = Gia live ... edge 5p`, holdings MSB 14.75k, planned table MSB 14.75k, VNI KPI 1843.09.
+- Browser DOM test after load: `liveBadge = LIVE 2026-06-05 Â· 2026-06-05 11:31:09`, `liveStatus = Gia live ... edge 5p`, holdings MSB 14.75k, planned table MSB 14.75k, VNI KPI 1843.09.
 - New public health gate with `--require-fresh-live --require-edge-live --require-vni-history --require-current-vni --require-execution-desk` passed. Static VNI snapshot was stale versus VPS, but edge live matched VPS and kept the public gate green.
 
 Operational rule:
 - Do not rely on GitHub schedule alone for user-visible 5-minute live quotes. GitHub Actions remains the heavy/static lane: price artifact fallback and R46 forecast every 30 minutes. Browser-visible live price must come from the Vercel API layer or another always-available hosted endpoint.
+

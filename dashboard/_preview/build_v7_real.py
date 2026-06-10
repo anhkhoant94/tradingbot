@@ -198,6 +198,128 @@ def open_positions_from_trades(records, through_date):
     return {sym: shares for sym, shares in positions.items() if shares > 0}
 
 
+def open_lots_from_trades(records, through_date):
+    lots_by_symbol = {}
+    for row in sorted(records, key=lambda r: str(r.get("date") or "")):
+        d = str(row.get("date") or "")
+        if not d or d > through_date:
+            continue
+        sym = str(row.get("symbol") or "").upper().strip()
+        sign = side_sign(row.get("side") or row.get("actionLabel"))
+        shares = as_float(row.get("modelFullShares"), as_float(row.get("rawShares"), as_float(row.get("shares"), 0))) or 0
+        if not sym or sign == 0 or shares <= 0:
+            continue
+        px = as_float(
+            row.get("entryPriceK"),
+            as_float(row.get("executionPriceK"), as_float(row.get("priceK"), as_float(row.get("price")))),
+        )
+        if sign > 0:
+            lots_by_symbol.setdefault(sym, []).append({
+                "date": d,
+                "shares": float(shares),
+                "priceK": px,
+            })
+            continue
+        remaining = float(shares)
+        lots = lots_by_symbol.get(sym, [])
+        while remaining > 1e-9 and lots:
+            use = min(remaining, lots[0]["shares"])
+            lots[0]["shares"] -= use
+            remaining -= use
+            if lots[0]["shares"] <= 1e-9:
+                lots.pop(0)
+        if not lots:
+            lots_by_symbol.pop(sym, None)
+    return {sym: [lot for lot in lots if lot.get("shares", 0) > 1e-9] for sym, lots in lots_by_symbol.items()}
+
+
+def materialize_model_execution_trades(exec_orders, trade_rows, policy_cfg):
+    existing_sell_keys = {
+        (
+            str(row.get("date") or "")[:10],
+            str(row.get("symbol") or "").upper().strip(),
+        )
+        for row in trade_rows
+        if side_sign(row.get("side") or row.get("actionLabel")) < 0
+    }
+    buy_cost_rate = (as_float(policy_cfg.get("buy_cost_pct"), 0.3) or 0.3) / 100.0
+    sell_cost_rate = (as_float(policy_cfg.get("sell_cost_pct"), 0.4) or 0.4) / 100.0
+    rows = []
+    for order in sorted(exec_orders, key=lambda r: str(r.get("date") or r.get("executedDate") or "")):
+        sym = str(order.get("symbol") or "").upper().strip()
+        date_text = str(order.get("date") or order.get("executedDate") or "")[:10]
+        if not sym or not date_text or not action_is_sell(order.get("side") or order.get("actionLabel")):
+            continue
+        if (date_text, sym) in existing_sell_keys:
+            continue
+        lots = open_lots_from_trades(trade_rows, date_text).get(sym, [])
+        model_before = sum(as_float(lot.get("shares"), 0) or 0 for lot in lots)
+        if model_before <= 0:
+            continue
+        copy_before = as_float(order.get("positionBeforeShares"), 0) or 0
+        copy_sold = as_float(order.get("shares"), as_float(order.get("orderShares"), 0)) or 0
+        copy_after = as_float(order.get("positionAfterShares"), 0) or 0
+        if copy_after <= 0:
+            sell_shares = model_before
+        elif copy_before > 0 and copy_sold > 0:
+            sell_shares = min(model_before, model_before * copy_sold / copy_before)
+        else:
+            sell_shares = min(model_before, copy_sold)
+        sell_shares = scale_lot(sell_shares, 1.0)
+        if sell_shares <= 0:
+            continue
+        px = as_float(order.get("executionPriceK"), as_float(order.get("priceK")))
+        if not px:
+            continue
+        remaining = sell_shares
+        entry_value_bil = 0.0
+        earliest_entry = None
+        for lot in lots:
+            if remaining <= 1e-9:
+                break
+            lot_shares = as_float(lot.get("shares"), 0) or 0
+            use = min(remaining, lot_shares)
+            lot_px = as_float(lot.get("priceK"), as_float(order.get("entryPriceK"), px)) or px
+            entry_value_bil += use * lot_px / 1_000_000
+            entry_date = str(lot.get("date") or "")
+            earliest_entry = min(earliest_entry, entry_date) if earliest_entry else entry_date
+            remaining -= use
+        if remaining > 1e-6 or entry_value_bil <= 0:
+            avg_entry = as_float(order.get("entryPriceK"), px) or px
+            entry_value_bil = sell_shares * avg_entry / 1_000_000
+        else:
+            avg_entry = entry_value_bil * 1_000_000 / sell_shares
+        gross_bil = sell_shares * px / 1_000_000
+        fees_bil = entry_value_bil * buy_cost_rate + gross_bil * sell_cost_rate
+        pnl_bil = gross_bil - entry_value_bil - fees_bil
+        cost_basis_bil = entry_value_bil * (1.0 + buy_cost_rate)
+        return_pct = pnl_bil / cost_basis_bil * 100 if cost_basis_bil else None
+        model_after = max(0, model_before - sell_shares)
+        rows.append({
+            "date": date_text,
+            "triggerDate": order.get("sourceForecast", {}).get("asOf") or date_text,
+            "symbol": sym,
+            "side": "SELL",
+            "actionLabel": "Bán hết" if model_after <= 0 else "Bán bớt",
+            "positionBeforeShares": model_before,
+            "positionAfterShares": model_after,
+            "shares": sell_shares,
+            "rawShares": sell_shares,
+            "priceK": px,
+            "executionPriceK": px,
+            "grossBil": gross_bil,
+            "feesBil": fees_bil,
+            "entryPriceK": avg_entry,
+            "returnPct": return_pct,
+            "pnlBil": pnl_bil,
+            "holdDays": as_float(order.get("holdDays")),
+            "reason": order.get("reason") or "execution_state",
+            "entryDate": earliest_entry,
+            "source": "execution_state_model_materialized",
+        })
+    return rows
+
+
 def latest_price_on_or_before(history_by_symbol, symbol, date_text):
     hist = history_by_symbol.get(symbol)
     if hist is None or hist.empty:
@@ -684,7 +806,9 @@ if not ledger_base_curve:
     ledger_base_curve = curve
 ledger_base_nav_bil = float(ledger_base_curve[0]["navBil"]) if ledger_base_curve else 1.0
 ledger_scale = LEDGER_REBASE_NAV_BIL / ledger_base_nav_bil if ledger_base_nav_bil else 1.0
-trades_period = [row for row in trades_full if str(row.get("date") or "") >= LEDGER_REBASE_START_DATE]
+materialized_model_exec_trades = materialize_model_execution_trades(executed_orders, trades_full, policy_config)
+trades_for_ledger = list(trades_full) + materialized_model_exec_trades
+trades_period = [row for row in trades_for_ledger if str(row.get("date") or "") >= LEDGER_REBASE_START_DATE]
 
 
 def enrich_trade(row):
@@ -698,6 +822,8 @@ def enrich_trade(row):
     out["modelFullNavBilAtTrade"] = nav_bil_original
     out["modelFullGrossBil"] = gross_bil_original
     out["modelFullShares"] = out.get("shares")
+    out["priceK"] = as_float(out.get("priceK"), as_float(out.get("price")))
+    out["executionPriceK"] = as_float(out.get("executionPriceK"), as_float(out.get("priceK"), as_float(out.get("price"))))
     out["navBilAtTrade"] = nav_bil
     out["grossBil"] = gross_bil
     out["pnlBil"] = pnl_bil_original * ledger_scale if pnl_bil_original is not None else None
@@ -1341,6 +1467,7 @@ body {{ background:var(--bg); color:var(--text); font-size:var(--t3); line-heigh
 .spacer {{ flex:1; }} .search {{ width:min(420px,35vw); height:32px; border:1px solid var(--border); background:var(--surface2); border-radius:8px; display:flex; align-items:center; gap:8px; padding:0 10px; color:var(--muted); }}
 .search input {{ border:0; outline:0; background:transparent; color:var(--text); font:inherit; width:100%; }}
 .live {{ background:var(--greenSoft); color:var(--green); border-radius:999px; padding:4px 10px; font-weight:800; font-size:var(--t1); letter-spacing:.04em; }}
+.mobileTabs {{ display:none; }}
 .content {{ padding:20px 24px 28px; max-width:1540px; }}
 .view {{ display:none; }} .view.on {{ display:block; }}
 .pageh {{ display:flex; justify-content:space-between; align-items:start; gap:16px; margin-bottom:14px; }}
@@ -1389,7 +1516,56 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
 .logic {{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }} .logicCard {{ border:1px solid var(--border); border-radius:var(--r); padding:14px; background:var(--surface); }} .logicCard h3 {{ font-size:var(--t3); margin-bottom:6px; }} .logicCard p {{ color:var(--muted); font-size:var(--t2); line-height:1.5; }}
 .ledgerbar {{ display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid var(--soft); background:var(--surface2); }} .ledgerbar input {{ width:360px; max-width:45vw; height:30px; border:1px solid var(--border); border-radius:7px; padding:0 10px; background:var(--surface); color:var(--text); font:inherit; }} .pager {{ margin-left:auto; display:flex; gap:4px; }} .pager button {{ min-width:28px; height:28px; border:1px solid var(--border); border-radius:7px; background:var(--surface); color:var(--text); font:inherit; cursor:pointer; }} .pager button.on {{ background:var(--accent); color:white; border-color:var(--accent); }}
 .scroll {{ max-height:calc(100vh - 235px); overflow:auto; }}
-@media(max-width:900px) {{ .app {{ grid-template-columns:1fr; }} .sidebar {{ display:none; }} .topbar {{ padding:0 14px; }} .search {{ display:none; }} .content {{ padding:16px; }} .kpis,.split,.logic,.watchSummary,.statusline {{ grid-template-columns:1fr; }} svg {{ height:220px; }} }}
+@media(max-width:900px) {{
+  .app {{ grid-template-columns:1fr; }}
+  .sidebar {{ display:none; }}
+  .topbar {{ height:auto; min-height:52px; padding:9px 12px; gap:8px; flex-wrap:wrap; }}
+  .crumb {{ min-width:0; font-size:var(--t2); }}
+  .search {{ display:none; }}
+  .live {{ margin-left:0; max-width:100%; white-space:normal; line-height:1.25; }}
+  .mobileTabs {{ display:flex; gap:8px; overflow-x:auto; padding:10px 12px; border-bottom:1px solid var(--border); background:var(--surface); position:sticky; top:0; z-index:4; scrollbar-width:none; }}
+  .mobileTabs::-webkit-scrollbar {{ display:none; }}
+  .mobileTabs .nav {{ flex:0 0 auto; width:auto; min-width:112px; justify-content:center; border:1px solid var(--border); background:var(--surface2); height:34px; padding:0 10px; }}
+  .mobileTabs .nav.on {{ background:var(--accent); color:#fff; border-color:var(--accent); }}
+  .mobileTabs .nav .ct {{ margin-left:6px; background:rgba(255,255,255,.22); color:inherit; }}
+  .content {{ padding:14px 12px 24px; }}
+  .pageh {{ flex-direction:column; gap:8px; }}
+  h1 {{ font-size:var(--t6); }}
+  .sub {{ font-size:var(--t2); }}
+  .controls {{ gap:6px; }}
+  .kpis,.split,.logic,.watchSummary,.statusline {{ grid-template-columns:1fr; }}
+  .kpi,.statusline span,.watchSummary span {{ border-right:0; border-bottom:1px solid var(--soft); }}
+  .kpi:last-child,.statusline span:last-child,.watchSummary span:last-child {{ border-bottom:0; }}
+  .sech {{ align-items:flex-start; flex-direction:column; padding:11px 12px; gap:4px; }}
+  .sech h2 {{ font-size:var(--t3); line-height:1.35; }}
+  .scaletag {{ display:inline-flex; margin-top:2px; }}
+  .chartTop {{ flex-direction:column; padding:12px; }}
+  .ranges {{ max-width:100%; overflow-x:auto; }}
+  .chartwrap {{ padding:0 10px 8px 40px; }}
+  .ylabels {{ left:8px; width:30px; font-size:10px; }}
+  .xlabels {{ font-size:10px; gap:6px; }}
+  svg {{ height:210px; }}
+  .ptgrid {{ grid-template-columns:1fr 1fr; }}
+  .ptbox:nth-child(2n) {{ border-right:0; }}
+  .ledgerbar {{ align-items:stretch; flex-direction:column; gap:8px; padding:10px 12px; }}
+  .ledgerbar input {{ width:100%; max-width:none; }}
+  .pager {{ margin-left:0; flex-wrap:wrap; }}
+  .scroll {{ max-height:none; overflow:visible; }}
+}}
+@media(max-width:720px) {{
+  table.mobile-card {{ display:block; width:100%; border-collapse:separate; border-spacing:0; }}
+  table.mobile-card thead {{ display:none; }}
+  table.mobile-card tbody {{ display:block; }}
+  table.mobile-card tr {{ display:block; padding:10px 12px; border-bottom:1px solid var(--soft); background:var(--surface); }}
+  table.mobile-card tr:last-child {{ border-bottom:0; }}
+  table.mobile-card td {{ display:grid; grid-template-columns:minmax(92px,36%) minmax(0,1fr); gap:10px; align-items:start; padding:5px 0; border:0; min-width:0; text-align:left; white-space:normal; overflow-wrap:anywhere; }}
+  table.mobile-card td::before {{ content:attr(data-label); color:var(--muted); font-size:var(--t1); font-weight:800; letter-spacing:.05em; text-transform:uppercase; }}
+  table.mobile-card td[data-full="1"] {{ display:block; width:100%!important; color:var(--muted); }}
+  table.mobile-card td[data-full="1"]::before {{ content:""; display:none; }}
+  table.mobile-card td.num {{ text-align:left; white-space:normal; }}
+  table.mobile-card .pill {{ white-space:normal; justify-content:flex-start; text-align:left; }}
+  table.mobile-card .thresholds {{ justify-items:start; }}
+}}
 </style>
 </head>
 <body>
@@ -1400,7 +1576,7 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
   <button class="nav on" data-view="copy"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path d="M4 19V5m0 14h16M8 16l3-4 3 2 4-7"/></svg>Copy Trade<span class="ct">{len(holdings)}</span></button>
   <button class="nav" data-view="watch"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/></svg>Theo dõi mua<span class="ct">{len(watchlist_rows)}</span></button>
   <button class="nav" data-view="model"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path d="M3 4h18l-7 8v6l-4 2v-8L3 4z"/></svg>Bộ lọc model</button>
-  <button class="nav" data-view="ledger"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Lịch sử<span class="ct">{len(ledger_rows) + len(copy_executions)}</span></button>
+  <button class="nav" data-view="ledger"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Lịch sử<span class="ct">{len(ledger_rows)}</span></button>
   <div class="sidefoot">
     <div class="sfrow"><span>Regime</span><b>{regime_label}</b></div>
     <div class="sfrow"><span>Copy cash</span><b>{fmt_num(copy_cash_pct,1)}%</b></div>
@@ -1410,6 +1586,12 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
 </aside>
 <main class="main">
 <header class="topbar"><div class="crumb"><a>Ez Trading</a><span>/</span><b id="crumb">Copy Trade</b></div><div class="spacer"></div><label class="search"><span>⌕</span><input id="globalSearch" placeholder="Tìm mã, lệnh, ghi chú..." /></label><span class="live" id="liveBadge">LIVE {live_updated_label}</span></header>
+<nav class="mobileTabs" aria-label="Mobile menu">
+  <button class="nav on" data-view="copy">Copy<span class="ct">{len(holdings)}</span></button>
+  <button class="nav" data-view="watch">Theo dõi<span class="ct">{len(watchlist_rows)}</span></button>
+  <button class="nav" data-view="model">Model</button>
+  <button class="nav" data-view="ledger">Lịch sử<span class="ct">{len(ledger_rows)}</span></button>
+</nav>
 <div class="content">
   <section class="view on" data-view="copy">
     <div class="pageh"><div><h1>Copy Trade</h1><div class="sub">R46 Bear Stop 15bps · copy NAV tách riêng lịch sử model</div></div><div><button class="btn">In PDF</button></div></div>
@@ -1448,7 +1630,7 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
   </section>
   <section class="view" data-view="watch"><div class="pageh"><div><h1>Theo dõi mua</h1><div class="sub">{len(watchlist_rows)} mã theo dõi · loại {watchlist_summary['excludedHeld']} mã đang nắm</div></div></div><section class="sec"><div class="sech"><h2>Mã đáng theo dõi và có thể mua sắp tới</h2></div><div class="watchSummary" id="watchSummary"></div><div class="watchRules" id="watchRules"></div><table><thead><tr><th>Mã</th><th>Nhóm</th><th class="num">Điểm lọc</th><th class="num">Upside</th><th class="num">Target</th><th class="num">R:R</th><th class="num">TK 20D</th><th>Target tuần</th><th>Tín hiệu mua</th><th>Ghi chú</th></tr></thead><tbody id="watchRows"></tbody></table></section></section>
   <section class="view" data-view="model"><div class="pageh"><div><h1>Bộ lọc model · R46 Bear Stop 15bps</h1><div class="sub">Tóm tắt vận hành</div></div><span class="pill buy">AUDIT {policy.get('productionAudit',{}).get('status','R46')}</span></div><section class="sec"><div class="sech"><h2>Tóm tắt</h2></div><div class="secb"><div class="logic" id="logicGrid"></div></div></section></section>
-  <section class="view" data-view="ledger"><div class="pageh"><div><h1>Lịch sử giao dịch</h1><div class="sub">Copy execution tách riêng model ledger · model ledger quy đổi theo {ledger_basis_label}</div></div></div><section class="sec"><div class="sech"><h2>Lịch sử copy đã khớp <span class="scaletag">NAV copy 1 tỷ</span></h2><span class="meta">{len(copy_executions)} lệnh từ execution state</span></div><table><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá</th><th class="num">Giá trị</th><th class="num">Tỷ trọng NAV</th><th class="num">P/L</th><th class="num">P/L %</th><th>Trạng thái</th></tr></thead><tbody id="copyLedgerBody"></tbody></table></section><section class="sec"><div class="sech"><h2>Lịch sử model <span class="scaletag">NAV 2021 = 1 tỷ</span></h2><span class="meta">{len(ledger_rows)} dòng từ {ledger_first_trade_date} đến {ledger_last_trade_date}</span></div><div class="ledgerbar"><b id="ledgerCount"></b><input id="ledgerSearch" placeholder="Tìm theo mã, lệnh, lý do..." /><div class="pager" id="pager"></div></div><div class="scroll"><table><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá</th><th class="num">Giá trị</th><th class="num">Tỷ trọng NAV</th><th class="num">P/L</th><th class="num">P/L %</th><th class="num">Nắm giữ</th><th>Lý do</th></tr></thead><tbody id="ledgerBody"></tbody></table></div></section></section>
+  <section class="view" data-view="ledger"><div class="pageh"><div><h1>Lịch sử giao dịch</h1><div class="sub">Full bộ lệnh model đã khớp · quy đổi theo {ledger_basis_label}</div></div></div><section class="sec"><div class="sech"><h2>Lịch sử model <span class="scaletag">NAV 2021 = 1 tỷ</span></h2><span class="meta">{len(ledger_rows)} dòng từ {ledger_first_trade_date} đến {ledger_last_trade_date}</span></div><div class="ledgerbar"><b id="ledgerCount"></b><input id="ledgerSearch" placeholder="Tìm theo mã, lệnh, lý do..." /><div class="pager" id="pager"></div></div><div class="scroll"><table><thead><tr><th>Ngày</th><th>Mã</th><th>Lệnh</th><th class="num">KL</th><th class="num">Giá</th><th class="num">Giá trị</th><th class="num">Tỷ trọng NAV</th><th class="num">P/L</th><th class="num">P/L %</th><th class="num">Nắm giữ</th><th>Lý do</th></tr></thead><tbody id="ledgerBody"></tbody></table></div></section></section>
 </div>
 </main>
 </div>
@@ -1473,7 +1655,23 @@ function parseNavValue(raw){{ const text=String(raw??'').trim().replace(',','.')
 function navLabel(n){{ return Number(n).toLocaleString('en-US',{{maximumFractionDigits:3,useGrouping:false}}); }}
 function pill(side){{ const raw=String(side||'-'); const plain=vnPlain(raw); const c=plain.includes('MUA')||plain==='BUY'?'buy':plain.includes('BAN')||plain==='SELL'?'sell':plain.includes('BO')||plain.includes('SKIP')?'skip':'hold'; let label=raw; if(plain.includes('MUA DU KIEN')) label='Mua d\\u1ef1 ki\\u1ebfn'; else if(plain.includes('MUA THEM')) label='Mua th\\u00eam'; else if(plain.includes('MUA MOI')||plain==='BUY') label='Mua m\\u1edbi'; else if(plain.includes('BAN BOT')) label='B\\u00e1n b\\u1edbt'; else if(plain.includes('BAN HET')||plain==='SELL') label='B\\u00e1n h\\u1ebft'; else if(plain.includes('BAN 1 PHAN')) label='B\\u00e1n 1 ph\\u1ea7n'; else if(plain.includes('GIU')) label='Gi\\u1eef'; else if(plain.includes('THEO DOI')) label='Theo d\\u00f5i'; return `<span class="pill ${{c}}">${{esc(label)}}</span>`; }}
 function toggleTheme(){{ const h=document.documentElement; h.dataset.theme=h.dataset.theme==='light'?'dark':'light'; renderChart(currentRange); }}
-document.querySelectorAll('.nav').forEach(b=>b.addEventListener('click',()=>{{ document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('on',x===b)); document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.dataset.view===b.dataset.view)); document.getElementById('crumb').textContent=b.childNodes[1]?.textContent?.trim()||b.textContent.trim(); window.scrollTo(0,0); }}));
+function applyTableLabels(){{
+  document.querySelectorAll('table').forEach(table=>{{
+    table.classList.add('mobile-card');
+    const labels=[...table.querySelectorAll('thead th')].map(th=>th.textContent.trim());
+    table.querySelectorAll('tbody tr').forEach(tr=>{{
+      [...tr.children].forEach((td,i)=>{{
+        if(td.tagName!=='TD') return;
+        td.dataset.label=labels[i]||'';
+        if(Number(td.colSpan)>1) td.dataset.full='1'; else delete td.dataset.full;
+      }});
+    }});
+  }});
+}}
+let labelTimer=null;
+function scheduleTableLabels(){{ clearTimeout(labelTimer); labelTimer=setTimeout(applyTableLabels,0); }}
+new MutationObserver(scheduleTableLabels).observe(document.body,{{childList:true,subtree:true}});
+document.querySelectorAll('.nav').forEach(b=>b.addEventListener('click',()=>{{ const viewName=b.dataset.view; document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('on',x.dataset.view===viewName)); document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.dataset.view===viewName)); document.getElementById('crumb').textContent=(b.textContent||'').replace(/\\d+$/,'').trim(); window.scrollTo(0,0); scheduleTableLabels(); }}));
 function roundLot(x){{ return Math.max(0, Math.floor(Number(x || 0) / 100) * 100); }}
 function renderCopyForNav(navBilRaw, syncInput=true){{ const parsed=parseNavValue(navBilRaw); if(parsed===null) return; const navBil=parsed; if(syncInput) document.getElementById('navInput').value=navLabel(navBil); document.querySelectorAll('.navPreset').forEach(b=>b.classList.toggle('primary', Number(b.dataset.nav)===navBil)); let market=0,cost=0; const posLabels=[]; const holdRows=D.holdings.filter(rowMatches); const holdHtml=holdRows.length ? holdRows.map(h=>{{ const baseShares=Number(h.copyShares||h.modelShares||0); const shares=roundLot(baseShares*navBil); const entry=Number(h.entryPrice||0); const px=Number(h.currentPrice||0); const value=shares*px/1000; const rowCost=shares*entry/1000; const weight=value/(navBil*1000)*100; const pnl=value-rowCost; const pnlPct=rowCost>0?pnl/rowCost*100:null; market+=value; cost+=rowCost; posLabels.push(`${{esc(h.symbol)}} · ${{f(shares,0)}} cp`); return `<tr><td><strong>${{esc(h.symbol)}}</strong></td><td>${{esc(h.industry||h.sleeve||'-')}}</td><td class="num">${{f(shares,0)}}</td><td class="num">${{priceK(entry,3)}}</td><td class="num">${{priceK(px)}}</td><td class="num">${{valueTr(value)}}</td><td class="num">${{wp(weight)}}</td><td class="num ${{cls(pnl)}}">${{money(pnl)}}</td><td class="num ${{cls(pnlPct)}}">${{pc(pnlPct)}}</td></tr>`; }}).join('') : emptyRow(9, globalQ?'Không có vị thế khớp tìm kiếm.':'Chưa có vị thế.'); document.getElementById('holdRows').innerHTML=holdHtml; const exposure=navBil>0?market/(navBil*1000)*100:0; const posValue=document.getElementById('positionKpiValue'); const posSub=document.getElementById('positionKpiSub'); if(posValue) posValue.textContent=posLabels.length?posLabels.join(', '):'0 mã'; if(posSub) posSub.textContent='Giá trị '+f(market,1)+' tr · tỷ trọng '+wp(exposure,1); renderExecutionDesk(navBil); renderPlannedRows(navBil); }}
 const pt = D.paperTrade;
@@ -1491,7 +1689,7 @@ const copyExecutions = D.executionState?.orders || [];
 function thresholdHtml(r){{ const lines=[]; if(r.maxOpen) lines.push(`Open <= <b>${{priceK(r.maxOpen)}}</b>`); if(r.limitPrice) lines.push(`Pullback <= <b>${{priceK(r.limitPrice)}}</b>`); if(r.bearStop) lines.push(`Bear stop <b>${{priceK(r.bearStop)}}</b>`); if(r.lowPrice) lines.push(`Low mới nhất ${{priceK(r.lowPrice)}}`); if(!lines.length && r.referenceClose) lines.push(`Tham chiếu <b>${{priceK(r.referenceClose)}}</b>`); return `<div class="thresholds">${{lines.map(x=>`<span>${{x}}</span>`).join('')}}</div>`; }}
 function renderExecutionDesk(navBil=parseNavValue(document.getElementById('navInput')?.value)||1){{ const body=document.getElementById('execRows'); if(!body) return; const rows=execDesk.filter(rowMatches); body.innerHTML = rows.length ? rows.map(r=>{{ const shares=roundLot(Number(r.shares||0)*navBil); return `<tr><td>${{esc(r.group)}}<div class="meta">${{esc(r.date||'-')}}</div></td><td><strong>${{esc(r.symbol)}}</strong></td><td>${{pill(r.action||'-')}}</td><td class="num">${{shares?f(shares,0):'-'}}</td><td class="num">${{priceK(r.currentPrice)}}</td><td>${{thresholdHtml(r)}}</td><td>${{pill(r.status||'-')}}</td><td>${{esc(r.note||'')}}</td></tr>`; }}).join('') : emptyRow(8, globalQ?'Không có lệnh khớp tìm kiếm.':'Chưa có lệnh cần xử lý.'); }}
 function copyExecutionHtml(rows, cols=10){{ return rows.length ? rows.map(r=>`<tr><td>${{esc(r.date||'-')}}</td><td><strong>${{esc(r.symbol)}}</strong></td><td>${{pill(r.actionLabel||r.side)}}</td><td class="num">${{f(r.shares,0)}}</td><td class="num">${{priceK(r.executionPriceK)}}</td><td class="num">${{valueTr(r.grossMil)}}</td><td class="num">${{r.tradeWeightPct==null?'-':wp(r.tradeWeightPct,2)}}</td><td class="num ${{cls(r.pnlMil)}}">${{r.pnlMil==null?'-':money(r.pnlMil)}}</td><td class="num ${{cls(r.returnPct)}}">${{pc(r.returnPct,2)}}</td><td>${{pill(r.status||'-')}}</td></tr>`).join('') : emptyRow(cols, globalQ?'Không có lệnh copy khớp tìm kiếm.':'Chưa có lệnh copy đã khớp.'); }}
-function renderCopyExecutions(){{ const rows=copyExecutions.filter(rowMatches); const copyBody=document.getElementById('copyExecRows'); if(copyBody) copyBody.innerHTML=copyExecutionHtml(rows,10); const ledgerBody=document.getElementById('copyLedgerBody'); if(ledgerBody) ledgerBody.innerHTML=copyExecutionHtml(rows,10); }}
+function renderCopyExecutions(){{ const rows=copyExecutions.filter(rowMatches); const copyBody=document.getElementById('copyExecRows'); if(copyBody) copyBody.innerHTML=copyExecutionHtml(rows,10); }}
 function renderPlannedRows(navBil=parseNavValue(document.getElementById('navInput')?.value)||1){{ const rows=planned.filter(rowMatches); document.getElementById('plannedRows').innerHTML = rows.length ? rows.map(r=>{{ const baseShares=Number(r.orderShares||0); const shares=baseShares>0?roundLot(baseShares*navBil):null; return `<tr><td>${{esc(r.displayPlanDate||r.planDate)}}</td><td><strong>${{esc(r.symbol)}}</strong></td><td>${{pill(r.action||r.status)}}</td><td class="num">${{shares===null?'-':f(shares,0)}}</td><td class="num">${{priceK(r.currentPrice)}}</td><td class="num pos">${{priceK(r.targetPrice)}}</td><td class="num neg">${{priceK(r.stopPrice)}}</td><td>${{esc(r.note)}}</td></tr>`; }}).join('') : emptyRow(8, globalQ?'Không có dự kiến khớp tìm kiếm.':'Không có lệnh dự kiến.'); }}
 function liveSymbols(){{ const syms=new Set(); D.holdings.forEach(h=>h.symbol&&syms.add(h.symbol)); planned.forEach(r=>r.symbol&&syms.add(r.symbol)); execDesk.forEach(r=>r.symbol&&syms.add(r.symbol)); if(pt.symbol&&!pt.closed) syms.add(pt.symbol); D.watchlist.forEach(w=>w.symbol&&syms.add(w.symbol)); if(!syms.size) syms.add('MSB'); return Array.from(syms).slice(0,40); }}
 function applyEdgeLiveStatus(payload){{ if(!payload||!payload.quotes) return; const updated=payload.updatedAtICT||payload.updatedAtUtc||'-'; const latest=payload.latestPriceDate||D.asOf||'-'; D.asOf=latest; D.liveUpdatedLabel=updated; const liveBadge=document.getElementById('liveBadge'); if(liveBadge) liveBadge.textContent='LIVE '+liveBadgeLabel(latest,updated); const liveStatus=document.getElementById('liveStatusText'); if(liveStatus) liveStatus.innerHTML='Giá live: <b>'+esc(latest)+'</b> · cập nhật '+esc(updated)+' <span class="meta">edge 5p</span>'; if(payload.vnindex&&payload.vnindex.ok){{ D.vni.date=payload.vnindex.latest||D.vni.date; D.vni.close=Number(payload.vnindex.latestClose||D.vni.close); const vc=document.getElementById('vniKpiClose'); const vd=document.getElementById('vniKpiDate'); if(vc) vc.textContent=f(D.vni.close,2); if(vd) vd.textContent=D.vni.date||'-'; }} const quotes=payload.quotes||{{}}; const applyQuote=(row)=>{{ const sym=String(row.symbol||'').toUpperCase(); const q=quotes[sym]; if(q&&q.ok&&Number(q.close)>0){{ row.currentPrice=Number(q.close); row.priceAsOf=q.date||row.priceAsOf; if(row.lowPrice!==undefined&&Number(q.low)>0) row.lowPrice=Number(q.low); }} }}; D.holdings.forEach(applyQuote); planned.forEach(applyQuote); execDesk.forEach(applyQuote); D.watchlist.forEach(applyQuote); const pq=quotes[String(pt.symbol||'').toUpperCase()]; if(!pt.closed&&pq&&pq.ok&&Number(pq.close)>0){{ pt.freshPrice=Number(pq.close); pt.freshDate=pq.date||pt.freshDate; }} renderCopyForNav(document.getElementById('navInput')?.value||1,false); renderPaperTrade(); renderLatestRows(); renderWatchRows(); renderLedger(); }}
@@ -1529,6 +1727,7 @@ function setGlobalSearch(q){{ globalQ=String(q||''); const g=document.getElement
 document.getElementById('globalSearch')?.addEventListener('input',e=>setGlobalSearch(e.target.value));
 document.getElementById('ledgerSearch')?.addEventListener('input',e=>setGlobalSearch(e.target.value));
 renderLedger();
+scheduleTableLabels();
 </script>
 </body>
 </html>"""
