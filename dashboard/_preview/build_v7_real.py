@@ -871,7 +871,7 @@ watch_forecast_current = (
     and bool(watch_forecast_as_of and watch_live_price_date and watch_forecast_as_of >= watch_live_price_date)
 )
 planned_rows = (forecast_status.get("rows", []) or []) if watch_forecast_current else []
-shortlist_symbols = set(memo_by_symbol)
+shortlist_symbols = set()
 shortlist_symbols.update(str(row.get("symbol", "")).upper() for row in planned_rows if row.get("symbol"))
 
 
@@ -954,9 +954,6 @@ for row in dashboard_data.get("candidates") or []:
     put_watch(row, "candidate")
 for row in dashboard_data.get("watch") or []:
     put_watch(row, "watch")
-for row in memos:
-    sym = str(row.get("symbol", "")).upper()
-    put_watch({**stock_by_symbol.get(sym, {}), **row}, "memo")
 
 watchlist_rows_all = sorted(
     watch_merged.values(),
@@ -976,7 +973,8 @@ watchlist_summary = {
     "excludedHeld": sum(1 for row in watchlist_rows_all if row["inPortfolio"]),
     "onlineCandidates": len(dashboard_data.get("candidates") or []),
     "onlineWatch": len(dashboard_data.get("watch") or []),
-    "memoOnly": len(memos),
+    "memoOnly": 0,
+    "memoOnlyExcluded": len(memos),
     "forecastLinkedRows": len(planned_rows),
     "forecastLinkedAsOf": watch_forecast_as_of,
     "forecastLinkedPlanDate": watch_forecast_plan_date,
@@ -1532,7 +1530,7 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
 .thresholds b {{ color:var(--text); }}
 .pill {{ display:inline-flex; align-items:center; min-height:20px; border-radius:999px; padding:2px 8px; font-size:11.5px; line-height:1.2; font-weight:600; letter-spacing:0; text-transform:none; white-space:nowrap; }} .buy {{ background:var(--greenSoft); color:var(--green); }} .sell {{ background:var(--redSoft); color:var(--red); }} .hold {{ background:var(--blueSoft); color:var(--accent); }} .skip {{ background:var(--surface2); color:var(--muted); }}
 .ptgrid {{ display:grid; grid-template-columns:repeat(4,1fr); border-bottom:1px solid var(--soft); }} .ptbox {{ padding:10px 12px; border-right:1px solid var(--soft); }} .ptbox:nth-child(4n) {{ border-right:0; }} .ptbox span {{ color:var(--muted); font-size:var(--t1); font-weight:800; letter-spacing:.06em; text-transform:uppercase; }} .ptbox b {{ display:block; margin-top:3px; font-size:var(--t5); }}
-.watchSummary {{ display:grid; grid-template-columns:repeat(5,1fr); border-bottom:1px solid var(--border); }}
+.watchSummary {{ display:grid; grid-template-columns:repeat(6,1fr); border-bottom:1px solid var(--border); }}
 .watchSummary span {{ padding:12px 14px; border-right:1px solid var(--border); color:var(--muted); font-size:var(--t1); }}
 .watchSummary span:last-child {{ border-right:0; }}
 .watchSummary b {{ display:block; margin-top:2px; color:var(--text); font-size:var(--t4); }}
@@ -1736,7 +1734,8 @@ document.getElementById('watchSummary').innerHTML = [
   ['Có thể mua sớm', ws.buySoon || 0],
   ['Cần theo dõi thêm', ws.watchMore || 0],
   ['Forecast rows', `${{ws.forecastLinkedRows || 0}} · ${{ws.forecastLinkedCurrent ? 'current' : 'stale/none'}}`],
-  ['Nguồn online', `${{ws.onlineCandidates || 0}} candidate · ${{ws.onlineWatch || 0}} watch · ${{ws.memoOnly || 0}} memo`],
+  ['Nguồn auto', `${{ws.onlineCandidates || 0}} candidate · ${{ws.onlineWatch || 0}} watch`],
+  ['Memo tĩnh đã loại', ws.memoOnlyExcluded || 0],
   ['Đã loại đang nắm', ws.excludedHeld || 0],
 ].map(x=>`<span>${{x[0]}}<b>${{x[1]}}</b></span>`).join('');
 document.getElementById('watchRules').innerHTML = ['Không nắm','Gate PASS','Không AVOID','Có tín hiệu mua','Thanh khoản >= 3 tỷ','R:R >= 2','Upside >= 12%'].map((x,i)=>`<span><b>${{i+1}}</b>${{x}}</span>`).join('');
