@@ -1,136 +1,120 @@
 {
-  "updatedAt": "2026-06-10 19:08:06",
-  "updatedAtUtc": "2026-06-10T12:08:06Z",
-  "updatedAtICT": "2026-06-10 19:08:06",
-  "targetDate": "2026-06-10",
-  "symbolsTotal": 689,
-  "candidateSymbolsTotal": 704,
+  "updatedAt": "2026-06-11 03:08:49",
+  "updatedAtUtc": "2026-06-11T03:08:49Z",
+  "updatedAtICT": "2026-06-11 10:08:49",
+  "targetDate": "2026-06-11",
+  "symbolsTotal": 688,
+  "candidateSymbolsTotal": 703,
   "inactiveSymbolsExcluded": 15,
   "inactiveDaysThreshold": 45,
   "inactiveSample": [
     {
       "symbol": "ARM",
       "last": "2026-03-16",
-      "inactiveDays": 86
+      "inactiveDays": 87
     },
     {
       "symbol": "ATS",
       "last": "2026-03-06",
-      "inactiveDays": 96
+      "inactiveDays": 97
     },
     {
       "symbol": "BCG",
       "last": "2026-03-06",
-      "inactiveDays": 96
+      "inactiveDays": 97
     },
     {
       "symbol": "CJC",
       "last": "2026-03-06",
-      "inactiveDays": 96
+      "inactiveDays": 97
     },
     {
       "symbol": "CX8",
       "last": "2026-04-13",
-      "inactiveDays": 58
+      "inactiveDays": 59
     },
     {
       "symbol": "ECI",
       "last": "2026-03-27",
-      "inactiveDays": 75
+      "inactiveDays": 76
     },
     {
       "symbol": "GMA",
       "last": "2026-03-06",
-      "inactiveDays": 96
+      "inactiveDays": 97
     },
     {
       "symbol": "HCT",
       "last": "2026-03-30",
-      "inactiveDays": 72
+      "inactiveDays": 73
     },
     {
       "symbol": "LCD",
       "last": "2026-03-06",
-      "inactiveDays": 96
+      "inactiveDays": 97
     },
     {
       "symbol": "MCC",
       "last": "2026-03-06",
-      "inactiveDays": 96
+      "inactiveDays": 97
     },
     {
       "symbol": "SGD",
       "last": "2026-04-14",
-      "inactiveDays": 57
+      "inactiveDays": 58
     },
     {
       "symbol": "TCD",
       "last": "2026-03-06",
-      "inactiveDays": 96
+      "inactiveDays": 97
     },
     {
       "symbol": "TTE",
       "last": "2026-03-19",
-      "inactiveDays": 83
+      "inactiveDays": 84
     },
     {
       "symbol": "VE4",
       "last": "2026-03-06",
-      "inactiveDays": 96
+      "inactiveDays": 97
     },
     {
       "symbol": "VNT",
       "last": "2026-04-17",
-      "inactiveDays": 54
+      "inactiveDays": 55
     }
   ],
-  "inactiveProbeAttempted": 15,
-  "inactiveProbeSample": [
-    "ATS",
-    "BCG",
-    "CJC",
-    "GMA",
-    "LCD",
-    "MCC",
-    "TCD",
-    "VE4",
-    "ARM",
-    "TTE",
-    "ECI",
-    "HCT",
-    "CX8",
-    "SGD",
-    "VNT"
-  ],
-  "symbolsAttempted": 151,
-  "symbolsUpdated": 151,
+  "inactiveProbeAttempted": 0,
+  "inactiveProbeSample": [],
+  "symbolsAttempted": 695,
+  "symbolsUpdated": 695,
   "symbolsFailed": 0,
-  "latestPriceDate": "2026-06-10",
-  "symbolsAtTargetOrNewer": 553,
-  "sameDaySymbols": 553,
-  "sameDaySymbolsPct": 80.26,
-  "staleButUsableSymbols": 136,
-  "usableSymbols": 689,
+  "latestPriceDate": "2026-06-11",
+  "symbolsAtTargetOrNewer": 439,
+  "sameDaySymbols": 439,
+  "sameDaySymbolsPct": 63.81,
+  "staleButUsableSymbols": 249,
+  "usableSymbols": 688,
   "usableSymbolsPct": 100.0,
   "minFreshSymbols": 447,
-  "minUsableCacheSymbols": 655,
+  "minUsableCacheSymbols": 654,
   "usableForForecast": true,
-  "coverageMode": "same_day_rows",
+  "coverageMode": "successful_refresh_with_last_close",
   "vnindex": {
     "symbol": "VNINDEX",
     "ok": true,
-    "latest": "2026-06-10",
-    "rows": 1606,
-    "vnindex_2012_latest": "2026-06-10",
-    "vnindex_2012_rows": 4183
+    "latest": "2026-06-11",
+    "rows": 1607,
+    "vnindex_2012_latest": "2026-06-11",
+    "vnindex_2012_rows": 4184
   },
   "historyCache": {
-    "path": ".cache\\backtest\\history_cache.pkl",
-    "symbols": 689,
-    "latestPriceDate": "2026-06-10"
+    "path": ".cache/backtest/history_cache.pkl",
+    "symbols": 688,
+    "latestPriceDate": "2026-06-11"
   },
   "universe": {
-    "cachePath": ".cache\\universe.parquet",
+    "cachePath": ".cache/universe.parquet",
     "cachedSymbols": 704,
     "listingRefresh": "ok",
     "exchanges": [
@@ -144,16 +128,26 @@
       "SDA"
     ],
     "missingCachedCount": 1,
-    "recentMissingKeptCount": 1
+    "recentMissingKeptCount": 0
   },
   "retryRounds": [
     {
       "round": 1,
-      "freshBefore": 553,
-      "staleBefore": 136,
-      "failedOrMissingBefore": 0
+      "freshBefore": 433,
+      "staleBefore": 270,
+      "failedOrMissingBefore": 1,
+      "attempted": 270,
+      "ok": 270
+    },
+    {
+      "round": 2,
+      "freshBefore": 437,
+      "staleBefore": 266,
+      "failedOrMissingBefore": 0,
+      "attempted": 266,
+      "ok": 266
     }
   ],
   "failedSample": [],
-  "seconds": 67.08
+  "seconds": 290.11
 }
