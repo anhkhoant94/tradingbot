@@ -210,11 +210,13 @@ def open_lots_from_trades(records, through_date):
         shares = as_float(row.get("modelFullShares"), as_float(row.get("rawShares"), as_float(row.get("shares"), 0))) or 0
         if not sym or sign == 0 or shares <= 0:
             continue
-        px = as_float(
-            row.get("entryPriceK"),
-            as_float(row.get("executionPriceK"), as_float(row.get("priceK"), as_float(row.get("price")))),
-        )
         if sign > 0:
+            px = as_float(
+                row.get("executionPriceK"),
+                as_float(row.get("priceK"), as_float(row.get("price"), as_float(row.get("entryPriceK")))),
+            )
+            if not px:
+                continue
             lots_by_symbol.setdefault(sym, []).append({
                 "date": d,
                 "shares": float(shares),
