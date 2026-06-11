@@ -35,6 +35,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SECRET_PATH = Path.home() / ".cache" / "stock_screening_deploy_secrets.json"
+DASH = ROOT / "dashboard"
 
 FILES_TO_PUSH = [
     ".github/workflows/dashboard-auto-refresh.yml",
@@ -192,6 +193,77 @@ def vercel_json(method: str, path: str, secrets: dict, body: dict | None = None)
         raise RuntimeError(f"Vercel API {method} {path} failed: HTTP {exc.code} {text}") from exc
 
 
+def read_json_file(path: Path) -> dict:
+    try:
+        if path.exists():
+            return json.loads(path.read_text(encoding="utf-8-sig"))
+    except Exception:
+        pass
+    return {}
+
+
+def fetch_public_json(url: str) -> dict:
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Cache-Control": "no-cache",
+            "User-Agent": "stock-screening-dashboard-deployer",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        return json.loads(resp.read().decode("utf-8-sig"))
+
+
+def public_latest_price_date(secrets: dict) -> str:
+    base = secrets["vercel_public_url"].rstrip("/")
+    candidates: list[str] = []
+    try:
+        edge = fetch_public_json(f"{base}/api/live-status?symbols=VNINDEX")
+        if edge.get("latestPriceDate"):
+            candidates.append(str(edge["latestPriceDate"]))
+        vnindex = edge.get("vnindex") or {}
+        if vnindex.get("latest"):
+            candidates.append(str(vnindex["latest"]))
+    except Exception as exc:
+        print(f"stale-deploy guard: edge live check unavailable: {exc}")
+    for name in ["dashboard_live_update_status.json", "full_universe_live_update_status.json"]:
+        try:
+            payload = fetch_public_json(f"{base}/{name}?v={int(time.time())}")
+            if payload.get("latestPriceDate"):
+                candidates.append(str(payload["latestPriceDate"]))
+            if payload.get("targetDate"):
+                candidates.append(str(payload["targetDate"]))
+        except Exception as exc:
+            print(f"stale-deploy guard: public {name} check unavailable: {exc}")
+    return max(candidates) if candidates else ""
+
+
+def assert_local_dashboard_not_stale(secrets: dict) -> None:
+    if os.environ.get("ALLOW_STALE_DASHBOARD_DEPLOY") == "1":
+        print("stale-deploy guard bypassed by ALLOW_STALE_DASHBOARD_DEPLOY=1")
+        return
+    public_latest = public_latest_price_date(secrets)
+    if not public_latest:
+        print("stale-deploy guard: no public latest date found; continuing")
+        return
+    local_forecast = read_json_file(DASH / "r46_forecast.json")
+    local_full = read_json_file(DASH / "full_universe_live_update_status.json")
+    local_live = read_json_file(DASH / "dashboard_live_update_status.json")
+    local_dates = {
+        "r46_forecast.asOf": str(local_forecast.get("asOf") or ""),
+        "full_universe.latestPriceDate": str(local_full.get("latestPriceDate") or ""),
+        "dashboard_live.latestPriceDate": str(local_live.get("latestPriceDate") or ""),
+    }
+    stale = {k: v for k, v in local_dates.items() if v and v < public_latest}
+    if stale:
+        raise SystemExit(
+            "Refusing to deploy stale local dashboard artifacts. "
+            f"public_latest={public_latest}; local={local_dates}. "
+            "Run with --build first, or set ALLOW_STALE_DASHBOARD_DEPLOY=1 only for an intentional rollback."
+        )
+    print(f"stale-deploy guard passed: public_latest={public_latest}; local={local_dates}")
+
+
 def build_dashboard() -> None:
     run_step([sys.executable, "update_dashboard_live_data.py"])
     run_step([sys.executable, "tools/update_full_universe_prices.py", "--workers", "24", "--min-fresh-pct", "0.65"])
@@ -203,6 +275,7 @@ def build_dashboard() -> None:
 
 
 def deploy_vercel(secrets: dict) -> None:
+    assert_local_dashboard_not_stale(secrets)
     env = os.environ.copy()
     env["VERCEL_TOKEN"] = secrets["vercel_token"]
     env["VERCEL_PROJECT"] = secrets["vercel_project"]
