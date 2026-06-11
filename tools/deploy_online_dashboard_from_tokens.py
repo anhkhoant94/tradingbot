@@ -345,7 +345,9 @@ def verify_public() -> None:
                 "--require-edge-live",
                 "--require-vni-history",
                 "--require-current-vni",
+                "--require-current-forecast",
                 "--require-execution-desk",
+                "--require-dynamic-perf",
             ])
             return
         except subprocess.CalledProcessError:
