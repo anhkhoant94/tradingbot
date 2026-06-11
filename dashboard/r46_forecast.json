@@ -1,17 +1,17 @@
 {
   "schemaVersion": 2,
   "policy": "r46_bear_stop_mcore",
-  "asOf": "2026-06-10",
+  "asOf": "2026-06-11",
   "planDate": "2026-06-15",
-  "generatedAtSource": "dashboard\\dashboard_live_update_status.json",
+  "generatedAtSource": "dashboard/dashboard_live_update_status.json",
   "status": "COMPUTED",
-  "computedAtUtc": "2026-06-10T12:09:55Z",
-  "computedAtICT": "2026-06-10 19:09:55",
+  "computedAtUtc": "2026-06-11T03:10:09Z",
+  "computedAtICT": "2026-06-11 10:10:09",
   "source": "output/beat_vni30_parallel/r46_live_forecast/latest_targets.parquet",
   "message": "Forecast R46 đã precompute từ full-universe live chain.",
   "rows": [],
   "meta": {
-    "tailMatrixRows": 2720,
+    "tailMatrixRows": 2716,
     "tailMatrixDates": [
       "2026-05-25",
       "2026-06-01",
