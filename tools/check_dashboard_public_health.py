@@ -73,6 +73,37 @@ def num(value, default=None):
         return default
 
 
+def cagr_from_embedded_chart(rows: list[dict]) -> float | None:
+    if len(rows) < 2:
+        return None
+    first = rows[0]
+    last = rows[-1]
+    first_nav = num(first.get("model"))
+    last_nav = num(last.get("model"))
+    try:
+        d0 = dt.date.fromisoformat(str(first.get("date"))[:10])
+        d1 = dt.date.fromisoformat(str(last.get("date"))[:10])
+    except Exception:
+        return None
+    years = (d1 - d0).days / 365.25
+    if first_nav is None or last_nav is None or first_nav <= 0 or last_nav <= 0 or years <= 0:
+        return None
+    return ((last_nav / first_nav) ** (1.0 / years) - 1.0) * 100.0
+
+
+def maxdd_from_embedded_chart(rows: list[dict]) -> float | None:
+    peak = None
+    max_dd = 0.0
+    for row in rows:
+        nav = num(row.get("model"))
+        if nav is None or nav <= 0:
+            continue
+        peak = nav if peak is None else max(peak, nav)
+        if peak:
+            max_dd = min(max_dd, nav / peak - 1.0)
+    return max_dd * 100.0 if peak is not None else None
+
+
 def parse_status_age_seconds(payload: dict) -> float | None:
     raw_utc = payload.get("updatedAtUtc")
     if raw_utc:
@@ -136,6 +167,11 @@ def main() -> None:
         action="store_true",
         help="exit non-zero when the deployed page does not embed the R46 execution desk",
     )
+    parser.add_argument(
+        "--require-dynamic-perf",
+        action="store_true",
+        help="exit non-zero when embedded performance KPIs do not match the embedded live chart",
+    )
     args = parser.parse_args()
 
     idx_status, idx_raw = fetch_bytes(args.url, "/")
@@ -194,6 +230,21 @@ def main() -> None:
     embedded_copy_cash_pct = num(embedded_copy_account.get("cashPct"))
     embedded_copy_exposure_pct = num(embedded_copy_account.get("exposurePct"))
     embedded_chart_last_date = str((embedded_chart[-1] or {}).get("date") or "") if embedded_chart else ""
+    embedded_perf = embedded_data.get("perf") or {}
+    chart_cagr = cagr_from_embedded_chart(embedded_chart)
+    chart_maxdd = maxdd_from_embedded_chart(embedded_chart)
+    embedded_perf_cagr = num(embedded_perf.get("cagr"))
+    embedded_perf_maxdd = num(embedded_perf.get("maxDrawdown"))
+    embedded_perf_chart_end_date = str(embedded_perf.get("chartEndDate") or "")
+    dynamic_perf_matches_chart = (
+        chart_cagr is not None
+        and chart_maxdd is not None
+        and embedded_perf_cagr is not None
+        and embedded_perf_maxdd is not None
+        and abs(embedded_perf_cagr - chart_cagr) < 1e-9
+        and abs(embedded_perf_maxdd - chart_maxdd) < 1e-9
+        and embedded_perf_chart_end_date == embedded_chart_last_date
+    )
     full_cash_expected = bool(expected_exec_orders and not embedded_holdings)
     copy_full_cash_consistent = (
         not full_cash_expected
@@ -363,6 +414,12 @@ def main() -> None:
         "copy_full_cash_consistent": copy_full_cash_consistent,
         "embedded_chart_last_date": embedded_chart_last_date or None,
         "chart_current_after_execution": chart_current_after_execution,
+        "embedded_perf_cagr": embedded_perf_cagr,
+        "computed_chart_cagr": chart_cagr,
+        "embedded_perf_maxdd": embedded_perf_maxdd,
+        "computed_chart_maxdd": chart_maxdd,
+        "embedded_perf_chart_end_date": embedded_perf_chart_end_date or None,
+        "dynamic_perf_matches_chart": dynamic_perf_matches_chart,
         "vni_history_points": len(re.findall(r'"vniClose"\s*:\s*[0-9]', history)),
         "has_r46_key": "r46_bear_stop_mcore" in analysis,
         "has_r23_key": "r23_nav3b_mcore" in analysis,
@@ -404,6 +461,8 @@ def main() -> None:
         or not payload["forecast_as_of_matches_source"]
         or payload["embedded_forecast_display_state"] != "COMPUTED"
     ):
+        raise SystemExit(1)
+    if args.require_dynamic_perf and not payload["dynamic_perf_matches_chart"]:
         raise SystemExit(1)
 
 
