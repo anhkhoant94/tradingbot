@@ -182,6 +182,12 @@ def main() -> None:
         for row in embedded_exec_orders
     }
     copy_execution_matches_state = expected_exec_keys <= embedded_exec_keys
+    copy_execution_nav_scaled = (
+        "scaledCopyExecution" in index
+        and "copyExecutionBaseNavMil" in index
+        and 'id="copyExecScaleTag"' in index
+        and "NAV copy 1" not in index
+    )
     embedded_holdings = embedded_data.get("holdings") or []
     embedded_copy_account = embedded_data.get("copyAccount") or {}
     embedded_chart = embedded_data.get("chart") or []
@@ -348,6 +354,7 @@ def main() -> None:
         "execution_state_order_count": len(expected_exec_orders),
         "embedded_copy_execution_count": len(embedded_exec_orders),
         "copy_execution_matches_state": copy_execution_matches_state,
+        "copy_execution_nav_scaled": copy_execution_nav_scaled,
         "has_copy_execution_table": 'id="copyExecRows"' in index,
         "full_cash_expected": full_cash_expected,
         "embedded_holdings_count": len(embedded_holdings),
@@ -386,6 +393,7 @@ def main() -> None:
     if args.require_execution_desk and expected_exec_orders and not (
         payload["has_copy_execution_table"]
         and payload["copy_execution_matches_state"]
+        and payload["copy_execution_nav_scaled"]
         and payload["copy_full_cash_consistent"]
         and payload["chart_current_after_execution"]
     ):
