@@ -20,7 +20,7 @@ on:
       workers:
         description: "Parallel workers for history/ratio fetch"
         required: false
-        default: "4"
+        default: "1"
 
 concurrency:
   group: screening-weekly
@@ -39,7 +39,7 @@ jobs:
       PYTHONPATH: ${{ github.workspace }}
       MODE: ${{ github.event.inputs.mode || 'opportunity' }}
       SAMPLE_SIZE: ${{ github.event.inputs.sample_size || '0' }}
-      WORKERS: ${{ github.event.inputs.workers || '4' }}
+      WORKERS: ${{ github.event.inputs.workers || '1' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
