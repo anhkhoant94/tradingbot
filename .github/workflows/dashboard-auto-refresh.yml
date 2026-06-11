@@ -1,4 +1,4 @@
-name: Dashboard Forecast Refresh
+﻿name: Dashboard Forecast Refresh
 
 on:
   schedule:
@@ -128,7 +128,7 @@ jobs:
         if: env.LIVE_DATA_REFRESH_FAILED == '1'
         working-directory: ${{ github.workspace }}
         run: |
-          python tools/check_dashboard_public_health.py --require-edge-live --require-vni-history --require-current-vni --require-current-forecast --require-execution-desk
+          python tools/check_dashboard_public_health.py --require-edge-live --require-vni-history --require-current-vni --require-current-forecast --require-execution-desk --require-dynamic-perf
           echo "SKIP_DASHBOARD_DEPLOY=1" >> "$GITHUB_ENV"
           echo "Live source was unavailable from GitHub; public dashboard/edge data is fresh, so this run will not rebuild from partial checkout data."
 
@@ -270,9 +270,10 @@ jobs:
       - name: Verify public dashboard assets
         if: env.LIVE_DATA_REFRESH_FAILED != '1'
         working-directory: ${{ github.workspace }}
-        run: python tools/check_dashboard_public_health.py --require-fresh-live --require-edge-live --require-vni-history --require-current-vni --require-current-forecast --require-execution-desk
+        run: python tools/check_dashboard_public_health.py --require-fresh-live --require-edge-live --require-vni-history --require-current-vni --require-current-forecast --require-execution-desk --require-dynamic-perf
 
       - name: Reconcile public dashboard against generated artifacts
         if: env.LIVE_DATA_REFRESH_FAILED != '1'
         working-directory: ${{ github.workspace }}
         run: python tools/reconcile_dashboard_online_local.py --base-url "$VERCEL_PUBLIC_URL"
+
