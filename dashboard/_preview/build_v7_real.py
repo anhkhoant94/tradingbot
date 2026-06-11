@@ -861,7 +861,16 @@ stock_by_symbol = {
     if row.get("symbol")
 }
 held_symbols = {str(row.get("symbol", "")).upper() for row in holdings}
-planned_rows = policy.get("plannedOrders", {}).get("rows", [])
+watch_live_price_date = str(live_status.get("latestPriceDate") or "")
+watch_forecast_date = next_monday(live_status.get("latestPriceDate") or signal_w1.get("execution_date"))
+watch_forecast_as_of = str(forecast_status.get("asOf") or "")
+watch_forecast_plan_date = forecast_status.get("planDate")
+watch_forecast_current = (
+    forecast_status.get("status") == "COMPUTED"
+    and watch_forecast_plan_date == watch_forecast_date
+    and bool(watch_forecast_as_of and watch_live_price_date and watch_forecast_as_of >= watch_live_price_date)
+)
+planned_rows = (forecast_status.get("rows", []) or []) if watch_forecast_current else []
 shortlist_symbols = set(memo_by_symbol)
 shortlist_symbols.update(str(row.get("symbol", "")).upper() for row in planned_rows if row.get("symbol"))
 
@@ -968,6 +977,10 @@ watchlist_summary = {
     "onlineCandidates": len(dashboard_data.get("candidates") or []),
     "onlineWatch": len(dashboard_data.get("watch") or []),
     "memoOnly": len(memos),
+    "forecastLinkedRows": len(planned_rows),
+    "forecastLinkedAsOf": watch_forecast_as_of,
+    "forecastLinkedPlanDate": watch_forecast_plan_date,
+    "forecastLinkedCurrent": watch_forecast_current,
 }
 method_cards = policy.get("methodology", {}).get("cards", [])
 audit = policy.get("productionAudit", {})
@@ -1722,6 +1735,7 @@ document.getElementById('watchSummary').innerHTML = [
   ['Tổng watchlist', ws.total || 0],
   ['Có thể mua sớm', ws.buySoon || 0],
   ['Cần theo dõi thêm', ws.watchMore || 0],
+  ['Forecast rows', `${{ws.forecastLinkedRows || 0}} · ${{ws.forecastLinkedCurrent ? 'current' : 'stale/none'}}`],
   ['Nguồn online', `${{ws.onlineCandidates || 0}} candidate · ${{ws.onlineWatch || 0}} watch · ${{ws.memoOnly || 0}} memo`],
   ['Đã loại đang nắm', ws.excludedHeld || 0],
 ].map(x=>`<span>${{x[0]}}<b>${{x[1]}}</b></span>`).join('');
