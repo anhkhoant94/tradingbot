@@ -456,6 +456,47 @@ def cagr_from_curve_rows(rows):
     return ((last_nav / first_nav) ** (1.0 / years) - 1.0) * 100.0
 
 
+def max_drawdown_from_curve_rows(rows):
+    peak = None
+    max_dd = 0.0
+    for row in rows:
+        nav = as_float(row.get("navBil"))
+        if nav is None or nav <= 0:
+            continue
+        peak = nav if peak is None else max(peak, nav)
+        if peak:
+            max_dd = min(max_dd, nav / peak - 1.0)
+    return max_dd * 100.0 if peak is not None else None
+
+
+def sharpe_from_curve_rows(rows):
+    returns = []
+    prev = None
+    for row in rows:
+        nav = as_float(row.get("navBil"))
+        if nav is None or nav <= 0:
+            continue
+        if prev and prev > 0:
+            returns.append(nav / prev - 1.0)
+        prev = nav
+    if len(returns) < 2:
+        return None
+    mean = sum(returns) / len(returns)
+    variance = sum((r - mean) ** 2 for r in returns) / (len(returns) - 1)
+    std = math.sqrt(variance) if variance > 0 else 0.0
+    return (mean / std) * math.sqrt(252.0) if std > 0 else None
+
+
+def return_pct_from_curve_rows(rows, key):
+    if len(rows) < 2:
+        return None
+    first = as_float(rows[0].get(key))
+    last = as_float(rows[-1].get(key))
+    if first is None or last is None or first <= 0:
+        return None
+    return (last / first - 1.0) * 100.0
+
+
 def scale_lot(value, scale):
     raw = as_float(value)
     if raw is None:
@@ -982,15 +1023,30 @@ watchlist_summary = {
 }
 method_cards = policy.get("methodology", {}).get("cards", [])
 audit = policy.get("productionAudit", {})
+chart_max_drawdown = max_drawdown_from_curve_rows(curve_2021)
+chart_sharpe = sharpe_from_curve_rows(curve_2021)
+chart_model_return = return_pct_from_curve_rows(curve_2021, "navBil")
+chart_vni_return = return_pct_from_curve_rows(curve_2021, "vniClose")
+chart_edge = (
+    chart_model_return - chart_vni_return
+    if chart_model_return is not None and chart_vni_return is not None
+    else None
+)
 perf = {
     "cagr": chart_cagr if chart_cagr is not None else (audit.get("cagr") or policy.get("historicalCagr")),
+    "maxDrawdown": chart_max_drawdown if chart_max_drawdown is not None else (audit.get("maxDrawdown") or policy.get("historicalMaxDrawdown")),
+    "sharpe": chart_sharpe if chart_sharpe is not None else policy.get("historicalSharpe"),
+    "modelReturn": chart_model_return,
+    "vniReturn": chart_vni_return,
+    "chartEdge": chart_edge,
     "auditCagr": audit.get("cagr") or policy.get("historicalCagr"),
+    "auditMaxDrawdown": audit.get("maxDrawdown") or policy.get("historicalMaxDrawdown"),
+    "auditSharpe": policy.get("historicalSharpe"),
     "chartEndDate": curve_2021[-1].get("date") if curve_2021 else None,
-    "maxDrawdown": audit.get("maxDrawdown") or policy.get("historicalMaxDrawdown"),
-    "sharpe": policy.get("historicalSharpe"),
     "minEdge": audit.get("minEdgeVsVni"),
     "passVni30": audit.get("passVni30"),
     "slippageBps": audit.get("slippageBps"),
+    "source": "embedded_chart_live",
 }
 
 latest_curve = curve_2021[-1] if curve_2021 else {}
@@ -1446,6 +1502,12 @@ if not holdings and executed_orders:
 if live_price_date and executed_orders:
     assert chart_rows[-1]["date"] >= live_price_date, "FAIL: chart/CAGR chưa bắt kịp live price date sau execution state"
 assert data["perf"]["cagr"] is not None, "FAIL: CAGR chart không tính được từ equity curve"
+assert data["perf"]["maxDrawdown"] is not None, "FAIL: MaxDD chart không tính được từ equity curve"
+recheck_cagr = cagr_from_curve_rows(curve_2021)
+recheck_maxdd = max_drawdown_from_curve_rows(curve_2021)
+assert recheck_cagr is not None and abs(data["perf"]["cagr"] - recheck_cagr) < 1e-9, "FAIL: CAGR payload lệch chart live"
+assert recheck_maxdd is not None and abs(data["perf"]["maxDrawdown"] - recheck_maxdd) < 1e-9, "FAIL: MaxDD payload lệch chart live"
+assert data["perf"]["chartEndDate"] == chart_rows[-1]["date"], "FAIL: perf chartEndDate lệch chart last date"
 assert data["vni"]["close"] > 0, "FAIL: VNI close không hợp lệ"
 
 html = f"""<!doctype html>
@@ -1624,7 +1686,7 @@ table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding
       <div class="kpi"><div class="l">Vị thế đang nắm</div><div class="v" id="positionKpiValue">{len(holdings)} mã</div><div class="s" id="positionKpiSub">Quy đổi theo NAV copy</div></div>
       <div class="kpi"><div class="l">Lệnh cần làm</div><div class="v">{urgent_count} ngay · {planned_count} T2</div><div class="s">{forecast_display_state} · dữ liệu {forecast_as_of or '-'}</div></div>
       <div class="kpi"><div class="l">VNI gần nhất</div><div class="v" id="vniKpiClose">{fmt_num(data['vni']['close'],2)}</div><div class="s" id="vniKpiDate">{data['vni']['date'] or '-'}</div></div>
-      <div class="kpi"><div class="l">Audit model</div><div class="v">VNI+30 {perf['passVni30']}/6</div><div class="s">Min edge +{fmt_num(perf['minEdge'],1)}pp · {perf['slippageBps']}bps</div></div>
+      <div class="kpi"><div class="l">Chart live</div><div class="v">CAGR +{fmt_num(perf['cagr'],1)}%</div><div class="s">MaxDD {fmt_num(perf['maxDrawdown'],1)}% · {perf['chartEndDate'] or '-'}</div></div>
     </div>
     <div class="statusline">
       <span id="liveStatusText">Giá live: <b>{live_price_date or '-'}</b> · cập nhật {live_updated_label}</span>
