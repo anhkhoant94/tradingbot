@@ -25,6 +25,7 @@ from pathlib import Path
 
 API_BASE = "https://api.vercel.com"
 TEXT_EXTS = {".html", ".css", ".js", ".json", ".txt", ".md", ".svg"}
+BINARY_EXTS = {".ico", ".png"}
 
 
 def request_json(method: str, path: str, token: str, body: dict | None = None, query: dict | None = None) -> dict:
@@ -58,10 +59,11 @@ def collect_files(root: Path) -> list[dict]:
         rel = path.relative_to(root).as_posix()
         if any(part.startswith("_") for part in path.relative_to(root).parts):
             continue
-        if path.suffix.lower() not in TEXT_EXTS:
-            raise RuntimeError(f"Unexpected non-text dashboard file: {rel}")
+        suffix = path.suffix.lower()
+        if suffix not in TEXT_EXTS and suffix not in BINARY_EXTS:
+            raise RuntimeError(f"Unexpected dashboard file type: {rel}")
         data = path.read_bytes()
-        if b"\0" in data:
+        if suffix in TEXT_EXTS and b"\0" in data:
             raise RuntimeError(f"Refusing to deploy dashboard file containing NUL bytes: {rel}")
         files.append(
             {
